@@ -14,6 +14,10 @@ import { ElementNode } from './nodes/ElementNode';
 import { VisualNode } from './nodes/VisualNode';
 import { RelationEdge } from './edges/RelationEdge';
 import { NodeMenu } from './panels/NodeMenu';
+import { cellRects, normalizeGrid, cellKey } from '@all-draw/notation-grid';
+
+export const CELL_PREFIX = 'cell:';
+const isCellId = (id: string | undefined | null) => !!id && id.startsWith(CELL_PREFIX);
 
 const nodeTypes = { element: ElementNode, visual: VisualNode };
 const edgeTypes = { relation: RelationEdge };
@@ -50,7 +54,21 @@ function CanvasInner() {
     const seen = new Set<string>();
     const visit = (n: ViewNode) => { if (seen.has(n.id)) return; if (n.parentNodeId && byId.has(n.parentNodeId)) visit(byId.get(n.parentNodeId)!); seen.add(n.id); ordered.push(n); };
     mine.forEach(visit);
-    return ordered.map(n => {
+    const synthetic: Node[] = [];
+    if (view?.kind === 'grid') {
+      const grid = normalizeGrid(view.grid);
+      const rects = cellRects(grid);
+      const mk = (id: string, text: string, r: { x: number; y: number; w: number; h: number }, visualType: string, fill?: string): Node => ({
+        id, type: 'visual', position: { x: r.x, y: r.y }, width: r.w, height: r.h, draggable: false, selectable: false, connectable: false, zIndex: -20,
+        data: { node: { id, viewId: view.id, visualType, text, x: r.x, y: r.y, w: r.w, h: r.h, style: { fill } } as ViewNode }, style: { width: r.w, height: r.h },
+      });
+      for (const [id, r] of Object.entries(rects.layers)) { const l = grid.layers.find(x => x.id === id); synthetic.push(mk(`hdr:layer:${id}`, l?.name ?? '', r, 'core:header', l?.color)); }
+      for (const [id, r] of Object.entries(rects.stages)) synthetic.push(mk(`hdr:stage:${id}`, grid.stages.find(x => x.id === id)?.name ?? '', r, 'core:header'));
+      for (const [id, r] of Object.entries(rects.groups)) { const g = grid.stageGroups.find(x => x.id === id); synthetic.push(mk(`hdr:group:${id}`, g?.name ?? '', r, 'core:header', g?.color)); }
+      for (const c of Object.values(rects.cells)) { const color = grid.layers.find(x => x.id === c.layerId)?.color; synthetic.push(mk(`${CELL_PREFIX}${cellKey(c.layerId, c.stageId)}`, '', c, 'core:cell', color ? `color-mix(in srgb, ${color} 25%, white)` : undefined)); }
+    }
+    const cellIds = new Set(synthetic.map(n => n.id));
+    return [...synthetic, ...ordered.map(n => {
       const el = n.elementId ? store.get('elements', n.elementId) : undefined;
       const type = el ? registry.elementType(el.typeId) : undefined;
       const dimmed = !!(el && view && registry.notationOf(el.typeId) !== view.notationId && registry.notationOf(el.typeId) !== 'freeform' && !el.libraryId)
@@ -62,7 +80,7 @@ function CanvasInner() {
         position: { x: n.x, y: n.y },
         width: n.w, height: n.h,
         data: { node: n, dimmed },
-        parentId: n.parentNodeId && byId.has(n.parentNodeId) ? n.parentNodeId : undefined,
+        parentId: n.parentNodeId && byId.has(n.parentNodeId) ? n.parentNodeId : (n.cell && cellIds.has(`${CELL_PREFIX}${cellKey(n.cell.layerId, n.cell.stageId)}`) ? `${CELL_PREFIX}${cellKey(n.cell.layerId, n.cell.stageId)}` : undefined),
         extent: n.parentNodeId && byId.has(n.parentNodeId) ? ('parent' as const) : undefined,
         selected: selection.nodes.includes(n.id),
         draggable: !readOnly && !isCell,
@@ -71,7 +89,7 @@ function CanvasInner() {
         zIndex: isCell ? -10 : (type?.container || n.visualType === 'core:group') ? -1 : n.z ?? 0,
         style: { width: n.w, height: n.h },
       } satisfies Node;
-    });
+    })];
   }, [allNodes, viewId, view, store, registry, selection.nodes, readOnly, elementsVersion]);
 
   const rfEdges = useMemo<Edge[]>(() => {
@@ -116,11 +134,14 @@ function CanvasInner() {
       // ¿Se ha soltado dentro de un contenedor?
       const abs = rf.getInternalNode(n.id)?.internals.positionAbsolute ?? n.position;
       const target = findContainer(rf, store, registry, n, abs, vn);
-      const newParent = target?.id ?? null;
+      const targetIsCell = isCellId(target?.id);
+      const newParent = targetIsCell ? null : (target?.id ?? null);
+      const newCell = targetIsCell ? cellOf(target!.id) : null;
       const cur = vn.parentNodeId ?? null;
-      if (newParent !== cur) {
+      const curCell = vn.cell ? cellKey(vn.cell.layerId, vn.cell.stageId) : null;
+      if (newParent !== cur || (newCell ? cellKey(newCell.layerId, newCell.stageId) : null) !== curCell) {
         const parentAbs = target ? (rf.getInternalNode(target.id)?.internals.positionAbsolute ?? target.position) : { x: 0, y: 0 };
-        moves.push({ id: n.id, x: Math.round(abs.x - parentAbs.x), y: Math.round(abs.y - parentAbs.y), parentNodeId: newParent, cell: target?.data && (target.data as { node?: ViewNode }).node?.cell ? (target.data as { node: ViewNode }).node.cell : (target ? null : null) });
+        moves.push({ id: n.id, x: Math.round(abs.x - parentAbs.x), y: Math.round(abs.y - parentAbs.y), parentNodeId: newParent, cell: newCell });
       } else moves.push({ id: n.id, x: Math.round(n.position.x), y: Math.round(n.position.y) });
     }
     if (moves.length) {
@@ -208,9 +229,9 @@ function CanvasInner() {
     let x = pos.x - size.w / 2, y = pos.y - size.h / 2, parentNodeId: string | undefined, cell: ViewNode['cell'] | undefined;
     if (container) {
       const pAbs = rf.getInternalNode(container.id)?.internals.positionAbsolute ?? container.position;
-      x -= pAbs.x; y -= pAbs.y; parentNodeId = container.id;
-      cell = (container.data as { node?: ViewNode }).node?.cell;
-    }
+      x -= pAbs.x; y -= pAbs.y;
+      if (isCellId(container.id)) cell = cellOf(container.id); else parentNodeId = container.id;
+    } else if (view?.kind === 'grid') return; // en una rejilla, solo dentro de una celda
     const node = makeNode(viewId, undefined, { x: Math.round(x), y: Math.round(y), w: size.w, h: size.h }, { parentNodeId, cell, style: { showPorts: false } });
     if (isNew) run({ type: 'addElementToView', element, node });
     else run({ type: 'set', collection: 'nodes', id: node.id, value: { ...node, elementId: element.id } });
@@ -284,6 +305,10 @@ function CanvasInner() {
 }
 
 // ---------------------------------------------------------------- utilidades
+function cellOf(cellNodeId: string): { layerId: string; stageId: string } {
+  const [layerId, stageId] = cellNodeId.slice(CELL_PREFIX.length).split('|');
+  return { layerId: layerId ?? '', stageId: stageId ?? '' };
+}
 export function defaultSize(shape: string | undefined, container: boolean): { w: number; h: number } {
   if (container) return { w: 320, h: 220 };
   switch (shape) {
@@ -302,6 +327,7 @@ type RF = ReturnType<typeof useReactFlow>;
 function isContainerNode(n: Node, store: StoreT, reg: RegT): boolean {
   const vn = (n.data as { node?: ViewNode }).node; if (!vn) return false;
   if (vn.visualType === 'core:group' || vn.visualType === 'core:cell') return true;
+  if (vn.visualType === 'core:header') return false;
   const el = vn.elementId ? store.get('elements', vn.elementId) : undefined;
   return !!(el && reg.elementType(el.typeId)?.container);
 }

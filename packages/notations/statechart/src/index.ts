@@ -16,7 +16,7 @@ const el = (id: string, name: string, extra: Partial<ElementType> = {}): Element
 
 export const STATECHART_ELEMENT_TYPES: ElementType[] = [
   el('State', 'Estado', {
-    shape: 'rounded', container: true, color: '#FFF2CC', icon: 'state',
+    shape: 'rounded', container: true, color: '#FFF2CC', icon: '▢',
     doc: 'Estado atómico o compuesto (si contiene otros estados).',
     fields: [
       { key: 'entry', label: 'Entry', kind: 'textarea', doc: 'Acciones al entrar.' },
@@ -24,22 +24,22 @@ export const STATECHART_ELEMENT_TYPES: ElementType[] = [
       { key: 'activities', label: 'Actividades', kind: 'list', port: false, doc: 'Actividades "do" mientras el estado está activo.' },
     ],
   }),
-  el('Initial', 'Inicial', { shape: 'circle', color: '#000000', icon: 'initial', doc: 'Pseudoestado inicial; solo puede ser origen.' }),
-  el('Final', 'Final', { shape: 'double-circle', color: '#000000', icon: 'final', doc: 'Estado final; solo puede ser destino.' }),
-  el('Choice', 'Decisión', { shape: 'diamond', color: '#FFFFFF', icon: 'choice', doc: 'Pseudoestado de elección con guardas dinámicas.' }),
-  el('Fork', 'Bifurcación', { shape: 'bar', color: '#000000', icon: 'fork', doc: 'Divide una transición hacia varias regiones.' }),
-  el('Join', 'Unión', { shape: 'bar', color: '#000000', icon: 'join', doc: 'Sincroniza varias transiciones en una.' }),
+  el('Initial', 'Inicial', { shape: 'circle', color: '#000000', icon: '●', doc: 'Pseudoestado inicial; solo puede ser origen.' }),
+  el('Final', 'Final', { shape: 'double-circle', color: '#000000', icon: '◉', doc: 'Estado final; solo puede ser destino.' }),
+  el('Choice', 'Decisión', { shape: 'diamond', color: '#FFFFFF', icon: '◇', doc: 'Pseudoestado de elección con guardas dinámicas.' }),
+  el('Fork', 'Bifurcación', { shape: 'bar', color: '#000000', icon: '┳', doc: 'Divide una transición hacia varias regiones.' }),
+  el('Join', 'Unión', { shape: 'bar', color: '#000000', icon: '┻', doc: 'Sincroniza varias transiciones en una.' }),
   el('History', 'Historia', {
-    shape: 'circle', color: '#FFFFFF', icon: 'history',
+    shape: 'circle', color: '#FFFFFF', icon: 'H',
     doc: 'Pseudoestado de historia (H o H*).',
     fields: [{ key: 'deep', label: 'Profunda (H*)', kind: 'checkbox' }],
   }),
   el('Parallel', 'Región paralela', {
-    shape: 'rect', container: true, color: '#E1D5E7', icon: 'parallel',
+    shape: 'rect', container: true, color: '#E1D5E7', icon: '⫴',
     doc: 'Región ortogonal: sus hijos se ejecutan concurrentemente. Borde discontinuo.',
     meta: { borderStyle: 'dashed' },
   }),
-  el('Terminate', 'Terminar', { shape: 'circle', color: '#000000', icon: 'terminate', doc: 'Pseudoestado de terminación (X); solo puede ser destino.' }),
+  el('Terminate', 'Terminar', { shape: 'circle', color: '#000000', icon: '✕', doc: 'Pseudoestado de terminación (X); solo puede ser destino.' }),
 ];
 
 export const STATECHART_RELATION_TYPES: RelationType[] = [

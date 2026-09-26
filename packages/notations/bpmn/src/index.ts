@@ -40,18 +40,18 @@ const eventDef = (options: string): FieldDef => ({ key: 'eventDefinition', label
 
 export const BPMN_ELEMENT_TYPES: ElementType[] = [
   // Participantes
-  el('Pool', 'Pool', 'participants', { shape: 'pool', container: true, color: COLORS.participant, icon: 'pool', doc: 'Participante de una colaboración. Contiene lanes y nodos de flujo.' }),
-  el('Lane', 'Lane', 'participants', { shape: 'lane', container: true, color: COLORS.participant, icon: 'lane', doc: 'Carril dentro de una pool (rol, sistema). Puede anidar lanes.' }),
+  el('Pool', 'Pool', 'participants', { shape: 'pool', container: true, color: COLORS.participant, icon: '', doc: 'Participante de una colaboración. Contiene lanes y nodos de flujo.' }),
+  el('Lane', 'Lane', 'participants', { shape: 'lane', container: true, color: COLORS.participant, icon: '', doc: 'Carril dentro de una pool (rol, sistema). Puede anidar lanes.' }),
   // Actividades
   el('Task', 'Tarea', 'activities', {
-    shape: 'rounded', color: COLORS.activity, icon: 'task',
+    shape: 'rounded', color: COLORS.activity, icon: '',
     fields: [
       { key: 'taskType', label: 'Tipo de tarea', kind: 'select', options: 'none,user,service,script,manual,businessRule,send,receive' },
       ...activityFields,
     ],
   }),
   el('SubProcess', 'Subproceso', 'activities', {
-    shape: 'rounded', container: true, color: COLORS.activity, icon: 'subprocess',
+    shape: 'rounded', container: true, color: COLORS.activity, icon: '⊞',
     doc: 'Colapsado: se abre por drill-down (`detailViewId`). Expandido: contiene nodos de flujo en la misma vista.',
     fields: [
       { key: 'collapsed', label: 'Colapsado', kind: 'checkbox' },
@@ -60,29 +60,29 @@ export const BPMN_ELEMENT_TYPES: ElementType[] = [
     ],
   }),
   el('CallActivity', 'Actividad de llamada', 'activities', {
-    shape: 'rounded', color: COLORS.activity, icon: 'call-activity', meta: { borderWidth: 3 },
+    shape: 'rounded', color: COLORS.activity, icon: '⊡', meta: { borderWidth: 3 },
     doc: 'Invoca un proceso global reutilizable.',
     fields: [{ key: 'calledElement', label: 'Proceso llamado', kind: 'ref' }, ...activityFields],
   }),
   // Eventos
   el('StartEvent', 'Evento de inicio', 'events', {
-    shape: 'circle', color: COLORS.event, icon: 'start-event',
+    shape: 'circle', color: COLORS.event, icon: '○',
     fields: [eventDef('none,message,timer,signal,conditional,error,escalation')],
   }),
   el('EndEvent', 'Evento de fin', 'events', {
-    shape: 'circle', color: COLORS.event, icon: 'end-event', meta: { borderWidth: 3 },
+    shape: 'circle', color: COLORS.event, icon: '●', meta: { borderWidth: 3 },
     fields: [eventDef('none,message,signal,error,escalation,terminate,compensation')],
   }),
   el('IntermediateCatchEvent', 'Evento intermedio de captura', 'events', {
-    shape: 'double-circle', color: COLORS.event, icon: 'intermediate-catch',
+    shape: 'double-circle', color: COLORS.event, icon: '◎',
     fields: [eventDef('none,message,timer,signal,conditional,link')],
   }),
   el('IntermediateThrowEvent', 'Evento intermedio de lanzamiento', 'events', {
-    shape: 'double-circle', color: COLORS.event, icon: 'intermediate-throw',
+    shape: 'double-circle', color: COLORS.event, icon: '◉',
     fields: [eventDef('none,message,signal,escalation,link,compensation')],
   }),
   el('BoundaryEvent', 'Evento de borde', 'events', {
-    shape: 'double-circle', color: COLORS.event, icon: 'boundary-event',
+    shape: 'double-circle', color: COLORS.event, icon: '◌',
     doc: 'Se adhiere al borde de una actividad (`attachedTo`). No interruptor = borde discontinuo.',
     fields: [
       eventDef('message,timer,signal,conditional,error,escalation,compensation'),
@@ -91,20 +91,20 @@ export const BPMN_ELEMENT_TYPES: ElementType[] = [
     ],
   }),
   // Compuertas
-  el('ExclusiveGateway', 'Compuerta exclusiva', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: 'gateway-exclusive', doc: 'XOR: un solo camino.' }),
-  el('ParallelGateway', 'Compuerta paralela', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: 'gateway-parallel', doc: 'AND: todos los caminos.' }),
-  el('InclusiveGateway', 'Compuerta inclusiva', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: 'gateway-inclusive', doc: 'OR: uno o varios caminos.' }),
-  el('EventBasedGateway', 'Compuerta basada en eventos', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: 'gateway-event', doc: 'El primer evento intermedio que ocurra decide el camino.' }),
-  el('ComplexGateway', 'Compuerta compleja', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: 'gateway-complex', fields: [{ key: 'activationCondition', label: 'Condición de activación', kind: 'text' }] }),
+  el('ExclusiveGateway', 'Compuerta exclusiva', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: '✕', doc: 'XOR: un solo camino.' }),
+  el('ParallelGateway', 'Compuerta paralela', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: '＋', doc: 'AND: todos los caminos.' }),
+  el('InclusiveGateway', 'Compuerta inclusiva', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: '○', doc: 'OR: uno o varios caminos.' }),
+  el('EventBasedGateway', 'Compuerta basada en eventos', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: '⬠', doc: 'El primer evento intermedio que ocurra decide el camino.' }),
+  el('ComplexGateway', 'Compuerta compleja', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: '✱', fields: [{ key: 'activationCondition', label: 'Condición de activación', kind: 'text' }] }),
   // Datos
   el('DataObject', 'Objeto de datos', 'data', {
-    shape: 'note', color: COLORS.data, icon: 'data-object',
+    shape: 'note', color: COLORS.data, icon: '🗎',
     fields: [{ key: 'isCollection', label: 'Colección', kind: 'checkbox' }, { key: 'state', label: 'Estado', kind: 'text' }],
   }),
-  el('DataStore', 'Almacén de datos', 'data', { shape: 'cylinder', color: COLORS.data, icon: 'data-store' }),
+  el('DataStore', 'Almacén de datos', 'data', { shape: 'cylinder', color: COLORS.data, icon: '⛁' }),
   // Artefactos
-  el('Group', 'Grupo', 'artifacts', { shape: 'group', container: true, color: COLORS.artifact, icon: 'group', doc: 'Agrupación visual sin semántica de flujo.' }),
-  el('TextAnnotation', 'Anotación', 'artifacts', { shape: 'note', color: COLORS.artifact, icon: 'annotation', fields: [{ key: 'text', label: 'Texto', kind: 'textarea' }] }),
+  el('Group', 'Grupo', 'artifacts', { shape: 'group', container: true, color: COLORS.artifact, icon: '▢', doc: 'Agrupación visual sin semántica de flujo.' }),
+  el('TextAnnotation', 'Anotación', 'artifacts', { shape: 'note', color: COLORS.artifact, icon: '🗒', fields: [{ key: 'text', label: 'Texto', kind: 'textarea' }] }),
 ];
 
 export const BPMN_RELATION_TYPES: RelationType[] = [

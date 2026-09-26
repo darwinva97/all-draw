@@ -8,7 +8,9 @@ import type { YjsStore } from './ydoc';
 
 export class YjsHistory {
   readonly manager: Y.UndoManager;
-  constructor(readonly store: YjsStore) {
+  readonly store: YjsStore;
+  constructor(store: YjsStore) {
+    this.store = store;
     this.manager = new Y.UndoManager([...COLLECTIONS.map(c => store.maps[c]), store.metaMap], {
       trackedOrigins: new Set(['local']),
       captureTimeout: 0, // cada transacción es un paso

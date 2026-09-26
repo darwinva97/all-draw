@@ -30,19 +30,19 @@ const technology: FieldDef = { key: 'technology', label: 'Tecnología', kind: 't
 
 export const C4_ELEMENT_TYPES: ElementType[] = [
   el('Person', 'Persona', CAT.people, {
-    shape: 'actor', color: C4_COLORS.person, icon: 'person',
+    shape: 'actor', color: C4_COLORS.person, icon: '👤',
     doc: 'Usuario humano del sistema (rol, persona, actor).',
     fields: [external],
     meta: { externalColor: C4_COLORS.external },
   }),
   el('SoftwareSystem', 'Sistema de software', CAT.static, {
-    shape: 'rounded', container: true, color: C4_COLORS.system, icon: 'system',
+    shape: 'rounded', container: true, color: C4_COLORS.system, icon: '▣',
     doc: 'Nivel más alto de abstracción: entrega valor a sus usuarios. Contiene contenedores.',
     fields: [external],
     meta: { externalColor: C4_COLORS.external, level: 1 },
   }),
   el('Container', 'Contenedor', CAT.static, {
-    shape: 'rounded', container: true, color: C4_COLORS.container, icon: 'container',
+    shape: 'rounded', container: true, color: C4_COLORS.container, icon: '▤',
     doc: 'Aplicación o almacén de datos desplegable por separado. Contiene componentes.',
     fields: [
       technology,
@@ -51,13 +51,13 @@ export const C4_ELEMENT_TYPES: ElementType[] = [
     meta: { level: 2 },
   }),
   el('Component', 'Componente', CAT.static, {
-    shape: 'rounded', container: true, color: C4_COLORS.component, icon: 'component',
+    shape: 'rounded', container: true, color: C4_COLORS.component, icon: '▥',
     doc: 'Agrupación de funcionalidad con interfaz bien definida dentro de un contenedor.',
     fields: [technology],
     meta: { level: 3 },
   }),
   el('Code', 'Código', CAT.static, {
-    shape: 'rect', color: C4_COLORS.code, icon: 'code',
+    shape: 'rect', color: C4_COLORS.code, icon: '{ }',
     doc: 'Clase, interfaz, módulo o función. Nivel 4, opcional.',
     fields: [{ key: 'kind', label: 'Clase', kind: 'select', options: 'class,interface,module,function,enum' }],
     meta: { level: 4 },
@@ -68,7 +68,7 @@ export const C4_ELEMENT_TYPES: ElementType[] = [
     fields: [technology, { key: 'instances', label: 'Instancias', kind: 'number' }],
   }),
   el('Boundary', 'Límite', CAT.static, {
-    shape: 'group', container: true, color: C4_COLORS.boundary, icon: 'boundary',
+    shape: 'group', container: true, color: C4_COLORS.boundary, icon: '▢',
     doc: 'Límite visual (empresa, sistema, contenedor) para agrupar elementos en una vista.',
     fields: [{ key: 'kind', label: 'Clase', kind: 'select', options: 'enterprise,system,container,group' }],
     meta: { borderStyle: 'dashed' },

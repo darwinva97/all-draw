@@ -18,6 +18,7 @@ export function shapeStyle(shape: Shape, type: ElementType | undefined, vn: View
   if (rule.glow) { css.boxShadow = `${css.boxShadow ? css.boxShadow + ',' : ''} 0 0 12px ${rule.glow}`; }
   if (['ellipse', 'diamond', 'hexagon', 'parallelogram', 'cylinder', 'actor', 'circle', 'double-circle', 'bar'].includes(shape)) {
     css.background = 'transparent'; css.borderColor = 'transparent';
+    if (['circle', 'double-circle', 'diamond', 'bar', 'actor'].includes(shape)) css.color = rule.text ?? vn.style.text ?? '#111';
   }
   return css;
 }

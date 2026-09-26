@@ -20,7 +20,8 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
   const router = ve.style.router ?? 'smoothstep';
   const args = { sourceX: p.sourceX, sourceY: p.sourceY, targetX: p.targetX, targetY: p.targetY, sourcePosition: p.sourcePosition, targetPosition: p.targetPosition };
   const [path, lx, ly] = router === 'straight' ? getStraightPath(args) : router === 'bezier' ? getBezierPath(args) : getSmoothStepPath({ ...args, borderRadius: 6 });
-  const label = ve.label ?? rel?.name ?? '';
+  const fieldLabel = rel && type ? type.fields.filter(f => ['text', 'select'].includes(f.kind)).map(f => rel.fields[f.key]).filter(v => typeof v === 'string' && v.trim()).join(' · ') : '';
+  const label = ve.label ?? (rel?.name || fieldLabel);
   const dash = line === 'dashed' ? '8 5' : line === 'dotted' ? '2 4' : undefined;
   const ms = markerId(sh, color), mt = markerId(th, color);
   const mappings = rel?.mappings.length ? rel.mappings.map(m => `${m.fromPath} → ${m.toPath}`).join('\n') : '';

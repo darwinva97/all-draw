@@ -133,3 +133,8 @@
 .ad-sev-error { color: var(--ad-danger); } .ad-problem.ad-sev-error { border-left-color: var(--ad-danger); color: inherit; }
 .ad-sev-warning { color: #d97706; } .ad-problem.ad-sev-warning { border-left-color: #d97706; color: inherit; }
 .ad-problem.ad-sev-info { border-left-color: #94a3b8; }
+.ad-visual--core-header { background: #f3f4f6; border-color: #d1d5db; border-radius: 0; display: flex; align-items: center; justify-content: center; }
+.ad-visual--core-header .ad-visual__title { font-weight: 600; color: var(--ad-text); font-size: 12px; }
+.ad-node.is-container { align-items: flex-start; justify-content: flex-start; text-align: left; }
+.ad-node.is-container .ad-node__body { align-items: flex-start; }
+.ad-node.is-container.ad-shape-pool .ad-node__body, .ad-node.is-container.ad-shape-lane .ad-node__body { align-items: center; }

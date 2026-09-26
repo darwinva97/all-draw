@@ -1,6 +1,6 @@
 import { memo, useMemo } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
-import type { Element, ElementType, Port, RuleStyle, ViewNode } from '@all-draw/core';
+import type { ElementType, Port, RuleStyle, ViewNode } from '@all-draw/core';
 import { useEditor } from '../context';
 import { useRecord, usePorts } from '../hooks';
 import { resolveStyle } from '@all-draw/core';
@@ -23,10 +23,10 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   const shape = type?.shape ?? 'rounded';
   const css = shapeStyle(shape, type, vn, rule as RuleStyle);
   const label = vn.text ?? (element.name || (type?.name ?? ''));
-  const icon = rule.icon ?? type?.icon;
+  const icon = (rule.icon ?? type?.icon) || undefined;
 
   return (
-    <div className={`ad-node ad-shape-${shape} ${selected ? 'is-selected' : ''} ${data.dimmed ? 'is-dimmed' : ''} ${rule.bold ? 'r-bold' : ''} ${rule.strike ? 'r-strike' : ''}`} style={css} title={element.doc || undefined}>
+    <div className={`ad-node ad-shape-${shape} ${type?.container ? 'is-container' : ''} ${selected ? 'is-selected' : ''} ${data.dimmed ? 'is-dimmed' : ''} ${rule.bold ? 'r-bold' : ''} ${rule.strike ? 'r-strike' : ''}`} style={css} title={element.doc || undefined}>
       <ShapeSvg shape={shape} fill={css.background as string} stroke={css.borderColor as string} figure={vn.style.figure} />
       <Handle type="target" position={Position.Top} id="" className="ad-handle ad-handle--body" />
       <Handle type="source" position={Position.Bottom} id="" className="ad-handle ad-handle--body" />

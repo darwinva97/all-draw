@@ -4,7 +4,7 @@
  * y se añaden las reglas de anidamiento y un par de ayudantes.
  */
 import type { NotationPack, NestingRule } from '@all-draw/core';
-import { CATEGORIES, ELEMENTS, RELATIONS, VALIDITY, VIEWPOINTS, LAYERS, CONCEPTS, SPEC_VERSION } from './generated';
+import { CATEGORIES, ELEMENTS, RELATIONS, VALIDITY, VIEWPOINTS, SPEC_VERSION } from './generated';
 
 export { CATEGORIES, ELEMENTS, RELATIONS, VALIDITY, VIEWPOINTS, LAYERS, CONCEPTS, SPEC_VERSION } from './generated';
 

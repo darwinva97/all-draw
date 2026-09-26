@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { relationsOfElement, viewsOfElement, type Element, type FieldDef, type KeyValue, type Relation, type ViewNode } from '@all-draw/core';
 import { useEditor } from '../context';
+import { addLayer, addStage, removeLayer, removeStage, updateLayer, updateStage, normalizeGrid, LAYER_COLORS } from '@all-draw/notation-grid';
 import { useRecord, usePorts, useAnyChange } from '../hooks';
 
 /** Inspector: lo seleccionado (nodo→elemento, arista→relación) o la vista. */
@@ -171,9 +172,27 @@ function ViewInspector({ viewId }: { viewId: string | null }) {
         <option value="">(ninguno: todo)</option>{pack.viewpoints.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>}
       <label className="ad-field"><span>Elemento raíz</span><select className="ad-input" disabled={readOnly} value={view.rootElementId ?? ''} onChange={e => patch({ rootElementId: e.target.value || undefined })}>
         <option value="">(ninguno)</option>{store.list('elements').filter(e => !e.template).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></label>
+      {view.kind === 'grid' && <GridEditor viewId={view.id} grid={normalizeGrid(view.grid)} />}
       <label className="ad-field ad-field--inline"><input type="checkbox" disabled={readOnly} checked={!!view.public} onChange={e => patch({ public: e.target.checked })} /> <span>Pública (solo lectura con enlace)</span></label>
       <div className="ad-hint">Arrastra tipos desde la paleta. Conecta arrastrando desde el borde inferior de un nodo, o desde un pin. Botón derecho para cambiar de dimensión.</div>
     </div>
+  </>;
+}
+
+function GridEditor({ viewId, grid }: { viewId: string; grid: ReturnType<typeof normalizeGrid> }) {
+  const { run, readOnly } = useEditor();
+  const set = (g: ReturnType<typeof normalizeGrid>) => run({ type: 'set', collection: 'views', id: viewId, value: { ...useEditor_store_get(viewId), grid: g } });
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { store } = useEditor();
+  function useEditor_store_get(id: string) { return store.get('views', id)!; }
+  return <>
+    <div className="ad-section">Capas</div>
+    {grid.layers.map((l, i) => <div key={l.id} className="ad-row"><input type="color" disabled={readOnly} value={l.color ?? LAYER_COLORS[i % LAYER_COLORS.length]} onChange={e => set(updateLayer(grid, l.id, { color: e.target.value }))} /><input className="ad-input" disabled={readOnly} value={l.name} onChange={e => set(updateLayer(grid, l.id, { name: e.target.value }))} /><input className="ad-input" type="number" style={{ width: 70 }} disabled={readOnly} value={l.size ?? ''} placeholder="alto" onChange={e => set(updateLayer(grid, l.id, { size: e.target.value ? Number(e.target.value) : undefined }))} />{!readOnly && <button className="ad-btn" onClick={() => set(removeLayer(grid, l.id))}>×</button>}</div>)}
+    {!readOnly && <button className="ad-btn" onClick={() => set(addLayer(grid, { name: `Capa ${grid.layers.length + 1}`, color: LAYER_COLORS[grid.layers.length % LAYER_COLORS.length] }))}>＋ capa</button>}
+    <div className="ad-section">Etapas</div>
+    {grid.stages.map(st => <div key={st.id} className="ad-row"><input className="ad-input" disabled={readOnly} value={st.name} onChange={e => set(updateStage(grid, st.id, { name: e.target.value }))} /><input className="ad-input" type="number" style={{ width: 70 }} disabled={readOnly} value={st.size ?? ''} placeholder="ancho" onChange={e => set(updateStage(grid, st.id, { size: e.target.value ? Number(e.target.value) : undefined }))} />{!readOnly && <button className="ad-btn" onClick={() => set(removeStage(grid, st.id))}>×</button>}</div>)}
+    {!readOnly && <button className="ad-btn" onClick={() => set(addStage(grid, { name: `Etapa ${grid.stages.length + 1}` }))}>＋ etapa</button>}
+    <div className="ad-hint">Los nodos de una capa o etapa borrada quedan fuera de la rejilla hasta que los muevas a otra celda.</div>
   </>;
 }
 

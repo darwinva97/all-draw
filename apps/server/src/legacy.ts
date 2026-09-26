@@ -7,9 +7,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import * as Y from 'yjs';
-import type { WorkspaceStore } from './store/types';
+import { LEGACY_EMAIL, type WorkspaceStore } from '@all-draw/server-core';
 
-export const LEGACY_EMAIL = 'legacy@alldraw.local';
+export { LEGACY_EMAIL };
 
 export async function importLegacyFiles(store: WorkspaceStore, dataDir: string): Promise<string[]> {
   if (!fs.existsSync(dataDir)) return [];

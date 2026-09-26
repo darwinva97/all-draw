@@ -18,8 +18,8 @@ export function ShortcutsPanel({ open, onClose }: { open: boolean; onClose: () =
   if (!open) return null;
   return (
     <div className="ad-cmdk-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="ad-cmdk ad-shortcuts" role="dialog" aria-label="Atajos de teclado">
-        <header className="ad-shortcuts__head"><strong>Atajos de teclado</strong><button className="ad-btn ad-btn--ghost" onClick={onClose} aria-label="Cerrar">×</button></header>
+      <div className="ad-cmdk ad-shortcuts" role="dialog" aria-modal="true" aria-label="Atajos de teclado">
+        <header className="ad-shortcuts__head"><strong>Atajos de teclado</strong><button className="ad-btn ad-btn--ghost" onClick={onClose} aria-label="Cerrar" autoFocus>×</button></header>
         <div className="ad-shortcuts__grid">
           {GROUPS.map(g => (
             <section key={g.title}>

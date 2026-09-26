@@ -2,13 +2,13 @@
  * Adaptador SQLite con `node:sqlite` (incluido en Node ≥ 22.13). Un fichero, sin dependencias
  * nativas externas. Las migraciones se aplican al abrir (`schema_migrations`).
  *
- * El esquema es SQL estándar para que un adaptador Postgres sea una traducción directa
- * (`BLOB` → `BYTEA`, `INTEGER` booleanos → `BOOLEAN`, `?` → `$n`).
+ * El esquema es SQL estándar: `postgres.ts` es una traducción directa (`BLOB` → `BYTEA`,
+ * `INTEGER` booleanos → `BOOLEAN`, `?` → `$n`) y `apps/worker/migrations/0001_init.sql` (D1) es este mismo SQL.
  */
 import { DatabaseSync } from 'node:sqlite';
 import * as Y from 'yjs';
 import { newId } from '@all-draw/core';
-import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, User, WorkspaceRow, WorkspaceStore } from './types';
+import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, User, WorkspaceRow, WorkspaceStore } from '@all-draw/server-core';
 
 const now = () => new Date().toISOString();
 
@@ -130,6 +130,7 @@ export class SqliteWorkspaceStore implements WorkspaceStore {
   async getUser(id: string) { return this.user(this.one('SELECT * FROM users WHERE id = ?', id)); }
   async getUserByEmail(email: string) { return this.user(this.one('SELECT * FROM users WHERE email = ?', email.trim().toLowerCase())); }
   async countUsers() { return (this.one<{ n: number }>('SELECT COUNT(*) AS n FROM users'))!.n; }
+  async setPasswordHash(userId: string, passwordHash: string) { this.run('UPDATE users SET password_hash = ? WHERE id = ?', passwordHash, userId); }
 
   async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
     const s: Session = { tokenHash, userId, createdAt: now(), expiresAt };

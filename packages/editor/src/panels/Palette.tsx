@@ -50,13 +50,13 @@ export function Palette() {
   };
   if (!view || !pal) return <aside className="ad-pal"><div className="ad-empty">Sin vista</div></aside>;
   return (
-    <aside className="ad-pal">
-      <input className="ad-input" placeholder="Buscar…" value={q} onChange={e => setQ(e.target.value)} />
-      <div className="ad-tabs">
-        <button className={tab === 'notation' ? 'is-active' : ''} onClick={() => setTab('notation')}>Notación</button>
-        <button className={tab === 'libs' ? 'is-active' : ''} onClick={() => setTab('libs')}>Librerías</button>
-        <button className={tab === 'model' ? 'is-active' : ''} onClick={() => setTab('model')}>Modelo</button>
-        <button className={tab === 'visual' ? 'is-active' : ''} onClick={() => setTab('visual')}>Visual</button>
+    <aside className="ad-pal" aria-label="Paleta">
+      <input className="ad-input" type="search" aria-label="Buscar en la paleta" placeholder="Buscar…" value={q} onChange={e => setQ(e.target.value)} />
+      <div className="ad-tabs" role="tablist" aria-label="Secciones de la paleta">
+        <button role="tab" aria-selected={tab === 'notation'} className={tab === 'notation' ? 'is-active' : ''} onClick={() => setTab('notation')}>Notación</button>
+        <button role="tab" aria-selected={tab === 'libs'} className={tab === 'libs' ? 'is-active' : ''} onClick={() => setTab('libs')}>Librerías</button>
+        <button role="tab" aria-selected={tab === 'model'} className={tab === 'model' ? 'is-active' : ''} onClick={() => setTab('model')}>Modelo</button>
+        <button role="tab" aria-selected={tab === 'visual'} className={tab === 'visual' ? 'is-active' : ''} onClick={() => setTab('visual')}>Visual</button>
       </div>
       <div className="ad-pal__scroll">
         {tab === 'notation' && <>
@@ -109,13 +109,13 @@ export function Palette() {
             <div className="ad-row">
               <button className="ad-btn" onClick={addImageUrl} title="Añadir una imagen por URL">＋ URL</button>
               <button className="ad-btn" onClick={() => file.current?.click()} title="Añadir una imagen desde un fichero (se guarda incrustada)">＋ Fichero</button>
-              <input ref={file} type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void addImageFile(f); e.target.value = ''; }} />
+              <input ref={file} type="file" aria-label="Imagen desde un fichero" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void addImageFile(f); e.target.value = ''; }} />
             </div>
             {images.length === 0 && <div className="ad-hint">Añade una imagen y arrástrala al lienzo.</div>}
             {images.filter(i => match(i.name)).map((img, i) => (
               <div key={i} className="ad-pal__item" draggable onDragStart={dragVisual({ visualType: 'core:image', src: img.src })} title={img.name}>
                 <img className="ad-pal__thumb" src={img.src} alt="" /><span className="ad-pal__ellipsis">{img.name}</span>
-                <button className="ad-btn ad-btn--ghost" onClick={() => setImages(xs => xs.filter((_, j) => j !== i))} title="Quitar de la paleta">×</button>
+                <button className="ad-btn ad-btn--ghost" onClick={() => setImages(xs => xs.filter((_, j) => j !== i))} title="Quitar de la paleta" aria-label={`Quitar ${img.name} de la paleta`}>×</button>
               </div>
             ))}
           </details>

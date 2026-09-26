@@ -1,0 +1,30 @@
+{
+  "name": "@all-draw/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "migrate": "wrangler d1 migrations apply alldraw --remote",
+    "migrate:local": "wrangler d1 migrations apply alldraw --local",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@all-draw/core": "workspace:*",
+    "@all-draw/server-core": "workspace:*",
+    "@all-draw/sync": "workspace:*",
+    "hono": "^4.13.9",
+    "yjs": "^13.6.33"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260925.1",
+    "lib0": "^0.2.117",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.139.0",
+    "y-protocols": "^1.0.7"
+  }
+}

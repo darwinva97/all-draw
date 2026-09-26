@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { relationsOfElement, viewsOfElement, type Element, type FieldDef, type KeyValue, type Relation, type ViewNode } from '@all-draw/core';
 import { useEditor } from '../context';
+import { ElementTraces } from './WorkspaceTraces';
 import { addLayer, addStage, removeLayer, removeStage, updateLayer, updateStage, normalizeGrid, LAYER_COLORS } from '@all-draw/notation-grid';
 import { useRecord, usePorts, useAnyChange, useCollection } from '../hooks';
 import { assignmentsTo, suggestedRoles, newAssignment } from './workspace-helpers';
@@ -65,6 +66,7 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
             <select className="ad-input" value={vn.detailViewId ?? ''} onChange={e => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { detailViewId: e.target.value || undefined } })}>
               <option value="">(ninguna)</option>{details.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select></label>}
+          <ElementTraces elementId={el.id} />
         </>}
         {tab === 'style' && <NodeStyleTab vn={vn} />}
       </div>
@@ -95,7 +97,9 @@ function PortsTab({ el, vn }: { el: Element; vn: ViewNode }) {
 }
 
 function NodeStyleTab({ vn }: { vn: ViewNode }) {
-  const { run, readOnly } = useEditor();
+  const { run, readOnly, registry, store } = useEditor();
+  const el = vn.elementId ? store.get('elements', vn.elementId) : undefined;
+  const archiFigure = !!el && registry.notationOf(el.typeId) === 'archimate' && !!registry.elementType(el.typeId)?.meta?.alternateFigure;
   const p = (patch: Record<string, unknown>) => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { style: patch } });
   return <>
     <div className="ad-hint">Solo afecta a esta aparición. Para pintar por datos usa las reglas.</div>
@@ -104,7 +108,7 @@ function NodeStyleTab({ vn }: { vn: ViewNode }) {
     <label className="ad-field"><span>Texto</span><input type="color" disabled={readOnly} value={vn.style.text ?? '#111111'} onChange={e => p({ text: e.target.value })} /><button className="ad-btn" onClick={() => p({ text: undefined })}>×</button></label>
     <label className="ad-field"><span>Tamaño</span><input className="ad-input" type="number" disabled={readOnly} value={vn.w} onChange={e => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { w: Number(e.target.value) } })} /> × <input className="ad-input" type="number" disabled={readOnly} value={vn.h} onChange={e => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { h: Number(e.target.value) } })} /></label>
     <label className="ad-field"><span>Texto alternativo</span><input className="ad-input" disabled={readOnly} value={vn.text ?? ''} placeholder="(nombre del elemento)" onChange={e => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { text: e.target.value || undefined } })} /></label>
-    <label className="ad-field"><span>Figura</span><select className="ad-input" disabled={readOnly} value={vn.style.figure ?? 0} onChange={e => p({ figure: Number(e.target.value) })}><option value={0}>Por defecto</option><option value={1}>Alternativa</option></select></label>
+    <label className="ad-field"><span>Figura</span><select className="ad-input" disabled={readOnly} value={vn.style.figure ?? 0} onChange={e => p({ figure: Number(e.target.value) })}><option value={0}>{archiFigure ? 'Rectángulo con icono' : 'Por defecto'}</option><option value={1}>{archiFigure ? 'Figura ArchiMate' : 'Alternativa'}</option></select></label>
   </>;
 }
 

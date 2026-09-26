@@ -25,8 +25,7 @@ export interface EditorProps {
 /** Disposición completa del editor. La app envuelve esto en `EditorProvider`. */
 export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: EditorProps) {
   const ed = useEditor();
-  const { readOnly, effectiveTheme, setTheme, registry, run, openView, canvas, selection, setRenaming } = ed;
-  const [wsOpen, setWsOpen] = useState(false);
+  const { readOnly, effectiveTheme, setTheme, registry, run, openView, canvas, selection, setRenaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel } = ed;
   const [searchOpen, setSearchOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   useEffect(() => { if (theme) setTheme(theme); }, [theme, setTheme]);
@@ -70,15 +69,15 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
       run({ type: 'set', collection: 'views', id: v.id, value: v });
       openView(v.id);
     }
-    else if (id === 'workspace') setWsOpen(true);
+    else if (id === 'workspace') openWorkspacePanel();
     else if (id === 'layout') onRequestLayout?.();
     else if (id === 'fit') canvas.current?.fitView();
     else if (id === 'theme') setTheme(effectiveTheme === 'dark' ? 'light' : 'dark');
     else if (id === 'shortcuts') setKeysOpen(true);
-  }, [registry, run, openView, onRequestLayout, canvas, setTheme, effectiveTheme]);
+  }, [registry, run, openView, onRequestLayout, canvas, setTheme, effectiveTheme, openWorkspacePanel]);
 
   const left = readOnly ? toolbarLeft : <>
-    <button className="ad-btn" onClick={() => setWsOpen(true)} title="Librerías, reglas de estilo y personas">Espacio</button>
+    <button className="ad-btn" onClick={() => openWorkspacePanel()} title="Librerías, reglas de estilo, personas y trazabilidad">Espacio</button>
     {toolbarLeft}
   </>;
   return (
@@ -89,7 +88,7 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
         <main className="ad-editor__main"><Canvas onRequestLayout={onRequestLayout} /><Problems /></main>
         <Inspector />
       </div>
-      {!readOnly && <WorkspacePanel open={wsOpen} onClose={() => setWsOpen(false)} />}
+      {!readOnly && <WorkspacePanel open={workspaceTab !== null} onClose={closeWorkspacePanel} initialTab={workspaceTab ?? 'libraries'} />}
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} actions={actions} onAction={onAction} />
       <ShortcutsPanel open={keysOpen} onClose={() => setKeysOpen(false)} />
     </div>

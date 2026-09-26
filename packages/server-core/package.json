@@ -1,0 +1,41 @@
+{
+  "name": "@all-draw/server-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./test/store-contract": "./test/store-contract.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@all-draw/core": "workspace:*",
+    "@all-draw/io": "workspace:*",
+    "@all-draw/notation-archimate": "workspace:*",
+    "@all-draw/notation-bpmn": "workspace:*",
+    "@all-draw/notation-c4": "workspace:*",
+    "@all-draw/notation-catalog": "workspace:*",
+    "@all-draw/notation-dfd": "workspace:*",
+    "@all-draw/notation-er": "workspace:*",
+    "@all-draw/notation-flowchart": "workspace:*",
+    "@all-draw/notation-freeform": "workspace:*",
+    "@all-draw/notation-grid": "workspace:*",
+    "@all-draw/notation-mindmap": "workspace:*",
+    "@all-draw/notation-sequence": "workspace:*",
+    "@all-draw/notation-statechart": "workspace:*",
+    "@all-draw/notation-uml-class": "workspace:*",
+    "@all-draw/sync": "workspace:*",
+    "@hono/zod-openapi": "^1.6.3",
+    "hono": "^4.13.9",
+    "lib0": "^0.2.117",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.33",
+    "zod": "^4.6.5"
+  }
+}

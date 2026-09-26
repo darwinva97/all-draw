@@ -8,14 +8,13 @@ import path from 'node:path';
 import { getRequestListener } from '@hono/node-server';
 import { WebSocketServer } from 'ws';
 import { createApi } from './api';
-import { makeHasher, resolveToken, roleFor, tokenFromRequest } from './auth';
+import { SAFE_ID, authorizeConnection, makeHasher, tokenFromRequest } from './auth';
 import type { Config } from './config';
-import { DocManager } from './docs';
-import type { WorkspaceStore } from './store/types';
+import { DocManager, LocalDocHost } from './docs';
+import type { Role, WorkspaceStore } from './store/types';
 import { setupConnection } from './ysync';
 
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.map': 'application/json', '.txt': 'text/plain' };
-const SAFE_ID = /^[A-Za-z0-9_\-:.]{1,120}$/;
 
 export interface App {
   server: http.Server;
@@ -27,7 +26,7 @@ export interface App {
 export function createApp(config: Config, store: WorkspaceStore): App {
   const hash = makeHasher(config.sessionSecret);
   const docs = new DocManager(store);
-  const api = createApi({ store, docs, hash, config });
+  const api = createApi({ store, docs: new LocalDocHost(docs), hash, config });
   const apiListener = getRequestListener(api.fetch);
   const staticDir = path.resolve(config.staticDir);
 
@@ -55,18 +54,24 @@ export function createApp(config: Config, store: WorkspaceStore): App {
     const url = new URL(req.url ?? '/', 'http://x');
     if (!url.pathname.startsWith('/ws/')) return socket.destroy();
     const id = url.pathname.slice(4);
-    wss.handleUpgrade(req, socket, head, async ws => {
+    // Identidad y doc se resuelven ANTES de aceptar el socket: el cliente manda su sync step1 nada
+    // más abrirse y, si el listener de `message` se registrara tras un `await`, ese mensaje se perdería.
+    void (async () => {
+      let outcome: { live: Awaited<ReturnType<DocManager['get']>>; role: Role } | { close: number; reason: string };
       try {
-        if (!SAFE_ID.test(id)) return ws.close(4400, 'id no válido');
-        const headers = { get: (n: string) => (req.headers[n.toLowerCase()] as string | undefined) ?? null };
-        const principal = await resolveToken({ store, hash }, tokenFromRequest(headers, url));
-        if (!(await store.getWorkspace(id))) return ws.close(4404, 'el espacio no existe');
-        const role = await roleFor(store, principal, id);
-        if (!role) return ws.close(4401, 'sin permiso');
-        const live = await docs.get(id);
-        setupConnection(ws, live, role);
-      } catch (e) { console.error('ws', e); try { ws.close(1011, 'error'); } catch { /* nada */ } }
-    });
+        if (!SAFE_ID.test(id)) outcome = { close: 4400, reason: 'id no válido' };
+        else {
+          const headers = { get: (n: string) => (req.headers[n.toLowerCase()] as string | undefined) ?? null };
+          const auth = await authorizeConnection({ store, hash }, tokenFromRequest(headers, url), id);
+          outcome = 'close' in auth ? auth : { live: await docs.get(id), role: auth.role };
+        }
+      } catch (e) { console.error('ws', e); outcome = { close: 1011, reason: 'error' }; }
+      if (socket.destroyed) return;
+      wss.handleUpgrade(req, socket, head, ws => {
+        if ('close' in outcome) return ws.close(outcome.close, outcome.reason);
+        setupConnection(ws, outcome.live, outcome.role);
+      });
+    })();
   });
 
   return {

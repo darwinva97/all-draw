@@ -24,6 +24,17 @@ pnpm start         # servidor Node: estáticos + sincronización Yjs en /ws/<sal
 pnpm e2e           # pruebas con el chromium del sistema (necesita `pnpm dev` y `pnpm start` levantados)
 ```
 
-Staging: https://alldraw.bezenti.com. Estado detallado y pendientes en `docs/05-estado.md`.
+Staging: https://alldraw.bezenti.com.
+
+## Documentación
+
+- **Manual de usuario** (`docs/manual/`, con capturas): [Primeros pasos](docs/manual/01-primeros-pasos.md) ·
+  [Modelo y vistas](docs/manual/02-modelo-y-vistas.md) · [Editor](docs/manual/03-editor.md) ·
+  [Notaciones](docs/manual/04-notaciones.md) · [Librerías, reglas y personas](docs/manual/05-librerias-reglas-personas.md) ·
+  [Compartir y colaborar](docs/manual/06-compartir-y-colaborar.md) · [Importar y exportar](docs/manual/07-importar-exportar.md) ·
+  [Agentes y API](docs/manual/08-agentes-y-api.md) · [Desplegar](docs/manual/09-desplegar.md).
+- **Estado del proyecto y pendientes**: [`docs/05-estado.md`](docs/05-estado.md).
+- Para agentes: [`apps/server/SKILL.md`](apps/server/SKILL.md) y `GET /api/openapi.json`; servidor: [`apps/server/README.md`](apps/server/README.md).
+- Accesibilidad: `node e2e/a11y.mjs` (con `pnpm dev` levantado) comprueba nombres accesibles, etiquetas de campos, diálogos y foco.
 
 Licencia MIT. Reutiliza código MIT de [archify](https://github.com/tt-a1i/archify) y datos de [Archi](https://github.com/archimatetool/archi).

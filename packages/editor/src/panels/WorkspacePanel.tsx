@@ -1,16 +1,17 @@
 /**
  * Panel del espacio de trabajo: edición desde la interfaz de librerías (tipos, campos y
- * componentes), reglas de estilo y personas. Es un overlay a pantalla completa con pestañas.
+ * componentes), reglas de estilo, personas y trazabilidad entre notaciones. Es un overlay a pantalla completa con pestañas.
  */
 import { useEffect, useState } from 'react';
 import { LibrariesTab } from './WorkspaceLibraries';
 import { RulesTab } from './WorkspaceRules';
 import { PeopleTab } from './WorkspacePeople';
+import { TracesTab } from './WorkspaceTraces';
 
-export type WorkspaceTab = 'libraries' | 'rules' | 'people';
+export type WorkspaceTab = 'libraries' | 'rules' | 'people' | 'traces';
 
 const TABS: { id: WorkspaceTab; label: string }[] = [
-  { id: 'libraries', label: 'Librerías' }, { id: 'rules', label: 'Reglas' }, { id: 'people', label: 'Personas' },
+  { id: 'libraries', label: 'Librerías' }, { id: 'rules', label: 'Reglas' }, { id: 'people', label: 'Personas' }, { id: 'traces', label: 'Trazabilidad' },
 ];
 
 export function WorkspacePanel({ open, onClose, initialTab = 'libraries' }: { open: boolean; onClose: () => void; initialTab?: WorkspaceTab }) {
@@ -37,6 +38,7 @@ export function WorkspacePanel({ open, onClose, initialTab = 'libraries' }: { op
           {tab === 'libraries' && <LibrariesTab />}
           {tab === 'rules' && <RulesTab />}
           {tab === 'people' && <PeopleTab />}
+          {tab === 'traces' && <TracesTab onNavigate={onClose} />}
         </div>
       </div>
     </div>

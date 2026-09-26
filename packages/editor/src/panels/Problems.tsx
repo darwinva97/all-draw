@@ -18,10 +18,10 @@ export function Problems() {
   };
   return (
     <div className={`ad-problems ${open ? 'is-open' : ''}`}>
-      <button className="ad-problems__bar" onClick={() => setOpen(o => !o)}>
+      <button className="ad-problems__bar" aria-expanded={open} aria-label={`Problemas: ${errors} errores, ${warns} avisos, ${diags.length - errors - warns} notas`} onClick={() => setOpen(o => !o)}>
         <span className={errors ? 'ad-sev-error' : ''}>● {errors} errores</span> <span className={warns ? 'ad-sev-warning' : ''}>▲ {warns} avisos</span> <span>ℹ {diags.length - errors - warns} notas</span>
       </button>
-      {open && <div className="ad-problems__list">
+      {open && <div className="ad-problems__list" role="region" aria-label="Lista de problemas">
         {diags.length === 0 && <div className="ad-empty">Sin problemas.</div>}
         {diags.map((d, i) => <div key={i} className={`ad-problem ad-sev-${d.severity}`}>
           <button className="ad-link" onClick={() => goTo(d)}><code>{d.code}</code> {d.message}</button>

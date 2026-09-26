@@ -8,6 +8,7 @@
  */
 import { allPorts, resolveStyle, type ArrowHead, type Element, type ElementType, type NotationRegistry, type Port, type RuleStyle, type Shape, type Store, type ViewEdge, type ViewNode } from '@all-draw/core';
 import { cellRects, normalizeGrid, cellKey } from '@all-draw/notation-grid';
+import { figureEntry, figureOf, figureParts, iconParts, showsIcon, textInset } from '@all-draw/notation-archimate';
 import { edgePath, floatingEndpoints, type Box, type Endpoints, type Pt, type Router } from './bendpath-svg';
 
 export type SvgTheme = 'light' | 'dark' | 'dual';
@@ -239,12 +240,27 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
   const strokeWidth = rule.borderWidth ?? 1;
   const dash = rule.borderStyle === 'dashed' ? '6 4' : rule.borderStyle === 'dotted' ? '2 3' : (shape === 'group' || shape === 'container') ? '4 3' : undefined;
   const label = vn.text ?? (el.name || (type?.name ?? ''));
-  const icon = LABEL_BELOW.has(shape) ? undefined : ((rule.icon ?? type?.icon) || undefined);
-  const cls = ['ad-node', `ad-shape-${shape}`, isContainer ? 'is-container' : '', dimmed ? 'is-dimmed' : '', rule.bold ? 'r-bold' : '', rule.strike ? 'r-strike' : ''].filter(Boolean).join(' ');
+  // ArchiMate: figuras e iconos de Archi (mismas `FIGURES` que el editor).
+  const archi = ctx.reg.notationOf(el.typeId) === 'archimate' ? figureEntry(el.typeId) : undefined;
+  const archiDef = archi ? figureOf(el.typeId, vn.style.figure === 1 ? 1 : 0) : undefined;
+  const inset = archiDef ? textInset(archiDef, b.w, b.h) : { top: 0, right: 0, bottom: 0, left: 0 };
+  const icon = archi || LABEL_BELOW.has(shape) ? undefined : ((rule.icon ?? type?.icon) || undefined);
+  const cls = ['ad-node', `ad-shape-${shape}`, archi ? 'ad-node--archimate' : '', isContainer ? 'is-container' : '', dimmed ? 'is-dimmed' : '', rule.bold ? 'r-bold' : '', rule.strike ? 'r-strike' : ''].filter(Boolean).join(' ');
 
   const parts: string[] = [];
   // Cuerpo
-  if (svgShape) parts.push(shapeSvg(shape, b, fill, stroke, 1.5));
+  if (archi && archiDef) {
+    const alt = vn.style.figure === 1 && !!archi.figure1;
+    const fp = figureParts(archiDef, b.w, b.h, fill, stroke, strokeWidth, rule.borderStyle === 'dashed' ? '6 4' : rule.borderStyle === 'dotted' ? '2 3' : undefined);
+    const paths = fp.map(p => `<path${attrs({ d: p.d, fill: p.fill, stroke: p.stroke, 'stroke-width': p.strokeWidth, 'stroke-dasharray': p.dash, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' })}/>`).join('');
+    parts.push(`<g class="ad-shape ad-archi"${attrs({ 'data-figure': ctx.bare ? undefined : alt ? 1 : 0, transform: `translate(${num(b.x)},${num(b.y)})` })}>${paths}</g>`);
+    if (showsIcon(el.typeId, vn.style.figure)) {
+      const ip = iconParts(el.typeId, stroke).map(p => `<path${attrs({ d: p.d, fill: p.fill, stroke: p.stroke, 'stroke-width': p.strokeWidth, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' })}/>`).join('');
+      parts.push(`<g class="ad-archi__icon"${attrs({ transform: `translate(${num(b.x + b.w - 20)},${num(b.y + 4)})` })}>${ip}</g>`);
+      inset.right += 12;
+    }
+  }
+  else if (svgShape) parts.push(shapeSvg(shape, b, fill, stroke, 1.5));
   else if (shape === 'pool' || shape === 'lane') {
     const band = shape === 'pool' ? 24 : 18;
     parts.push(`<rect class="ad-shape"${attrs({ x: b.x, y: b.y, width: b.w, height: b.h, rx: 4, fill, stroke, 'stroke-width': strokeWidth })}/>`);
@@ -263,7 +279,9 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
       parts.push(textBlock([label], { x: b.x + b.w / 2, y: b.y + b.h + 2 + lineH / 2, cls: 'ad-node__label', fill: textColor, fontSize }));
     } else {
       const padX = 10, padY = 4;
-      const maxW = Math.max(fontSize, b.w - padX * 2);
+      // Zona útil (las figuras de Archi con cabecera o pestañas laterales reservan margen).
+      const area = { x: b.x + inset.left, y: b.y + inset.top, w: Math.max(fontSize, b.w - inset.left - inset.right), h: Math.max(lineH, b.h - inset.top - inset.bottom) };
+      const maxW = Math.max(fontSize, area.w - padX * 2);
       const lines = wrapText(label, maxW, fontSize);
       const blocks: { lines: string[]; cls: string; fontSize: number; lineH: number }[] = [];
       if (icon) blocks.push({ lines: [icon], cls: 'ad-node__icon', fontSize: 16, lineH: 17 });
@@ -271,8 +289,8 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
       if (type) blocks.push({ lines: [type.name], cls: 'ad-node__type', fontSize: 10, lineH: 13 });
       const total = blocks.reduce((s, k) => s + k.lines.length * k.lineH, 0) + (blocks.length - 1);
       const left = isContainer;
-      let y = left ? b.y + padY + 2 : b.y + (b.h - total) / 2;
-      const x = left ? b.x + padX : b.x + b.w / 2;
+      let y = left ? area.y + padY + 2 : area.y + (area.h - total) / 2;
+      const x = left ? area.x + padX : area.x + area.w / 2;
       for (const k of blocks) {
         const h = k.lines.length * k.lineH;
         parts.push(textBlock(k.lines, { x, y: y + h / 2, anchor: left ? 'start' : 'middle', cls: k.cls, fill: textColor, fontSize: k.fontSize, lineH: k.lineH }));

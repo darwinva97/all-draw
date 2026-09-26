@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { dimensionsOfElement, viewsOfElement, makeView, makeNode, newId, type Command } from '@all-draw/core';
 import { useEditor } from '../context';
+import { topSuggestions, linkCommand } from './traces-helpers';
 
 /** Menú contextual de un nodo: cambiar de dimensión, detalle, puertos, quitar, borrar. */
 export function NodeMenu({ x, y, nodeId, onClose }: { x: number; y: number; nodeId: string; onClose: () => void }) {
@@ -16,6 +17,7 @@ export function NodeMenu({ x, y, nodeId, onClose }: { x: number; y: number; node
   const dims = dimensionsOfElement(store, el.id);
   const { details, appearsIn } = viewsOfElement(store, el.id);
   const packs = registry.allPacks().filter(p => p.id !== 'core');
+  const traceSugs = readOnly ? [] : topSuggestions(store, registry, el.id, 3);
 
   const openIn = (viewId: string) => { openView(viewId, true); onClose(); };
   const createDetail = (notationId: string, viewpointId?: string, dimName?: string) => {
@@ -49,6 +51,12 @@ export function NodeMenu({ x, y, nodeId, onClose }: { x: number; y: number; node
       )}
       {appearsIn.length > 0 && <div className="ad-popover__section">Aparece en</div>}
       {appearsIn.map(v => <button key={v.id} className="ad-popover__item" onClick={() => openIn(v.id)}>◻ {v.name}</button>)}
+      {traceSugs.length > 0 && <div className="ad-popover__section">Trazas</div>}
+      {traceSugs.map(s => (
+        <button key={s.target.id} className="ad-popover__item" title={`${s.reason} (${Math.round(s.score * 100)} %)`} onClick={() => { run(linkCommand(el.id, s)); onClose(); }}>
+          ⇢ Enlazar con {s.target.name || '(sin nombre)'} <small>({registry.pack(registry.notationOf(s.target.typeId))?.name ?? registry.notationOf(s.target.typeId)})</small>
+        </button>
+      ))}
       {!readOnly && <>
         <div className="ad-popover__section">Nodo</div>
         <button className="ad-popover__item" onClick={togglePorts}>{vn.style.showPorts ? 'Ocultar pines' : 'Mostrar pines'}</button>

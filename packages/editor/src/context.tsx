@@ -6,6 +6,7 @@
 import { createContext, useContext, useMemo, useState, useCallback, useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import type { Store, Command, NotationRegistry, Validator } from '@all-draw/core';
 import type { AwarenessLike, PresenceMe } from './presence';
+import type { WorkspaceTab } from './panels/WorkspacePanel';
 
 export interface HistoryLike { run(cmd: Command): void; undo(): boolean; redo(): boolean; readonly canUndo: boolean; readonly canRedo: boolean }
 
@@ -54,6 +55,10 @@ export interface EditorCtx {
   setRenaming(id: string | null): void;
   /** API del lienzo montado (null si no hay vista abierta). */
   canvas: RefObject<CanvasApi | null>;
+  /** Pestaña abierta del panel Espacio (null = cerrado). */
+  workspaceTab: WorkspaceTab | null;
+  openWorkspacePanel(tab?: WorkspaceTab): void;
+  closeWorkspacePanel(): void;
 }
 
 const Ctx = createContext<EditorCtx | null>(null);
@@ -94,6 +99,7 @@ export function EditorProvider(props: EditorProviderProps) {
   const [sys, setSys] = useState<'light' | 'dark'>(systemTheme);
   const [snap, setSnapState] = useState<boolean>(() => readStored(SNAP_KEY) === '1');
   const canvas = useRef<CanvasApi | null>(null);
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab | null>(null);
   const viewId = trail[trail.length - 1] ?? null;
 
   useEffect(() => { if (props.theme) setThemeState(props.theme); }, [props.theme]);
@@ -122,13 +128,15 @@ export function EditorProvider(props: EditorProviderProps) {
   const setTheme = useCallback((t: Theme) => { setThemeState(t); writeStored(THEME_KEY, t); }, []);
   const setSnap = useCallback((v: boolean) => { setSnapState(v); writeStored(SNAP_KEY, v ? '1' : '0'); }, []);
   const presence = useMemo(() => props.presence ?? null, [props.presence]);
+  const openWorkspacePanel = useCallback((tab: WorkspaceTab = 'libraries') => setWorkspaceTab(tab), []);
+  const closeWorkspacePanel = useCallback(() => setWorkspaceTab(null), []);
   const effectiveTheme = theme === 'system' ? sys : theme;
 
   const value = useMemo<EditorCtx>(() => ({
     store: props.store, history: props.history, registry: props.registry, viewId, openView, back, trail,
     selection, select: setSelection, run, readOnly: !!props.readOnly, validators: props.validators ?? [],
-    presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, setRenaming, canvas,
-  }), [props.store, props.history, props.registry, viewId, openView, back, trail, selection, run, props.readOnly, props.validators, presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming]);
+    presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, setRenaming, canvas, workspaceTab, openWorkspacePanel, closeWorkspacePanel,
+  }), [props.store, props.history, props.registry, viewId, openView, back, trail, selection, run, props.readOnly, props.validators, presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel]);
 
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>;
 }

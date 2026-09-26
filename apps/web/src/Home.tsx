@@ -12,6 +12,7 @@ export function Home() {
   const [serverUp, setServerUp] = useState<boolean>(false);
   const [auth, setAuth] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
   const file = useRef<HTMLInputElement>(null);
   const refresh = async () => {
     setList((await listLocalWorkspaces()).filter(w => !w.id.startsWith('srv_')));
@@ -30,17 +31,18 @@ export function Home() {
     location.hash = `#/w/${id}`;
   };
   const createRemote = async (initial?: unknown, name = 'Nuevo espacio') => {
-    setBusy(true);
-    try { const w = await api.createWorkspace(name, initial); location.hash = `#/s/${w.id}`; } catch (e) { alert((e as Error).message); setBusy(false); }
+    setBusy(true); setErr('');
+    try { const w = await api.createWorkspace(name, initial); location.hash = `#/s/${w.id}`; } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   const onFile = async (f: File) => {
     const text = await f.text();
+    setErr('');
     try {
       const { importAny } = await import('@all-draw/io');
       const { workspace, warnings, format } = await importAny(text, f.name);
       if (warnings.length) console.warn(`Importación ${format}:`, warnings);
       if (user) await createRemote(workspace, workspace.meta.name); else await createLocal(workspace);
-    } catch (e) { alert(`No se pudo importar: ${(e as Error).message}`); setBusy(false); }
+    } catch (e) { setErr(`No se pudo importar: ${(e as Error).message}`); setBusy(false); }
   };
   const upload = async (w: LocalWorkspaceEntry) => {
     setBusy(true);
@@ -57,33 +59,34 @@ export function Home() {
         <button className="btn btn--primary" disabled={busy} onClick={() => user ? createRemote() : createLocal(null)}>Nuevo espacio{user ? ' en el servidor' : ''}</button>
         <button className="btn" disabled={busy} onClick={() => user ? createRemote(demoWorkspace(), 'Demo · Alta de cliente') : createLocal(demoWorkspace())}>Abrir la demo</button>
         <button className="btn" disabled={busy} onClick={() => file.current?.click()}>Importar…</button>
-        <input ref={file} type="file" accept=".drawer,.json,.archimate,.xml,.bpmn,.mmd,.yaml,.yml" hidden onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
+        <input ref={file} type="file" aria-label="Fichero a importar" accept=".drawer,.json,.archimate,.xml,.bpmn,.mmd,.yaml,.yml" hidden onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
         <span style={{ flex: 1 }} />
         {serverUp && user === null && <button className="btn" onClick={() => setAuth(true)}>Entrar / registrarse</button>}
         {user && <span className="app-status">{user.name} · <a href="#/keys">claves API</a> · <button className="btn btn--ghost" onClick={async () => { await api.logout(); refresh(); }}>salir</button></span>}
       </div>
+      <p className="err" role="alert" aria-live="assertive">{err}</p>
       <p className="app-status" style={{ padding: 0 }}>Formatos: .drawer (Drawer), .alldraw.json, .archimate (Archi), Open Exchange, BPMN 2.0 XML, Structurizr JSON, XState JSON, Mermaid, OpenAPI.</p>
       {remote && <>
-        <div className="home__section">En el servidor</div>
+        <h2 className="home__section">En el servidor</h2>
         <div className="home__list">
-          {remote.length === 0 && <p style={{ color: '#6b7280' }}>Todavía no tienes espacios en el servidor.</p>}
+          {remote.length === 0 && <p className="home__empty">Todavía no tienes espacios en el servidor.</p>}
           {remote.map(w => (
             <div key={w.id} className="home__item" onClick={() => (location.hash = `#/s/${w.id}`)}>
-              <div><div>{w.name || '(sin nombre)'} <small>· {w.role}</small></div><small>{new Date(w.updatedAt).toLocaleString()}</small></div>
-              {w.role === 'owner' && <button className="btn btn--ghost" onClick={async e => { e.stopPropagation(); if (confirm(`¿Borrar "${w.name}" del servidor?`)) { await api.deleteWorkspace(w.id); refresh(); } }}>Borrar</button>}
+              <div><a className="home__link" href={`#/s/${w.id}`} onClick={e => e.stopPropagation()}>{w.name || '(sin nombre)'}</a> <small>· {w.role}</small><br /><small>{new Date(w.updatedAt).toLocaleString()}</small></div>
+              {w.role === 'owner' && <button className="btn btn--ghost" aria-label={`Borrar ${w.name || 'espacio sin nombre'} del servidor`} onClick={async e => { e.stopPropagation(); if (confirm(`¿Borrar "${w.name}" del servidor?`)) { await api.deleteWorkspace(w.id); refresh(); } }}>Borrar</button>}
             </div>
           ))}
         </div>
       </>}
-      <div className="home__section">En este navegador</div>
+      <h2 className="home__section">En este navegador</h2>
       <div className="home__list">
-        {list.length === 0 && <p style={{ color: '#6b7280' }}>Todavía no hay espacios locales.</p>}
+        {list.length === 0 && <p className="home__empty">Todavía no hay espacios locales.</p>}
         {list.map(w => (
           <div key={w.id} className="home__item" onClick={() => (location.hash = `#/w/${w.id}`)}>
-            <div><div>{w.name || '(sin nombre)'}</div><small>{new Date(w.updatedAt).toLocaleString()}</small></div>
+            <div><a className="home__link" href={`#/w/${w.id}`} onClick={e => e.stopPropagation()}>{w.name || '(sin nombre)'}</a><br /><small>{new Date(w.updatedAt).toLocaleString()}</small></div>
             <span>
-              {user && <button className="btn btn--ghost" disabled={busy} onClick={e => { e.stopPropagation(); upload(w); }}>Subir al servidor</button>}
-              <button className="btn btn--ghost" onClick={async e => { e.stopPropagation(); if (confirm(`¿Borrar "${w.name}" de este navegador?`)) { await deleteLocalWorkspace(w.id); refresh(); } }}>Borrar</button>
+              {user && <button className="btn btn--ghost" disabled={busy} aria-label={`Subir ${w.name || 'espacio sin nombre'} al servidor`} onClick={e => { e.stopPropagation(); upload(w); }}>Subir al servidor</button>}
+              <button className="btn btn--ghost" aria-label={`Borrar ${w.name || 'espacio sin nombre'} de este navegador`} onClick={async e => { e.stopPropagation(); if (confirm(`¿Borrar "${w.name}" de este navegador?`)) { await deleteLocalWorkspace(w.id); refresh(); } }}>Borrar</button>
             </span>
           </div>
         ))}

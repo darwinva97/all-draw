@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { MemoryStore, NotationRegistry, CORE_PACK, exampleWorkspace, parseWorkspace, makeElement, makeView, makeNode, makeRelation, makeEdge, type NotationPack, type ViewNode, type StyleRule } from '@all-draw/core';
 import { FREEFORM_PACK } from '@all-draw/notation-freeform';
 import { GRID_PACK } from '@all-draw/notation-grid';
+import { ARCHIMATE_PACK, figureOf, iconOf } from '@all-draw/notation-archimate';
 import { renderSvg, renderSvgDetailed, wrapText, mixWithWhite, visiblePorts, escapeXml } from '../src/svg';
 import { edgePath, floatingEndpoints, orthogonalize, smoothStepPath } from '../src/bendpath-svg';
 
@@ -229,6 +230,34 @@ describe('renderSvg', () => {
     expect(svg).toContain('data-cell="L1|S1"');
     // Arista entre celdas
     expect(svg).toContain('data-edge="e"');
+  });
+
+  it('vista ArchiMate: figuras de Archi con data-figure, paths e iconos', () => {
+    const store = new MemoryStore();
+    const r = new NotationRegistry().register(CORE_PACK).register(ARCHIMATE_PACK);
+    const view = makeView('Arquitectura', { id: 'va', notationId: 'archimate' }); store.set('views', view.id, view);
+    const add = (id: string, typeId: string, x: number, figure?: number) => {
+      const el = makeElement(typeId, id, { id: `el_${id}` }); store.set('elements', el.id, el);
+      const n = makeNode('va', el.id, { x, y: 10, w: 120, h: 55 }, { id, style: figure === undefined ? {} : { figure } }); store.set('nodes', n.id, n);
+    };
+    add('actor', 'archimate:BusinessActor', 0);
+    add('proc', 'archimate:BusinessProcess', 140, 1);
+    add('comp', 'archimate:ApplicationComponent', 280, 1);
+    add('node', 'archimate:Node', 420, 1);
+    add('goal', 'archimate:Goal', 560);
+    const svg = renderSvg(store, r, 'va');
+    expect(svg).toContain('data-figure="0"');
+    expect(svg).toContain('data-figure="1"');
+    expect((svg.match(/class="ad-shape ad-archi"/g) ?? []).length).toBe(5);
+    // Rectángulo con icono: icono 16×16 en la esquina; figura alternativa: sin icono
+    expect((svg.match(/class="ad-archi__icon"/g) ?? []).length).toBe(2);
+    expect(svg).toContain(`d="${iconOf('archimate:BusinessActor')}"`);
+    expect(svg).toContain(`d="${figureOf('archimate:BusinessProcess', 1).path(120, 55)}"`);
+    expect(svg).toContain(`d="${figureOf('archimate:Node', 1).lines!(120, 55)}"`);
+    expect(svg).toContain(`d="${figureOf('archimate:Goal', 0).path(120, 55)}"`);
+    expect(svg).not.toContain('NaN');
+    expect(svg).toContain('fill="#ffffb5"');
+    expect(renderSvg(store, r, 'va', { bare: true })).not.toContain('data-figure');
   });
 
   it('vista vacía produce un SVG válido', async () => {

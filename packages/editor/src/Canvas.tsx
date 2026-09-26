@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef, type DragEvent, type MouseEvent } from 'react';
 type DragEv = globalThis.MouseEvent | globalThis.TouchEvent;
 import {
-  ReactFlow, Background, Controls, MiniMap, useReactFlow, ReactFlowProvider, ViewportPortal, useViewport,
+  ReactFlow, Background, Controls, MiniMap, useReactFlow, ReactFlowProvider, ViewportPortal, useViewport, ConnectionMode,
   type Node, type Edge, type NodeChange, type Connection, type IsValidConnection, type OnConnectEnd, type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -20,12 +20,15 @@ import { AlignBar } from './panels/AlignBar';
 import { copySelection, pastePlan, setClipboard, readClipboard, type Clip, type PasteMode, type PasteOptions } from './clipboard';
 import { usePeers, remoteSelection, selectionSignature, throttle, type Peer } from './presence';
 import { cellRects, normalizeGrid, cellKey, cellAt } from '@all-draw/notation-grid';
+import { LifelineNode, ActivationNode, FragmentNode } from './views/SequenceNodes';
+import { SequenceMessageEdge } from './views/SequenceEdges';
+import { useSequenceCanvas } from './views/useSequenceCanvas';
 
 export const CELL_PREFIX = 'cell:';
 const isCellId = (id: string | undefined | null) => !!id && id.startsWith(CELL_PREFIX);
 
-const nodeTypes = { element: ElementNode, visual: VisualNode };
-const edgeTypes = { relation: RelationEdge };
+const nodeTypes = { element: ElementNode, visual: VisualNode, lifeline: LifelineNode, activation: ActivationNode, fragment: FragmentNode };
+const edgeTypes = { relation: RelationEdge, sequenceMessage: SequenceMessageEdge };
 
 export const DND_TYPE = 'application/x-all-draw-type';
 export const DND_TEMPLATE = 'application/x-all-draw-template';
@@ -54,6 +57,7 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
   const nodesVersion = useCollection('nodes');
   const edgesVersion = useCollection('edges');
   const elementsVersion = useCollection('elements');
+  const seq = useSequenceCanvas(view, { nodes: nodesVersion, edges: edgesVersion });
   const rf = useReactFlow();
   const [picker, setPicker] = useState<Picker | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
@@ -105,7 +109,7 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
       const isCell = n.visualType === 'core:cell';
       const lv = live[n.id];
       const w = lv?.w ?? n.w, h = lv?.h ?? n.h;
-      return {
+      const base = {
         id: n.id,
         type: n.elementId ? 'element' : 'visual',
         position: { x: lv?.x ?? n.x, y: lv?.y ?? n.y },
@@ -120,18 +124,22 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
         zIndex: isCell ? -10 : (type?.container || n.visualType === 'core:group') ? -1 : n.z ?? 0,
         style: { width: w, height: h },
       } satisfies Node;
+      return seq.active ? seq.decorateNode(n, base) : base;
     })];
-  }, [nodesVersion, viewId, view, store, registry, selection.nodes, readOnly, elementsVersion, live, remoteSel, effectiveTheme]);
+  }, [nodesVersion, viewId, view, store, registry, selection.nodes, readOnly, elementsVersion, live, remoteSel, effectiveTheme, seq]);
 
   const rfEdges = useMemo<Edge[]>(() => {
     if (!viewId) return [];
     const ids = new Set(rfNodes.map(n => n.id));
-    return indexOf(store).edgesOfView(viewId).filter(e => ids.has(e.fromNodeId) && ids.has(e.toNodeId)).map(e => ({
-      id: e.id, type: 'relation', source: e.fromNodeId, target: e.toNodeId,
-      sourceHandle: e.fromPortId ?? '', targetHandle: e.toPortId ?? '',
-      data: { edge: e }, selected: selection.edges.includes(e.id),
-    }));
-  }, [edgesVersion, store, viewId, rfNodes, selection.edges]);
+    return indexOf(store).edgesOfView(viewId).filter(e => ids.has(e.fromNodeId) && ids.has(e.toNodeId)).map(e => {
+      const base: Edge = {
+        id: e.id, type: 'relation', source: e.fromNodeId, target: e.toNodeId,
+        sourceHandle: e.fromPortId ?? '', targetHandle: e.toPortId ?? '',
+        data: { edge: e }, selected: selection.edges.includes(e.id),
+      };
+      return seq.active ? seq.decorateEdge(e, base) : base;
+    });
+  }, [edgesVersion, store, viewId, rfNodes, selection.edges, seq]);
 
   // ---------------------------------------------------------------- API del lienzo para otros paneles
   const fitNodes = useCallback((nodeIds?: string[]) => {
@@ -219,10 +227,12 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
   const onNodeDragStop = useCallback((_: DragEv, node: Node, nodes: Node[]) => {
     if (readOnly) return;
     const moves: NonNullable<Extract<Command, { type: 'moveNodes' }>['moves']> = [];
+    const extra: Command[] = [];
     for (const n of nodes) {
       const vn = store.get('nodes', n.id); if (!vn) continue;
       const start = dragStart.current.get(n.id);
       if (start && start.x === n.position.x && start.y === n.position.y && nodes.length > 1) continue;
+      if (seq.active) { const sc = seq.dragStop(n, vn); if (sc !== undefined) { if (sc) extra.push(sc); continue; } }
       // ¿Se ha soltado dentro de un contenedor?
       const abs = rf.getInternalNode(n.id)?.internals.positionAbsolute ?? n.position;
       const target = findContainer(rf, store, registry, n, abs, vn);
@@ -236,8 +246,8 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
         moves.push({ id: n.id, x: Math.round(abs.x - parentAbs.x), y: Math.round(abs.y - parentAbs.y), parentNodeId: newParent, cell: newCell });
       } else moves.push({ id: n.id, x: Math.round(n.position.x), y: Math.round(n.position.y) });
     }
-    if (moves.length) {
-      const cmds: Command[] = [{ type: 'moveNodes', moves }];
+    if (moves.length || extra.length) {
+      const cmds: Command[] = [...(moves.length ? [{ type: 'moveNodes', moves } as Command] : []), ...extra];
       // Relación implícita al anidar (propuesta del pack), solo si no existe ya
       for (const m of moves) {
         if (!m.parentNodeId) continue;
@@ -253,7 +263,7 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
       run({ type: 'batch', label: 'mover', commands: cmds });
     }
     void node;
-  }, [store, registry, rf, run, readOnly]);
+  }, [store, registry, rf, run, readOnly, seq]);
 
   const isValidConnection = useCallback<IsValidConnection>((c) => {
     const opts = relationOptions(c);
@@ -277,6 +287,7 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
 
   const onConnectEnd = useCallback<OnConnectEnd>((event, state: FinalConnectionState) => {
     if (readOnly || !state.isValid || !state.fromNode || !state.toNode || !viewId) return;
+    if (seq.active && seq.connect(state)) return;
     const c: Connection = { source: state.fromNode.id, target: state.toNode.id, sourceHandle: state.fromHandle?.id ?? null, targetHandle: state.toHandle?.id ?? null };
     const opts = relationOptions(c);
     if (!opts.length) return;
@@ -293,7 +304,7 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
       const me = event as globalThis.MouseEvent;
       setPicker({ x: me.clientX, y: me.clientY, options: def && opts.includes(def) ? [def, ...opts.filter(o => o !== def)] : opts, onPick: create });
     }
-  }, [store, registry, run, viewId, view, readOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [store, registry, run, viewId, view, readOnly, seq]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------- soltar desde la paleta
   const onDragOver = useCallback((e: DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }, []);
@@ -343,12 +354,14 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
     if (!element) return;
     const type = registry.elementType(element.typeId);
     const size = defaultSize(type?.shape, !!type?.container);
-    const at = placeAt(pos, size); if (!at) return;
-    const node = makeNode(viewId, undefined, { ...at, w: size.w, h: size.h }, { parentNodeId: at.parentNodeId, cell: at.cell, style: { showPorts: false } });
+    const seqAt = seq.active ? seq.drop(element.typeId, pos) : undefined;
+    if (seqAt === null) return;
+    const at: { x: number; y: number; w?: number; h?: number; parentNodeId?: string; cell?: ViewNode['cell'] } | null = seqAt ?? placeAt(pos, size); if (!at) return;
+    const node = makeNode(viewId, undefined, { x: at.x, y: at.y, w: at.w ?? size.w, h: at.h ?? size.h }, { parentNodeId: at.parentNodeId, cell: at.cell, style: { showPorts: false } });
     if (isNew) run({ type: 'addElementToView', element, node });
     else run({ type: 'set', collection: 'nodes', id: node.id, value: { ...node, elementId: element.id } });
     select({ nodes: [node.id], edges: [] });
-  }, [rf, run, select, store, registry, viewId, readOnly, placeAt, addVisual]);
+  }, [rf, run, select, store, registry, viewId, readOnly, placeAt, addVisual, seq]);
 
   function findLibraryOfType(typeId: string): string | undefined {
     return store.list('libraries').find(l => l.elementTypes.some(t => t.id === typeId))?.id;
@@ -515,6 +528,7 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
         colorMode={effectiveTheme}
         proOptions={{ hideAttribution: true }}
         connectionRadius={24}
+        connectionMode={seq.active ? ConnectionMode.Loose : ConnectionMode.Strict}
       >
         <Background gap={16} />
         <Controls showInteractive={false} />

@@ -64,8 +64,8 @@ export function CommandPalette({ open, onClose, actions, onAction }: CommandPale
 
   return (
     <div className="ad-cmdk-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="ad-cmdk" role="dialog" aria-label="Buscar" onKeyDown={onKey}>
-        <input ref={input} className="ad-cmdk__input" placeholder={pending ? `«${pending.label}» aparece en… (elige una vista)` : 'Buscar elementos, vistas o acciones…'} value={q} onChange={e => setQ(e.target.value)} disabled={!!pending} />
+      <div className="ad-cmdk" role="dialog" aria-modal="true" aria-label="Buscar" onKeyDown={onKey}>
+        <input ref={input} className="ad-cmdk__input" aria-label="Buscar elementos, vistas o acciones" placeholder={pending ? `«${pending.label}» aparece en… (elige una vista)` : 'Buscar elementos, vistas o acciones…'} value={q} onChange={e => setQ(e.target.value)} disabled={!!pending} />
         <div ref={list} className="ad-cmdk__list">
           {items.length === 0 && <div className="ad-empty">Sin resultados para «{q}».</div>}
           {items.map((it, i) => (

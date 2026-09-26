@@ -16,6 +16,7 @@ import ElkBundled from 'elkjs/lib/elk.bundled.js';
 import ElkApi from 'elkjs/lib/elk-api.js';
 import type { ELK, ElkNode, ElkExtendedEdge, ElkPort } from 'elkjs/lib/elk-api';
 import type { Command, NotationRegistry, Store, ViewEdge, ViewNode } from '@all-draw/core';
+import { sequenceLayoutCommand } from './sequence';
 
 export type LayoutAlgorithm = 'layered' | 'stress' | 'mrtree' | 'force';
 export type LayoutDirection = 'DOWN' | 'RIGHT';
@@ -201,6 +202,7 @@ async function removeOverlaps(elk: ELK, node: ElkNode, spacing: number): Promise
 /** Ejecuta el layout de una vista con un motor ELK concreto y devuelve el comando. */
 export async function layoutViewWith(elk: ELK, store: Store, reg: NotationRegistry | undefined, viewId: string, opts: LayoutOpts = {}): Promise<Command> {
   const view = store.get('views', viewId);
+  if (view?.kind === 'sequence') return sequenceLayoutCommand(store, viewId);
   const defaults = autoLayoutDefaults(view?.notationId ?? 'freeform');
   const full: Required<LayoutOpts> = { algorithm: opts.algorithm ?? defaults.algorithm, direction: opts.direction ?? defaults.direction, spacing: opts.spacing ?? 40 };
   const nodes = store.list('nodes').filter(n => n.viewId === viewId);

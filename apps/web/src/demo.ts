@@ -134,6 +134,33 @@ export function demoWorkspace(): Workspace {
   ws.edges[pe.id] = pe;
   void gAlta;
 
+  // Diagrama de secuencia del alta (líneas de vida en columnas; mensajes por `order` y altura `bendpoints[0].y`)
+  const vSeq = vw(makeView('Alta de cliente · Secuencia', { notationId: 'sequence', kind: 'sequence', rootElementId: alta.id, doc: 'Interacción entre el cliente, el portal, la API y la base de datos al dar de alta un cliente.' }));
+  const lCliente = el(makeElement('sequence:Lifeline', 'Cliente', { fields: { kind: 'actor' } }));
+  const lPortal = el(makeElement('sequence:Lifeline', 'Portal', { fields: { kind: 'boundary', type: 'Web' } }));
+  const lApi = el(makeElement('sequence:Lifeline', 'API de clientes', { fields: { kind: 'control' } }));
+  const lDb = el(makeElement('sequence:Lifeline', 'Base de datos', { fields: { kind: 'database', type: 'Postgres' } }));
+  const fAlt = el(makeElement('sequence:Fragment', 'alt', { fields: { kind: 'alt', condition: '[no existe el email]' } }));
+  const actApi = el(makeElement('sequence:Activation', 'Procesar alta', { fields: { label: 'procesar alta' } }));
+  rel('core:trace', lApi, c4api, 'es');
+  rel('core:trace', lDb, c4db, 'es');
+  const sCliente = node(vSeq.id, lCliente, 40, 0, 140, 60);
+  const sPortal = node(vSeq.id, lPortal, 260, 0, 140, 60);
+  const sApi = node(vSeq.id, lApi, 480, 0, 140, 60);
+  const sDb = node(vSeq.id, lDb, 700, 0, 140, 60);
+  node(vSeq.id, fAlt, 440, 250, 460, 120);
+  node(vSeq.id, actApi, 64, 150, 12, 300, { parentNodeId: sApi.id });
+  const msg = (a: Element, b: Element, order: number, text: string, kind = 'sync') => { const r = makeRelation('sequence:Message', { elementId: a.id }, { elementId: b.id }, { fields: { kind, order, text } }); ws.relations[r.id] = r; return r; };
+  const at = (viewId: string, r: ReturnType<typeof rel>, a: ReturnType<typeof node>, b: ReturnType<typeof node>, y: number) => { const e = makeEdge(viewId, r.id, a.id, b.id, { bendpoints: [{ x: 0, y }] }); ws.edges[e.id] = e; return e; };
+  at(vSeq.id, msg(lCliente, lPortal, 1, 'rellena el formulario'), sCliente, sPortal, 110);
+  at(vSeq.id, msg(lPortal, lApi, 2, 'POST /clientes'), sPortal, sApi, 150);
+  at(vSeq.id, msg(lApi, lDb, 3, 'buscar por email'), sApi, sDb, 200);
+  const ret = makeRelation('sequence:Return', { elementId: lDb.id }, { elementId: lApi.id }, { fields: { order: 4, text: 'ninguno' } }); ws.relations[ret.id] = ret;
+  at(vSeq.id, ret, sDb, sApi, 236);
+  at(vSeq.id, msg(lApi, lDb, 5, 'INSERT cliente'), sApi, sDb, 300);
+  at(vSeq.id, msg(lApi, lPortal, 6, '201 Created', 'async'), sApi, sPortal, 410);
+  at(vSeq.id, msg(lPortal, lCliente, 7, 'muestra la confirmación'), sPortal, sCliente, 450);
+
   // Drill-down explícito y dimensiones
   nAlta.detailViewId = vBpmn.id;
   nCrm.detailViewId = vC4.id;
@@ -142,6 +169,7 @@ export function demoWorkspace(): Workspace {
   ws.dimensions['dim_st'] = { id: 'dim_st', name: 'Estados', notationId: 'statechart', color: '#7c3aed' };
   ws.dimensions['dim_c4'] = { id: 'dim_c4', name: 'C4', notationId: 'c4', color: '#1168bd' };
   ws.dimensions['dim_grid'] = { id: 'dim_grid', name: 'Capas × etapas', notationId: 'grid', kind: 'grid', color: '#0ea5e9' };
+  ws.dimensions['dim_seq'] = { id: 'dim_seq', name: 'Secuencia', notationId: 'sequence', kind: 'sequence', color: '#db2777' };
   ws.rules['rule_ext'] = { id: 'rule_ext', name: 'Externos en gris', enabled: true, priority: 1, match: 'all', target: 'element', conditions: [{ source: 'field', key: 'external', op: 'eq', value: 'true' }], style: { bg: '#e5e7eb', text: '#374151' } };
   ws.rules['rule_svc'] = { id: 'rule_svc', name: 'Servicios sin repo', enabled: true, priority: 2, match: 'all', target: 'element', conditions: [{ source: 'type', op: 'eq', value: 'Microservicio' }, { source: 'field', key: 'repo', op: 'empty' }], style: { border: '#dc2626', borderStyle: 'dashed', badge: '#dc2626', badgeText: '!' } };
   ws.meta.currentViewId = vArchi.id;

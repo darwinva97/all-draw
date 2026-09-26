@@ -19,7 +19,7 @@ Primera implementación funcional de all-draw. Cubre las fases F0, F1 y F2 del p
 | `apps/web` | Vite + React 19, PWA, espacios locales en IndexedDB, demo "Alta de cliente" en 5 dimensiones, importar `.drawer`/JSON, exportar, compartir en línea (sala = id del espacio). | e2e sync |
 | `apps/server` | Node: sirve `apps/web/dist` y sincroniza Yjs por WebSocket en `/ws/<sala>` con persistencia en disco (`~/.alldraw-data`). Sin dependencias de despliegue: el mismo protocolo vale para Durable Objects. | e2e sync |
 
-Total: 305 tests unitarios en verde, `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
+Total: 347 tests unitarios en verde (más 3 del worker en workerd), `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
 
 ## Cómo ejecutarlo
 
@@ -72,3 +72,17 @@ pnpm gen:archimate              # regenera el pack desde _research/archi
 - Figuras ArchiMate con iconos propios; matriz de trazabilidad como panel en la interfaz (existe en core y en el validador).
 - Vistas de secuencia con lienzo propio (hoy se pintan como libres).
 - Documentación de usuario, accesibilidad, i18n.
+
+## Cuarta tanda (26 de septiembre de 2026, noche)
+
+- **Figuras ArchiMate** fieles a Archi: 61 iconos y figuras alternativas (`packages/notations/archimate/src/figures.ts`) usadas por el editor y por el SVG exportado; selector "Rectángulo con icono / Figura ArchiMate" en el inspector.
+- **Trazabilidad en la interfaz**: pestaña Trazabilidad en el panel Espacio (matriz entre dos notaciones, cobertura, huecos, enlazar sugerencias en lote), sección Trazas y Sugerencias en el inspector, y sugerencias en el menú del nodo.
+- **Diagramas de secuencia** con lienzo propio: líneas de vida como columnas, mensajes horizontales ordenables arrastrando, activaciones, fragmentos; layout propio; vista de secuencia en la demo.
+- **Despliegue agnóstico**: `packages/server-core` (API, auth con WebCrypto PBKDF2, protocolo Yjs, docs) compartido por `apps/server` (Node: SQLite o Postgres con `DATABASE_URL`) y `apps/worker` (Cloudflare: D1 + un Durable Object por espacio con hibernación, assets estáticos). Probado en workerd; no desplegado en Cloudflare todavía (pasos en `apps/worker/README.md`).
+- **Manual de usuario** en `docs/manual/` (9 capítulos con capturas) y pasada de accesibilidad (diálogos con foco atrapado, etiquetas, contraste, `e2e/a11y.mjs`).
+
+### Pendiente
+- Internacionalización (la interfaz es solo en español).
+- Desplegar el worker en Cloudflare y migrar datos (hoy la producción es el VPS con SQLite).
+- Herramienta de migración SQLite/Postgres → D1.
+- Etiquetar el input de título del inspector (aviso del script de accesibilidad).

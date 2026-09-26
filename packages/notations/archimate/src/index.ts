@@ -6,6 +6,7 @@
 import type { NotationPack, NestingRule } from '@all-draw/core';
 import { CATEGORIES, ELEMENTS, RELATIONS, VALIDITY, VIEWPOINTS, SPEC_VERSION } from './generated';
 
+export * from './figures';
 export { CATEGORIES, ELEMENTS, RELATIONS, VALIDITY, VIEWPOINTS, LAYERS, CONCEPTS, SPEC_VERSION } from './generated';
 
 const NS = 'archimate';

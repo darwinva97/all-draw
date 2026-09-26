@@ -1,21 +1,34 @@
 # @all-draw/server
 
-Servidor de all-draw: sirve la app web compilada, sincroniza documentos Yjs por WebSocket y expone
-una API REST (con OpenAPI) y un servidor MCP para agentes. Node ≥ 22.13 (usa `node:sqlite`).
+Servidor de all-draw en **Node** (≥ 22.13, usa `node:sqlite`): sirve la app web compilada, sincroniza
+documentos Yjs por WebSocket y expone una API REST (con OpenAPI) y un servidor MCP para agentes.
+
+Todo lo que no depende del runtime vive en **`packages/server-core`** (`@all-draw/server-core`) y lo
+comparte con **`apps/worker`** (Cloudflare Workers + D1 + Durable Objects, ver su README):
 
 ```
-src/server.mjs      entrada estable (systemd): registra el loader tsx y carga server.ts
-src/server.ts       arranque: config, SQLite, migración de ficheros antiguos, listen, apagado limpio
-src/app.ts          http.Server = API Hono (/api, /healthz) + estáticos SPA + WebSocket /ws/<id>
-src/api.ts          rutas REST con @hono/zod-openapi → /api/openapi.json
-src/auth.ts         scrypt, tokens, cookies, resolución de principal, rate limit
-src/docs.ts         documentos Yjs vivos (uno por espacio), persistencia con debounce
-src/ysync.ts        protocolo y-websocket con roles (viewer = sólo lectura)
-src/store/          WorkspaceStore: types.ts (interfaz), sqlite.ts, memory.ts
-src/notations.ts    registro con todos los packs → GET /api/notations
-src/legacy.ts       importación de ~/.alldraw-data/<id>.yupdate
-src/mcp.ts          servidor MCP (stdio) que habla con la API REST
-test/               vitest (store en memoria, servidor real en puerto libre)
+packages/server-core/src/
+  api.ts            rutas REST con @hono/zod-openapi → /api/openapi.json (createApi({ store, docs, hash, config }))
+  auth.ts           PBKDF2 y tokens con WebCrypto, cookies, principal, roles, authorizeConnection, rate limit
+  docs.ts           LiveDoc / DocManager: doc Yjs vivo por espacio, persistencia con debounce
+  host.ts           DocHost: lo que la API pide al contenido (snapshot, commands, validate, svg, …) + LocalDocHost
+  ops.ts            las operaciones anteriores como funciones sobre un YjsStore (las usa Node y el DO)
+  ysync.ts          protocolo y-websocket con roles sobre un SyncSocket mínimo (viewer = sólo lectura)
+  notations.ts      registro con todos los packs → GET /api/notations
+  store/types.ts    interfaz WorkspaceStore · store/memory.ts adaptador en memoria
+packages/server-core/test/store-contract.ts   batería de contrato que corre contra cada adaptador
+
+apps/server/src/
+  server.mjs        entrada estable (systemd): registra el loader tsx y carga server.ts
+  server.ts         arranque: config, Postgres (DATABASE_URL) o SQLite, migración de ficheros antiguos, listen, apagado limpio
+  app.ts            http.Server = API (server-core) + estáticos SPA + WebSocket /ws/<id> sobre `ws`
+  ysync.ts          adaptador de `ws` al protocolo de server-core (+ ping/pong)
+  auth.ts           registra el verificador de hashes heredados `scrypt$` (node:crypto) y re-exporta server-core
+  store/sqlite.ts   adaptador node:sqlite · store/postgres.ts adaptador pg (pool, migraciones idempotentes)
+  legacy.ts         importación de ~/.alldraw-data/<id>.yupdate
+  mcp.ts            servidor MCP (stdio) que habla con la API REST
+  api.ts, docs.ts, notations.ts, store/{types,memory}.ts   re-exportan server-core
+test/               vitest (servidor real en puerto libre; contrato del store para memory, sqlite y postgres)
 SKILL.md            guía para agentes: cómo modelar con comandos
 ```
 
@@ -35,6 +48,7 @@ PORT=4002 HOST=127.0.0.1 DATA_DIR=~/.alldraw-data node src/server.mjs
 | `PORT` / `HOST` | `4002` / `127.0.0.1` | Escucha |
 | `DATA_DIR` | `~/.alldraw-data` | Directorio de datos (BD y ficheros heredados) |
 | `DB_PATH` | `$DATA_DIR/alldraw.sqlite` | Fichero SQLite (WAL) |
+| `DATABASE_URL` | *(vacío)* | Si se define (`postgres://user:pass@host:5432/db`), se usa Postgres en vez de SQLite; las migraciones se aplican al arrancar (`schema_migrations`, con advisory lock). |
 | `STATIC_DIR` | `../web/dist` | App web compilada (fallback SPA a `index.html`) |
 | `SESSION_SECRET` | *(vacío)* | Si se define, los hashes de tokens en la BD son HMAC con este secreto en lugar de SHA-256: una copia de la BD no sirve para suplantar sesiones. Cambiarlo invalida todas las sesiones y API keys. |
 | `ALLOW_REGISTRATION` | `true` | `false` cierra `POST /api/auth/register` (salvo si aún no hay usuarios) |
@@ -47,7 +61,10 @@ Unidad systemd de usuario (`~/.config/systemd/user/alldraw.service`): sigue vali
 
 ## Identidad y permisos
 
-- **Registro/login** con email y contraseña (`crypto.scrypt`). El primer usuario real es **admin**
+- **Registro/login** con email y contraseña: PBKDF2-HMAC-SHA256 (100 000 iteraciones, WebCrypto, el
+  mismo código en Node y en Workers) → `pbkdf2$<iter>$<sal>$<hash>`. Los hashes `scrypt$…` de versiones
+  anteriores siguen valiendo en Node y se **re-hashean a PBKDF2 en el primer login correcto**
+  (`setPasswordHash`). El primer usuario real es **admin**
   (ve y administra todos los espacios). Login limitado a 10 intentos / 15 min por IP y por email.
 - **Sesión**: token `ads_…` (30 días) en cookie `alldraw_session` (`HttpOnly; SameSite=Lax; Path=/;
   Secure` en https) y también en el cuerpo de la respuesta para clientes no navegador.
@@ -108,7 +125,7 @@ en memoria los docs abiertos (`DocManager`), guarda 500 ms después del último 
 (`saveDoc` = update completo) y descarga el doc a los 60 s sin conexiones. La API REST y el
 WebSocket comparten el mismo doc, por eso un `POST commands` llega al instante a los clientes.
 
-### Esquema (`store/sqlite.ts`, migración v1)
+### Esquema (`store/sqlite.ts` y `store/postgres.ts`, migración v1; `apps/worker/migrations/0001_init.sql` para D1)
 
 ```
 users              id PK, email UNIQUE, name, password_hash, is_admin, created_at
@@ -127,14 +144,25 @@ que se listan). `loadDoc` funde `docs.state` con los `doc_updates` pendientes (`
 `saveDoc` reemplaza el estado y vacía la cola. Así un adaptador puede elegir entre escribir el
 estado completo o encolar incrementales.
 
-### Otros adaptadores
+### Adaptadores
 
-La interfaz `WorkspaceStore` (`store/types.ts`) es asíncrona y no expone SQL. Para **Postgres**:
-mismas tablas (`BLOB`→`BYTEA`, `INTEGER`→`BOOLEAN`, `?`→`$n`, `ON CONFLICT` es idéntico) y las
-mismas consultas de `sqlite.ts`. Para **Durable Objects**: un DO por espacio con `docs`/`doc_updates`
-en su storage y las tablas de usuarios/miembros en D1; `DocManager` se sustituye por la instancia del
-DO (el protocolo `ysync.ts` no cambia). `memory.ts` es la referencia de semántica y los tests de
-`test/store.test.ts` corren contra cada adaptador.
+La interfaz `WorkspaceStore` (`server-core/store/types.ts`) es asíncrona y no expone SQL.
+
+| Adaptador | Dónde | Selección |
+|---|---|---|
+| `MemoryWorkspaceStore` | `server-core/store/memory.ts` | tests |
+| `SqliteWorkspaceStore` | `store/sqlite.ts` (`node:sqlite`, migra al abrir) | por defecto (`DB_PATH`) |
+| `PostgresWorkspaceStore` | `store/postgres.ts` (`pg`, pool, `BYTEA`/`BOOLEAN`/`BIGSERIAL`, `$n`) | `DATABASE_URL` |
+| `D1WorkspaceStore` | `apps/worker/src/store/d1.ts` (migra `wrangler d1 migrations apply`) | worker |
+
+`memory.ts` es la referencia de semántica y la batería `@all-draw/server-core/test/store-contract`
+(`storeContractTests(name, factory)`) corre contra todos: `test/store.test.ts` (memory + sqlite),
+`test/store-postgres.test.ts` (se salta sin `TEST_DATABASE_URL`) y, en el worker, el contrato
+implícito de `test/api.test.ts` sobre D1 real.
+
+En el worker el documento no vive en el store sino en el Durable Object del espacio (`WorkspaceDO`):
+`DocHost` (`server-core/host.ts`) es la costura: `LocalDocHost` (Node, sobre `DocManager`) o
+`RemoteDocHost` (worker, `stub.fetch`). La API es la misma.
 
 ## Migración desde la versión anterior
 
@@ -165,6 +193,8 @@ MCP puede correr en la máquina del agente. Ver `SKILL.md`.
 ## Tests
 
 ```bash
-pnpm --filter @all-draw/server test        # vitest, store en memoria + SQLite :memory:
+pnpm --filter @all-draw/server test        # vitest: servidor real (store en memoria) + contrato memory/sqlite
+TEST_DATABASE_URL=postgres://u:p@127.0.0.1:5432/alldraw_test pnpm --filter @all-draw/server test   # + contrato Postgres (vacía las tablas)
+pnpm --filter @all-draw/server-core test   # API sin servidor HTTP (app.request), auth WebCrypto, contrato memory
 pnpm --filter @all-draw/server typecheck
 ```

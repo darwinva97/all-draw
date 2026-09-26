@@ -288,3 +288,82 @@ textarea.ad-inline-edit { text-align: left; height: 100%; }
 .ad-editor.theme-dark .ad-ws-overlay { background: rgba(0,0,0,.6); }
 .ad-editor.theme-dark .react-flow__controls button { background: var(--ad-panel); border-color: var(--ad-border); color: var(--ad-text); fill: var(--ad-text); }
 .ad-editor.theme-dark .react-flow__minimap { background: var(--ad-panel); }
+
+/* ---- Trazabilidad entre dimensiones (inspector, matriz del Espacio, panel de vistas) ---- */
+.ad-tr-main { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; }
+.ad-tr-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; }
+.ad-tr-sel { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ad-muted); text-transform: uppercase; letter-spacing: .03em; }
+.ad-tr-sel .ad-input { min-width: 140px; text-transform: none; font-size: 13px; color: var(--ad-text); }
+.ad-tr-filter { flex: 1; min-width: 160px; max-width: 320px; }
+.ad-tr-cov { margin-left: auto; font-size: 12px; color: var(--ad-muted); white-space: nowrap; }
+.ad-tr-scroll { overflow: auto; max-height: 55vh; border: 1px solid var(--ad-border); border-radius: 8px; }
+.ad-tr-matrix { border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.ad-tr-matrix th, .ad-tr-matrix td { border-bottom: 1px solid var(--ad-border); border-right: 1px solid var(--ad-border); background: var(--ad-panel); }
+.ad-tr-corner { position: sticky; top: 0; left: 0; z-index: 3; text-align: left; padding: 6px 8px; color: var(--ad-muted); font-weight: 400; min-width: 160px; }
+.ad-tr-colhead { position: sticky; top: 0; z-index: 2; vertical-align: bottom; height: 120px; width: 28px; max-width: 28px; padding: 0; }
+.ad-tr-colhead .ad-tr-head { writing-mode: vertical-rl; transform: rotate(180deg); height: 112px; width: 28px; padding: 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.ad-tr-rowhead { position: sticky; left: 0; z-index: 1; text-align: left; font-weight: 400; padding: 0; max-width: 240px; }
+.ad-tr-head { background: none; border: none; color: var(--ad-text); font: inherit; cursor: pointer; padding: 4px 8px; width: 100%; text-align: left; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-tr-head:hover { color: var(--ad-accent); background: color-mix(in srgb, var(--ad-accent) 8%, transparent); }
+.ad-tr-cell { width: 28px; height: 28px; text-align: center; padding: 0; line-height: 28px; }
+.ad-tr-cell.is-linked { color: var(--ad-accent); font-size: 14px; }
+.ad-tr-cell.is-suggested { color: var(--ad-muted); }
+.ad-tr-sug { background: none; border: none; color: inherit; font: inherit; cursor: pointer; width: 100%; height: 100%; padding: 0; line-height: 28px; }
+.ad-tr-sug:hover { color: var(--ad-accent); background: color-mix(in srgb, var(--ad-accent) 12%, transparent); }
+.ad-tr-cell:hover { background: color-mix(in srgb, var(--ad-accent) 6%, transparent); }
+.ad-tr-gaps { margin-top: 4px; }
+.ad-tr-gaps__actions { margin: 6px 0 8px; }
+.ad-tr-gaplist { list-style: none; margin: 0; padding: 0; }
+.ad-tr-gap { display: grid; grid-template-columns: minmax(140px, 1fr) auto minmax(160px, 2fr) auto; gap: 4px 12px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--ad-border); }
+.ad-tr-gap__name { padding: 2px 4px; }
+.ad-tr-gap__meta, .ad-tr-muted { color: var(--ad-muted); }
+.ad-tr-gap__sug { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-tr-gap .ad-btn { white-space: nowrap; }
+.ad-tr-row { display: flex; align-items: flex-start; gap: 4px; padding: 4px 6px; border-radius: 6px; }
+.ad-tr-row:hover { background: var(--ad-bg); }
+.ad-tr-row__main { flex: 1; min-width: 0; }
+.ad-tr-row__main small { color: var(--ad-muted); margin-left: 4px; }
+.ad-tr-row .ad-btn { flex: none; }
+.ad-tr-score { display: inline-block; min-width: 38px; font-size: 11px; font-weight: 600; color: var(--ad-accent); }
+.ad-tr-reason { font-size: 11px; color: var(--ad-muted); margin-top: 2px; }
+.ad-tr-count { display: block; padding: 4px 8px; font-size: 12px; color: var(--ad-muted); }
+button.ad-tr-count { color: var(--ad-text); }
+.ad-editor.theme-dark .ad-tr-scroll { border-color: var(--ad-border); }
+
+/* Vistas de secuencia */
+.ad-seq-lifeline { position: relative; box-sizing: border-box; }
+.ad-seq-lifeline__head { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 8px; border: 1px solid #6c8ebf; border-radius: 4px; background: #dae8fc; color: var(--ad-text); cursor: grab; text-align: center; font-size: 13px; }
+.ad-seq-lifeline__head.is-iconic { background: transparent; border-color: transparent; }
+.ad-seq-lifeline__head:active { cursor: grabbing; }
+.ad-seq-lifeline__icon { width: 28px; height: 30px; color: #3b5b8f; flex: none; }
+.ad-seq-lifeline__name { font-weight: 500; overflow-wrap: anywhere; line-height: 1.15; }
+.ad-seq-lifeline__line { position: absolute; top: 60px; bottom: 0; left: 50%; width: 0; border-left: 1.5px dashed #6c8ebf; pointer-events: none; }
+.ad-seq-lifeline.is-selected .ad-seq-lifeline__head, .ad-canvas .react-flow__node.selected .ad-seq-lifeline__head { outline: 2px solid var(--ad-accent); outline-offset: 2px; }
+.ad-canvas .react-flow__node.selected .ad-seq-lifeline__line { border-color: var(--ad-accent); }
+.ad-seq-handle.react-flow__handle { position: absolute; top: 60px; bottom: 0; left: 50%; width: 14px; height: auto; min-width: 0; min-height: 0; transform: translateX(-50%); border-radius: 7px; background: transparent; border: none; opacity: 1; cursor: crosshair; }
+.ad-seq-handle.react-flow__handle:hover, .ad-canvas .react-flow.connecting .ad-seq-handle.react-flow__handle { background: color-mix(in srgb, var(--ad-accent) 18%, transparent); }
+.ad-seq-activation { position: relative; box-sizing: border-box; width: 100%; height: 100%; border: 1px solid #6c8ebf; background: #fff; border-radius: 2px; }
+.ad-seq-activation .ad-seq-handle.react-flow__handle { top: 0; left: 0; width: 100%; transform: none; border-radius: 2px; }
+.ad-seq-activation.is-selected, .ad-canvas .react-flow__node.selected .ad-seq-activation { outline: 2px solid var(--ad-accent); outline-offset: 2px; }
+.ad-seq-fragment { position: relative; box-sizing: border-box; width: 100%; height: 100%; border: 1px solid #8a8a8a; background: rgba(0,0,0,.02); font-size: 12px; overflow: visible; }
+.ad-seq-fragment__kind { position: absolute; left: 0; top: 0; padding: 2px 14px 2px 6px; border-right: 1px solid #8a8a8a; border-bottom: 1px solid #8a8a8a; background: var(--ad-panel); font-weight: 600; clip-path: polygon(0 0, 100% 0, 100% 55%, calc(100% - 9px) 100%, 0 100%); }
+.ad-seq-fragment__cond { position: absolute; left: 8px; top: 24px; color: var(--ad-muted); font-style: italic; }
+.ad-seq-fragment__name { position: absolute; right: 6px; top: 3px; color: var(--ad-muted); }
+.ad-canvas .react-flow__node.selected .ad-seq-fragment { outline: 2px solid var(--ad-accent); outline-offset: 2px; }
+.ad-seq-msg-label { position: absolute; padding: 1px 6px; font-size: 11px; line-height: 1.4; white-space: nowrap; background: var(--ad-bg); border-radius: 3px; pointer-events: all; user-select: none; color: var(--ad-text); }
+.ad-seq-msg-label.is-draggable { cursor: ns-resize; }
+.ad-seq-msg-label.is-selected { outline: 1px solid var(--ad-accent); background: var(--ad-panel); }
+.ad-seq-msg-label.is-dragging { opacity: .7; }
+.ad-seq-msg-label em { color: var(--ad-muted); }
+.ad-editor.theme-dark .ad-seq-lifeline__head { background: #1f2c44; border-color: #4b6a9c; }
+.ad-editor.theme-dark .ad-seq-lifeline__head.is-iconic { background: transparent; border-color: transparent; }
+.ad-editor.theme-dark .ad-seq-lifeline__icon { color: #9fb6dc; }
+.ad-editor.theme-dark .ad-seq-lifeline__line { border-color: #4b6a9c; }
+.ad-editor.theme-dark .ad-seq-activation { background: #1c2230; border-color: #4b6a9c; }
+.ad-editor.theme-dark .ad-seq-fragment { border-color: #555d6b; background: rgba(255,255,255,.02); }
+.ad-editor.theme-dark .ad-seq-fragment__kind { border-color: #555d6b; }
+
+/* Figuras ArchiMate (Archi): fondo SVG con path + icono 16×16 arriba a la derecha */
+.ad-node--archimate { border-radius: 0; }
+.ad-node--archimate .ad-node__svg.ad-archi { overflow: visible; }
+.ad-archi__icon { position: absolute; top: 4px; right: 4px; width: 16px; height: 16px; pointer-events: none; }

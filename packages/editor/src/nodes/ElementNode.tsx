@@ -4,7 +4,9 @@ import type { ElementType, Port, RuleStyle, ViewNode } from '@all-draw/core';
 import { useEditor } from '../context';
 import { useRecord, usePorts, useCollection } from '../hooks';
 import { resolveStyle } from '@all-draw/core';
+import { textInset, figureOf, showsIcon } from '@all-draw/notation-archimate';
 import { shapeStyle, ShapeSvg } from './shapes';
+import { ArchimateFigure } from './ArchimateFigure';
 import { InlineEdit } from './InlineEdit';
 
 export type ElementNodeData = { node: ViewNode; dimmed?: boolean; /** Color de otro participante que lo tiene seleccionado. */ remoteColor?: string };
@@ -27,7 +29,16 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   const shape = type?.shape ?? 'rounded';
   const css = shapeStyle(shape, type, vn, rule as RuleStyle, effectiveTheme === 'dark');
   const label = vn.text ?? (element.name || (type?.name ?? ''));
-  const icon = ['circle', 'double-circle', 'diamond', 'bar', 'actor'].includes(shape) ? undefined : ((rule.icon ?? type?.icon) || undefined);
+  const archimate = registry.notationOf(element.typeId) === 'archimate';
+  // Figuras de Archi: el fondo lo pinta `ArchimateFigure` (path + icono) y el texto se centra en la zona útil.
+  const archiFill = css.background as string, archiStroke = css.borderColor as string;
+  if (archimate) {
+    const def = figureOf(element.typeId, vn.style.figure === 1 ? 1 : 0);
+    const inset = textInset(def, vn.w, vn.h);
+    css.background = 'transparent'; css.borderColor = 'transparent'; css.boxShadow = undefined;
+    css.padding = `${4 + inset.top}px ${10 + inset.right + (showsIcon(element.typeId, vn.style.figure) ? 12 : 0)}px ${4 + inset.bottom}px ${10 + inset.left}px`;
+  }
+  const icon = archimate || ['circle', 'double-circle', 'diamond', 'bar', 'actor'].includes(shape) ? undefined : ((rule.icon ?? type?.icon) || undefined);
   const editing = renaming === vn.id;
   if (data.remoteColor && !selected) { css.outline = `2px solid ${data.remoteColor}`; css.outlineOffset = 2; }
 
@@ -43,9 +54,11 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   };
 
   return (
-    <div className={`ad-node ad-shape-${shape} ${type?.container ? 'is-container' : ''} ${selected ? 'is-selected' : ''} ${data.dimmed ? 'is-dimmed' : ''} ${rule.bold ? 'r-bold' : ''} ${rule.strike ? 'r-strike' : ''}`} style={css} title={element.doc || undefined}>
+    <div className={`ad-node ad-shape-${shape} ${archimate ? 'ad-node--archimate' : ''} ${type?.container ? 'is-container' : ''} ${selected ? 'is-selected' : ''} ${data.dimmed ? 'is-dimmed' : ''} ${rule.bold ? 'r-bold' : ''} ${rule.strike ? 'r-strike' : ''}`} style={css} title={element.doc || undefined}>
       {!readOnly && <NodeResizer minWidth={24} minHeight={16} isVisible={selected && !editing} lineClassName="ad-resizer__line" handleClassName="ad-resizer__handle" />}
-      <ShapeSvg shape={shape} fill={css.background as string} stroke={css.borderColor as string} figure={vn.style.figure} />
+      {archimate
+        ? <ArchimateFigure typeId={element.typeId} figure={vn.style.figure} w={vn.w} h={vn.h} fill={archiFill} stroke={archiStroke} strokeWidth={rule.borderWidth ?? 1} borderStyle={rule.borderStyle} />
+        : <ShapeSvg shape={shape} fill={css.background as string} stroke={css.borderColor as string} figure={vn.style.figure} />}
       <Handle type="target" position={Position.Top} id="" className="ad-handle ad-handle--body" />
       <Handle type="source" position={Position.Bottom} id="" className="ad-handle ad-handle--body" />
       <div className="ad-node__body">

@@ -2,11 +2,14 @@ import { useState } from 'react';
 import { makeView, newId, type Dimension, type View } from '@all-draw/core';
 import { useEditor } from '../context';
 import { useCollection } from '../hooks';
+import { crossTraceCount } from './traces-helpers';
 
 /** Vistas agrupadas por notación, dimensiones, y creación de vistas. */
 export function ViewsPanel() {
-  const { registry, run, viewId, openView, readOnly, store } = useEditor();
+  const { registry, run, viewId, openView, readOnly, store, openWorkspacePanel } = useEditor();
   const views = useCollection('views');
+  useCollection('relations');
+  const traceCount = crossTraceCount(store, registry);
   const dims = useCollection('dimensions');
   const [creating, setCreating] = useState(false);
   const packs = registry.allPacks().filter(p => p.id !== 'core');
@@ -23,8 +26,8 @@ export function ViewsPanel() {
   const addDimension = (d: Omit<Dimension, 'id'>) => run({ type: 'set', collection: 'dimensions', id: newId('dim'), value: { id: newId('dim'), ...d } });
 
   return (
-    <aside className="ad-views">
-      <div className="ad-views__head"><span>Vistas</span>{!readOnly && <button className="ad-btn" onClick={() => setCreating(c => !c)}>＋</button>}</div>
+    <aside className="ad-views" aria-label="Vistas y dimensiones">
+      <div className="ad-views__head"><span>Vistas</span>{!readOnly && <button className="ad-btn" aria-label="Nueva vista" title="Nueva vista" aria-expanded={creating} onClick={() => setCreating(c => !c)}>＋</button>}</div>
       {creating && <div className="ad-views__new">
         {packs.map(p => <button key={p.id} className="ad-popover__item" onClick={() => create(p.id)}><span className="ad-dot" style={{ background: p.color ?? '#999' }} />{p.name}</button>)}
       </div>}
@@ -36,7 +39,7 @@ export function ViewsPanel() {
             {vs.sort((a, b) => a.name.localeCompare(b.name)).map(v => (
               <div key={v.id} className={`ad-views__item ${v.id === viewId ? 'is-active' : ''}`} onClick={() => openView(v.id)} title={v.doc}>
                 <span>{v.rootElementId ? '◇ ' : ''}{v.name || '(sin nombre)'}</span>
-                {!readOnly && <button className="ad-btn ad-btn--ghost" onClick={e => { e.stopPropagation(); if (confirm(`¿Borrar la vista "${v.name}"? Los elementos siguen en el modelo.`)) { run({ type: 'deleteView', id: v.id }); if (v.id === viewId) openView(null); } }}>×</button>}
+                {!readOnly && <button className="ad-btn ad-btn--ghost" aria-label={`Borrar la vista ${v.name || 'sin nombre'}`} title="Borrar la vista" onClick={e => { e.stopPropagation(); if (confirm(`¿Borrar la vista "${v.name}"? Los elementos siguen en el modelo.`)) { run({ type: 'deleteView', id: v.id }); if (v.id === viewId) openView(null); } }}>×</button>}
               </div>
             ))}
           </details>
@@ -45,9 +48,9 @@ export function ViewsPanel() {
           <summary className="ad-pal__cat">Dimensiones <small>{dims.length}</small></summary>
           <div className="ad-hint">Ejes por los que se navega desde cualquier nodo (botón derecho → "Abrir en otra dimensión").</div>
           {dims.map(d => <div key={d.id} className="ad-views__item"><span><span className="ad-dot" style={{ background: d.color ?? registry.pack(d.notationId)?.color ?? '#999' }} />{d.name} <small>{registry.pack(d.notationId)?.name}{d.viewpointId ? ` · ${d.viewpointId}` : ''}</small></span>
-            {!readOnly && <button className="ad-btn ad-btn--ghost" onClick={() => run({ type: 'delete', collection: 'dimensions', id: d.id })}>×</button>}</div>)}
+            {!readOnly && <button className="ad-btn ad-btn--ghost" aria-label={`Quitar la dimensión ${d.name}`} title="Quitar la dimensión" onClick={() => run({ type: 'delete', collection: 'dimensions', id: d.id })}>×</button>}</div>)}
           {!readOnly && <div className="ad-row">
-            <select className="ad-input" defaultValue="" onChange={e => { const [nid, vp] = e.target.value.split('|'); if (nid) { const p = registry.pack(nid); addDimension({ name: vp ? `${p?.name} · ${p?.viewpoints.find(v => v.id === vp)?.name}` : p?.name ?? nid, notationId: nid, viewpointId: vp || undefined, color: p?.color }); e.target.value = ''; } }}>
+            <select className="ad-input" aria-label="Añadir dimensión" defaultValue="" onChange={e => { const [nid, vp] = e.target.value.split('|'); if (nid) { const p = registry.pack(nid); addDimension({ name: vp ? `${p?.name} · ${p?.viewpoints.find(v => v.id === vp)?.name}` : p?.name ?? nid, notationId: nid, viewpointId: vp || undefined, color: p?.color }); e.target.value = ''; } }}>
               <option value="">＋ añadir dimensión…</option>
               {packs.map(p => <optgroup key={p.id} label={p.name}><option value={p.id}>{p.name} (todo)</option>{p.viewpoints.map(v => <option key={v.id} value={`${p.id}|${v.id}`}>{v.name}</option>)}</optgroup>)}
             </select>
@@ -56,6 +59,9 @@ export function ViewsPanel() {
         <details>
           <summary className="ad-pal__cat">Modelo <small>{store.list('elements').filter(e => !e.template).length} elementos · {store.list('relations').length} relaciones</small></summary>
           <div className="ad-hint">Los elementos viven una vez en el modelo y aparecen en muchas vistas. Pestaña "Modelo" de la paleta para reutilizarlos.</div>
+          {readOnly
+            ? <div className="ad-tr-count">{traceCount} trazas entre dimensiones</div>
+            : <button className="ad-link ad-tr-count" title="Abrir la matriz de trazabilidad" onClick={() => openWorkspacePanel('traces')}>⇢ {traceCount} trazas entre dimensiones</button>}
         </details>
       </div>
     </aside>

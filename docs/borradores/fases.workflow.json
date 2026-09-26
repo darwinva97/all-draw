@@ -1,0 +1,262 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "all-draw · hoja de ruta",
+    "subtitle": "Siete fases (≈17 semanas); cada una termina con algo usable y con tests",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    {
+      "id": "core",
+      "label": "Núcleo y editor"
+    },
+    {
+      "id": "notations",
+      "label": "Notaciones"
+    },
+    {
+      "id": "platform",
+      "label": "Plataforma"
+    },
+    {
+      "id": "deliver",
+      "label": "Entregas"
+    }
+  ],
+  "phases": [
+    {
+      "id": "p1",
+      "label": "Cimientos",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "p2",
+      "label": "Editor y dimensiones",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "p3",
+      "label": "Plataforma y v1",
+      "fromCol": 4,
+      "toCol": 5
+    }
+  ],
+  "mainPath": [
+    "f0",
+    "f1",
+    "f2",
+    "f3"
+  ],
+  "nodes": [
+    {
+      "id": "f0",
+      "lane": "core",
+      "col": 0,
+      "type": "backend",
+      "label": "F0 Fundación",
+      "sublabel": "monorepo · Zod · tests",
+      "tag": "1 sem"
+    },
+    {
+      "id": "f1",
+      "lane": "core",
+      "col": 1,
+      "type": "backend",
+      "label": "F1 Núcleo",
+      "sublabel": "comandos · puertos",
+      "tag": "2 sem"
+    },
+    {
+      "id": "f2",
+      "lane": "core",
+      "col": 2,
+      "type": "frontend",
+      "label": "F2 Editor",
+      "sublabel": "React Flow · grid",
+      "tag": "3 sem"
+    },
+    {
+      "id": "f3",
+      "lane": "core",
+      "col": 3,
+      "type": "frontend",
+      "label": "F3 Dimensiones",
+      "sublabel": "navegar · drill-down",
+      "tag": "4 sem"
+    },
+    {
+      "id": "f6",
+      "lane": "core",
+      "col": 5,
+      "type": "external",
+      "label": "F6 Agentes",
+      "sublabel": "MCP · rendimiento",
+      "tag": "2 sem"
+    },
+    {
+      "id": "archimate",
+      "lane": "notations",
+      "col": 3,
+      "type": "cloud",
+      "label": "1. ArchiMate",
+      "sublabel": "datos desde Archi"
+    },
+    {
+      "id": "states",
+      "lane": "notations",
+      "col": 4,
+      "type": "cloud",
+      "label": "2. Estados · 3. BPMN",
+      "sublabel": "subconjunto útil",
+      "width": 140
+    },
+    {
+      "id": "c4",
+      "lane": "notations",
+      "col": 5,
+      "type": "cloud",
+      "label": "4. C4",
+      "sublabel": "niveles anidados"
+    },
+    {
+      "id": "f4",
+      "lane": "platform",
+      "col": 4,
+      "type": "messagebus",
+      "label": "F4 Offline/online",
+      "sublabel": "Yjs · Cloudflare · PWA",
+      "tag": "2 sem",
+      "width": 120
+    },
+    {
+      "id": "f5",
+      "lane": "platform",
+      "col": 5,
+      "type": "messagebus",
+      "label": "F5 Import/export",
+      "sublabel": "BPMN XML · OEF · elkjs",
+      "tag": "3 sem",
+      "width": 120
+    },
+    {
+      "id": "mvp",
+      "lane": "deliver",
+      "col": 2,
+      "type": "security",
+      "label": "Paridad Drawer",
+      "sublabel": "importa .drawer"
+    },
+    {
+      "id": "multi",
+      "lane": "deliver",
+      "col": 4,
+      "type": "security",
+      "label": "Multi-notación",
+      "sublabel": "un proceso, 3 vistas"
+    },
+    {
+      "id": "v1",
+      "lane": "deliver",
+      "col": 5,
+      "type": "security",
+      "label": "v1 pública",
+      "sublabel": "Archi ↔ bpmn.io"
+    }
+  ],
+  "edges": [
+    {
+      "from": "f0",
+      "to": "f1"
+    },
+    {
+      "from": "f1",
+      "to": "f2"
+    },
+    {
+      "from": "f2",
+      "to": "f3"
+    },
+    {
+      "from": "f3",
+      "to": "archimate",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "archimate",
+      "to": "states"
+    },
+    {
+      "from": "states",
+      "to": "c4"
+    },
+    {
+      "from": "states",
+      "to": "f4",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "f4",
+      "to": "f5"
+    },
+    {
+      "from": "f2",
+      "to": "mvp",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "f4",
+      "to": "multi",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "f5",
+      "to": "v1",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "f5",
+      "to": "f6",
+      "variant": "dashed",
+      "role": "return",
+      "route": "outside-right",
+      "fromSide": "right",
+      "toSide": "right"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Orden de notaciones",
+      "items": [
+        "ArchiMate primero: su matriz y viewpoints ya existen como datos en Archi",
+        "Máquinas de estado: pequeña, prueba el drill-down",
+        "BPMN subconjunto, luego C4"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Despliegue",
+      "items": [
+        "Cloudflare desde F4; el servidor Hono corre igual en Node/VPS/AWS",
+        "Cada fase se publica en un subdominio de staging"
+      ]
+    }
+  ]
+}

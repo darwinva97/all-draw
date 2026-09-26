@@ -1,0 +1,352 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "all-draw · modelo de datos",
+    "subtitle": "Un elemento vive en muchas vistas; los pines son puertos del elemento",
+    "quality_profile": "standard",
+    "viewBox": [
+      1180,
+      700
+    ]
+  },
+  "components": [
+    {
+      "id": "lib",
+      "type": "external",
+      "label": "Library",
+      "sublabel": "packs · tipos · componentes",
+      "pos": [
+        40,
+        120
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "etype",
+      "type": "security",
+      "label": "ElementType",
+      "sublabel": "campos tipados · icono",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "rtype",
+      "type": "security",
+      "label": "RelationType",
+      "sublabel": "matriz de validez",
+      "pos": [
+        40,
+        480
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "element",
+      "type": "backend",
+      "label": "Element",
+      "sublabel": "id · nombre · fields{}",
+      "pos": [
+        300,
+        300
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "una vez"
+    },
+    {
+      "id": "port",
+      "type": "messagebus",
+      "label": "Port (pin)",
+      "sublabel": "path: response.userId",
+      "pos": [
+        300,
+        120
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "derivado de fields"
+    },
+    {
+      "id": "relation",
+      "type": "backend",
+      "label": "Relation",
+      "sublabel": "from/to: element + port",
+      "pos": [
+        300,
+        480
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "tipada"
+    },
+    {
+      "id": "view",
+      "type": "frontend",
+      "label": "View",
+      "sublabel": "notación · viewpoint · raíz",
+      "pos": [
+        640,
+        300
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "N por elemento"
+    },
+    {
+      "id": "vnode",
+      "type": "frontend",
+      "label": "ViewNode",
+      "sublabel": "x · y · estilo · padre",
+      "pos": [
+        640,
+        120
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "vedge",
+      "type": "frontend",
+      "label": "ViewEdge",
+      "sublabel": "bendpoints · estilo",
+      "pos": [
+        640,
+        480
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "dimension",
+      "type": "cloud",
+      "label": "Dimension",
+      "sublabel": "BPMN · Estados · ArchiMate…",
+      "pos": [
+        960,
+        300
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "eje navegable"
+    },
+    {
+      "id": "detail",
+      "type": "cloud",
+      "label": "detailViewId",
+      "sublabel": "drill-down a otra vista",
+      "pos": [
+        960,
+        120
+      ],
+      "size": [
+        170,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Modelo semántico (sin píxeles)",
+      "wraps": [
+        "element",
+        "port",
+        "relation"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Vistas (posición y estilo por vista)",
+      "wraps": [
+        "view",
+        "vnode",
+        "vedge"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "lib-etype",
+      "from": "lib",
+      "to": "etype",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "lib-rtype",
+      "from": "lib",
+      "to": "rtype",
+      "fromSide": "left",
+      "toSide": "left",
+      "via": [
+        [
+          20,
+          152
+        ],
+        [
+          20,
+          512
+        ]
+      ]
+    },
+    {
+      "id": "etype-element",
+      "from": "etype",
+      "to": "element",
+      "label": "typeId"
+    },
+    {
+      "id": "rtype-relation",
+      "from": "rtype",
+      "to": "relation",
+      "label": "typeId"
+    },
+    {
+      "id": "element-port",
+      "from": "element",
+      "to": "port",
+      "label": "1..n",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "relation-element",
+      "from": "relation",
+      "to": "element",
+      "label": "from · to",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "relation-port",
+      "from": "relation",
+      "to": "port",
+      "label": "fromPort · toPort",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [
+        [
+          560,
+          512
+        ],
+        [
+          560,
+          152
+        ]
+      ]
+    },
+    {
+      "id": "vnode-element",
+      "from": "vnode",
+      "to": "element",
+      "label": "elementId",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "right",
+      "via": [
+        [
+          560,
+          152
+        ],
+        [
+          560,
+          332
+        ]
+      ]
+    },
+    {
+      "id": "vedge-relation",
+      "from": "vedge",
+      "to": "relation",
+      "label": "relationId",
+      "variant": "emphasis"
+    },
+    {
+      "id": "view-vnode",
+      "from": "view",
+      "to": "vnode",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "view-vedge",
+      "from": "view",
+      "to": "vedge",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "view-dimension",
+      "from": "view",
+      "to": "dimension",
+      "label": "pertenece a"
+    },
+    {
+      "id": "vnode-detail",
+      "from": "vnode",
+      "to": "detail",
+      "variant": "dashed"
+    },
+    {
+      "id": "detail-view",
+      "from": "detail",
+      "to": "view",
+      "label": "abre",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Modelo ≠ vistas",
+      "items": [
+        "Borrar un nodo de una vista no borra el elemento",
+        "El mismo elemento se pinta distinto según la notación de cada vista"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Pines",
+      "items": [
+        "Cada campo tipado del elemento genera un puerto con path estable",
+        "Una relación puede unir varios pares de campos (mappings)"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Dimensiones",
+      "items": [
+        "Sobre cualquier nodo: 'abrir en otra dimensión'",
+        "detailViewId baja de nivel; el breadcrumb vuelve"
+      ]
+    }
+  ]
+}

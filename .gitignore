@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+*.log
+.DS_Store
+_research/
+.env
+.env.*
+!.env.example
+apps/web/dev-dist/
+.wrangler/

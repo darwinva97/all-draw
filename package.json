@@ -1,0 +1,24 @@
+{
+  "name": "all-draw",
+  "version": "0.1.0",
+  "description": "Diagramador universal: un modelo, muchas notaciones como dimensiones.",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "lint": "oxlint .",
+    "gen:archimate": "node packages/notations/archimate/scripts/generate.mjs"
+  },
+  "license": "MIT",
+  "packageManager": "pnpm@12.6.0",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "oxlint": "^1.85.0",
+    "prettier": "^3.9.9",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  }
+}

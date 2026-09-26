@@ -1,0 +1,300 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "all-draw · arquitectura del sistema",
+    "subtitle": "Monorepo agnóstico de despliegue: primero Cloudflare, luego VPS / AWS",
+    "quality_profile": "standard",
+    "viewBox": [
+      1180,
+      720
+    ]
+  },
+  "components": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "Navegador / PWA",
+      "sublabel": "offline con IndexedDB",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "agent",
+      "type": "external",
+      "label": "Agentes IA",
+      "sublabel": "SKILL.md · MCP · REST",
+      "pos": [
+        40,
+        470
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "editor",
+      "type": "frontend",
+      "label": "@all-draw/editor",
+      "sublabel": "React Flow · paleta · inspector",
+      "pos": [
+        290,
+        300
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "notations",
+      "type": "frontend",
+      "label": "@all-draw/notations",
+      "sublabel": "archimate · bpmn · statechart · c4 · grid",
+      "pos": [
+        290,
+        130
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "packs de datos"
+    },
+    {
+      "id": "core",
+      "type": "backend",
+      "label": "@all-draw/core",
+      "sublabel": "modelo Zod · comandos · puertos",
+      "pos": [
+        530,
+        300
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "modelo ≠ vistas"
+    },
+    {
+      "id": "layout",
+      "type": "backend",
+      "label": "@all-draw/layout",
+      "sublabel": "elkjs (worker) · lint geométrico",
+      "pos": [
+        530,
+        130
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "io",
+      "type": "backend",
+      "label": "@all-draw/io",
+      "sublabel": "BPMN · ArchiMate · Structurizr · .drawer",
+      "pos": [
+        530,
+        470
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "sync",
+      "type": "messagebus",
+      "label": "@all-draw/sync",
+      "sublabel": "Yjs · y-indexeddb · WebSocket",
+      "pos": [
+        770,
+        300
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "local-first"
+    },
+    {
+      "id": "server",
+      "type": "backend",
+      "label": "@all-draw/server",
+      "sublabel": "Hono API · auth · sala Yjs",
+      "pos": [
+        1000,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "agnóstico"
+    },
+    {
+      "id": "cf",
+      "type": "cloud",
+      "label": "Cloudflare",
+      "sublabel": "Worker + Durable Object",
+      "pos": [
+        1000,
+        130
+      ],
+      "size": [
+        150,
+        60
+      ],
+      "tag": "primero"
+    },
+    {
+      "id": "vps",
+      "type": "cloud",
+      "label": "VPS / AWS",
+      "sublabel": "Node + SQLite/Postgres",
+      "pos": [
+        1000,
+        470
+      ],
+      "size": [
+        150,
+        60
+      ],
+      "tag": "después"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Cliente (funciona sin red)",
+      "wraps": [
+        "editor",
+        "notations",
+        "core",
+        "layout",
+        "io",
+        "sync"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Adaptadores de despliegue",
+      "wraps": [
+        "cf",
+        "vps"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "browser-editor",
+      "from": "browser",
+      "to": "editor",
+      "variant": "emphasis"
+    },
+    {
+      "id": "agent-io",
+      "from": "agent",
+      "to": "io",
+      "label": "JSON / REST",
+      "variant": "dashed"
+    },
+    {
+      "id": "editor-core",
+      "from": "editor",
+      "to": "core",
+      "variant": "emphasis"
+    },
+    {
+      "id": "notations-editor",
+      "from": "notations",
+      "to": "editor",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "notations-core",
+      "from": "notations",
+      "to": "core",
+      "label": "tipos · matriz",
+      "variant": "dashed"
+    },
+    {
+      "id": "layout-core",
+      "from": "layout",
+      "to": "core",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "io-core",
+      "from": "io",
+      "to": "core",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "core-sync",
+      "from": "core",
+      "to": "sync",
+      "label": "Y.Doc",
+      "variant": "emphasis"
+    },
+    {
+      "id": "sync-server",
+      "from": "sync",
+      "to": "server",
+      "label": "WebSocket",
+      "variant": "dashed"
+    },
+    {
+      "id": "server-cf",
+      "from": "server",
+      "to": "cf",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "server-vps",
+      "from": "server",
+      "to": "vps",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Cliente autosuficiente",
+      "items": [
+        "Todo el modelo, la validación y el layout corren en el navegador",
+        "Sin red sigue editando; al volver sincroniza"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Servidor portable",
+      "items": [
+        "Hono corre en Workers, Node, Bun o Lambda",
+        "Persistencia detrás de una interfaz: Durable Object, SQLite o Postgres"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Notaciones como datos",
+      "items": [
+        "Cada notación es un pack: tipos, reglas, viewpoints, renderers",
+        "Añadir una notación no toca el núcleo"
+      ]
+    }
+  ]
+}

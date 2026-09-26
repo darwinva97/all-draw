@@ -1,0 +1,288 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "all-draw · un proceso, varias dimensiones",
+    "subtitle": "'Alta de cliente' modelado a la vez en BPMN, máquina de estados, ArchiMate y contratos de API",
+    "quality_profile": "standard",
+    "animation": "trace"
+  },
+  "lanes": [
+    {
+      "id": "bpmn",
+      "label": "Dimensión BPMN"
+    },
+    {
+      "id": "states",
+      "label": "Dimensión Estados"
+    },
+    {
+      "id": "archimate",
+      "label": "Dimensión ArchiMate"
+    },
+    {
+      "id": "api",
+      "label": "Dimensión APIs (pines)"
+    }
+  ],
+  "phases": [
+    {
+      "id": "p1",
+      "label": "Solicitud",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "p2",
+      "label": "Validación",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "p3",
+      "label": "Activación",
+      "fromCol": 4,
+      "toCol": 5
+    }
+  ],
+  "mainPath": [
+    "start",
+    "form",
+    "verify",
+    "gateway",
+    "activate",
+    "end"
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "lane": "bpmn",
+      "col": 0,
+      "type": "frontend",
+      "label": "Inicio",
+      "sublabel": "evento"
+    },
+    {
+      "id": "form",
+      "lane": "bpmn",
+      "col": 1,
+      "type": "frontend",
+      "label": "Rellenar alta",
+      "sublabel": "tarea usuario"
+    },
+    {
+      "id": "verify",
+      "lane": "bpmn",
+      "col": 2,
+      "type": "backend",
+      "label": "Verificar KYC",
+      "sublabel": "subproceso ↘ vista",
+      "tag": "drill-down"
+    },
+    {
+      "id": "gateway",
+      "lane": "bpmn",
+      "col": 3,
+      "type": "security",
+      "label": "¿Aprobado?",
+      "sublabel": "gateway XOR"
+    },
+    {
+      "id": "activate",
+      "lane": "bpmn",
+      "col": 4,
+      "type": "backend",
+      "label": "Activar cuenta",
+      "sublabel": "tarea servicio"
+    },
+    {
+      "id": "end",
+      "lane": "bpmn",
+      "col": 5,
+      "type": "frontend",
+      "label": "Fin",
+      "sublabel": "evento"
+    },
+    {
+      "id": "s_pending",
+      "lane": "states",
+      "col": 1,
+      "type": "external",
+      "label": "Pendiente",
+      "sublabel": "estado"
+    },
+    {
+      "id": "s_review",
+      "lane": "states",
+      "col": 2,
+      "type": "external",
+      "label": "En revisión",
+      "sublabel": "estado"
+    },
+    {
+      "id": "s_active",
+      "lane": "states",
+      "col": 4,
+      "type": "external",
+      "label": "Activa",
+      "sublabel": "estado final"
+    },
+    {
+      "id": "a_process",
+      "lane": "archimate",
+      "col": 2,
+      "type": "cloud",
+      "label": "Alta cliente",
+      "sublabel": "BusinessProcess",
+      "tag": "mismo elemento"
+    },
+    {
+      "id": "a_service",
+      "lane": "archimate",
+      "col": 4,
+      "type": "cloud",
+      "label": "Srv. Cuentas",
+      "sublabel": "ApplicationService"
+    },
+    {
+      "id": "api_kyc",
+      "lane": "api",
+      "col": 2,
+      "type": "messagebus",
+      "label": "POST /kyc",
+      "sublabel": "response.score",
+      "tag": "pin"
+    },
+    {
+      "id": "api_acc",
+      "lane": "api",
+      "col": 4,
+      "type": "messagebus",
+      "label": "POST /accounts",
+      "sublabel": "request.kycScore",
+      "tag": "pin"
+    }
+  ],
+  "edges": [
+    {
+      "from": "start",
+      "to": "form"
+    },
+    {
+      "from": "form",
+      "to": "verify"
+    },
+    {
+      "from": "verify",
+      "to": "gateway"
+    },
+    {
+      "from": "gateway",
+      "to": "activate",
+      "label": "sí"
+    },
+    {
+      "from": "activate",
+      "to": "end"
+    },
+    {
+      "from": "form",
+      "to": "s_pending",
+      "variant": "dashed",
+      "role": "branch",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "verify",
+      "to": "s_review",
+      "variant": "dashed",
+      "role": "branch",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "activate",
+      "to": "s_active",
+      "variant": "dashed",
+      "role": "branch",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "s_pending",
+      "to": "s_review"
+    },
+    {
+      "from": "s_review",
+      "to": "s_active",
+      "label": "aprobado"
+    },
+    {
+      "from": "s_review",
+      "to": "a_process",
+      "label": "realiza",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "from": "a_process",
+      "to": "a_service",
+      "label": "sirve"
+    },
+    {
+      "from": "a_process",
+      "to": "api_kyc",
+      "variant": "dashed",
+      "role": "branch",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "a_service",
+      "to": "api_acc",
+      "variant": "dashed",
+      "role": "branch",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "api_kyc",
+      "to": "api_acc",
+      "label": "score → kycScore",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Mismo suceso",
+      "items": [
+        "Las cuatro filas describen el mismo proceso desde ángulos distintos",
+        "Cambiar el nombre del proceso lo cambia en todas"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Cambiar de dimensión",
+      "items": [
+        "Sobre 'Verificar KYC' se abre el subproceso, su máquina de estados o su elemento ArchiMate",
+        "Las flechas punteadas son relaciones de trazabilidad entre dimensiones"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Pines",
+      "items": [
+        "'score → kycScore' conecta dos campos concretos de dos contratos",
+        "Si el contrato cambia, la relación avisa"
+      ]
+    }
+  ]
+}

@@ -24,3 +24,8 @@ En `docs/borradores/` (JSON fuente en formato archify, HTML autocontenido y PNG)
 - `fases` — hoja de ruta con las 7 fases y las 3 entregas.
 
 Regenerar: `node _research/archify/archify/bin/archify.mjs render <tipo> <spec.json> <out.html>` y captura con `chromium --headless=new --screenshot`.
+
+
+## Actualización 26 de septiembre de 2026
+
+Repositorio creado: https://github.com/darwinva97/all-draw (público, MIT). Nombre definitivo del producto: **all-draw**. Staging: https://alldraw.bezenti.com.

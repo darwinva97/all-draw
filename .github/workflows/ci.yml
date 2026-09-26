@@ -1,0 +1,23 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm -r --filter './packages/**' exec tsc --noEmit -p tsconfig.json
+      - run: pnpm --filter web build
+      - name: e2e (chromium del runner)
+        run: |
+          pnpm --filter web preview --port 4173 --host 127.0.0.1 &
+          (cd apps/server && PORT=4002 STATIC_DIR=../web/dist node src/server.mjs &)
+          sleep 3
+          CHROME=$(which chromium chromium-browser google-chrome 2>/dev/null | head -1); [ -n "$CHROME" ] && sed -i "s#/usr/bin/chromium#$CHROME#" e2e/*.mjs
+          pnpm e2e

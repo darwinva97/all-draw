@@ -30,6 +30,20 @@ export interface PasteOptions {
   mode: PasteMode;
   /** La vista destino es una rejilla: se conserva `cell`; si no, se descarta. */
   isGrid?: boolean;
+  /**
+   * En una rejilla, dónde caen los nodos raíz que no traen celda (o cuya celda ya no existe):
+   * la celda bajo el punto de pegado (o la primera) y la posición relativa dentro de ella.
+   * Sin `gridTarget`, esos nodos no se pegan: en una rejilla nada queda fuera de una celda.
+   */
+  gridTarget?: {
+    cell: { layerId: string; stageId: string };
+    /** Posición del primer nodo dentro de la celda (por defecto 8,8). */
+    origin?: { x: number; y: number };
+    /** ¿Existe todavía la celda? Si no se da, se aceptan todas. */
+    isValidCell?: (cell: { layerId: string; stageId: string }) => boolean;
+    /** Tamaño de la celda destino: los nodos se acotan para no sobresalir de ella. */
+    size?: { w: number; h: number };
+  };
 }
 
 export interface PastePlan { commands: Command[]; newNodeIds: string[] }
@@ -85,18 +99,32 @@ export function pastePlan(clip: Clip, opts: PasteOptions): PastePlan {
   const visit = (n: ViewNode) => { if (seen.has(n.id)) return; if (n.parentNodeId && byId.has(n.parentNodeId)) visit(byId.get(n.parentNodeId)!); seen.add(n.id); ordered.push(n); };
   clip.nodes.forEach(visit);
   const newNodeIds: string[] = [];
+  // Rejilla: los nodos raíz sin celda válida van a la celda destino, conservando su disposición relativa.
+  const roots = ordered.filter(n => !(n.parentNodeId && byId.has(n.parentNodeId)));
+  const ref = { x: Math.min(...roots.map(n => n.x)), y: Math.min(...roots.map(n => n.y)) };
+  const validCell = (c: ViewNode['cell']) => !!c && (!opts.gridTarget?.isValidCell || opts.gridTarget.isValidCell(c));
   for (const n of ordered) {
-    const id = nodeMap.get(n.id)!;
     const parentInClip = !!n.parentNodeId && nodeMap.has(n.parentNodeId);
+    if (!parentInClip && n.parentNodeId && byId.has(n.parentNodeId)) { nodeMap.delete(n.id); continue; } // su padre no se pegó
+    let cell = opts.isGrid ? n.cell : undefined;
+    let x = parentInClip ? n.x : n.x + opts.offset.x, y = parentInClip ? n.y : n.y + opts.offset.y;
+    if (opts.isGrid && !parentInClip && !validCell(cell)) {
+      const t = opts.gridTarget;
+      if (!t) { nodeMap.delete(n.id); continue; } // en una rejilla nada queda fuera de una celda
+      cell = t.cell;
+      const o = t.origin ?? { x: 8, y: 8 };
+      x = o.x + (n.x - ref.x) + opts.offset.x; y = o.y + (n.y - ref.y) + opts.offset.y;
+      if (t.size) { x = Math.max(0, Math.min(x, t.size.w - n.w)); y = Math.max(0, Math.min(y, t.size.h - n.h)); }
+    }
+    const id = nodeMap.get(n.id)!;
     const value: ViewNode = {
       ...structuredClone(n),
       id,
       viewId: opts.viewId,
       elementId: n.elementId ? (opts.mode === 'clone' ? (elMap.get(n.elementId) ?? n.elementId) : n.elementId) : undefined,
       parentNodeId: parentInClip ? nodeMap.get(n.parentNodeId!) : undefined,
-      x: parentInClip ? n.x : n.x + opts.offset.x,
-      y: parentInClip ? n.y : n.y + opts.offset.y,
-      cell: opts.isGrid ? n.cell : undefined,
+      x: Math.round(x), y: Math.round(y),
+      cell,
       detailViewId: opts.mode === 'clone' ? undefined : n.detailViewId,
     };
     stripUndefined(value);

@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
-import { validate, type Diagnostic } from '@all-draw/core';
+import { validate, DEFAULT_VALIDATORS, type Diagnostic } from '@all-draw/core';
 import { useEditor } from '../context';
 import { useAnyChange } from '../hooks';
 
 export function Problems() {
-  const { store, registry, run, readOnly, select, openView } = useEditor();
+  const { store, registry, run, readOnly, select, openView, validators } = useEditor();
   const v = useAnyChange();
   const [open, setOpen] = useState(false);
-  const diags = useMemo(() => validate(store, registry), [store, registry, v]);
+  const diags = useMemo(() => validate(store, registry, [...DEFAULT_VALIDATORS, ...validators]), [store, registry, validators, v]);
   const errors = diags.filter(d => d.severity === 'error').length, warns = diags.filter(d => d.severity === 'warning').length;
   const goTo = (d: Diagnostic) => {
     if (d.subject.collection === 'nodes') { const n = store.get('nodes', d.subject.id); if (n) { openView(n.viewId); select({ nodes: [n.id], edges: [] }); } }

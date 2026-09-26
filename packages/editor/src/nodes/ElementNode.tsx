@@ -1,17 +1,18 @@
-import { memo, useMemo } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { memo, useMemo, type MouseEvent } from 'react';
+import { Handle, NodeResizer, Position, type NodeProps, type Node } from '@xyflow/react';
 import type { ElementType, Port, RuleStyle, ViewNode } from '@all-draw/core';
 import { useEditor } from '../context';
 import { useRecord, usePorts, useCollection } from '../hooks';
 import { resolveStyle } from '@all-draw/core';
 import { shapeStyle, ShapeSvg } from './shapes';
+import { InlineEdit } from './InlineEdit';
 
-export type ElementNodeData = { node: ViewNode; dimmed?: boolean };
+export type ElementNodeData = { node: ViewNode; dimmed?: boolean; /** Color de otro participante que lo tiene seleccionado. */ remoteColor?: string };
 export type ElementRFNode = Node<ElementNodeData, 'element'>;
 
 /** Nodo genérico: pinta cualquier elemento según su tipo (forma, color, icono), las reglas de estilo y sus puertos. */
 export const ElementNode = memo(function ElementNode({ data, selected }: NodeProps<ElementRFNode>) {
-  const { registry, store, viewId } = useEditor();
+  const { registry, store, viewId, readOnly, run, renaming, setRenaming, effectiveTheme } = useEditor();
   const vn = data.node;
   const element = useRecord('elements', vn.elementId);
   const type = element ? registry.elementType(element.typeId) : undefined;
@@ -24,18 +25,34 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   if (!element) return <div className="ad-node ad-node--missing">?</div>;
   const visible = visiblePorts(ports, vn);
   const shape = type?.shape ?? 'rounded';
-  const css = shapeStyle(shape, type, vn, rule as RuleStyle);
+  const css = shapeStyle(shape, type, vn, rule as RuleStyle, effectiveTheme === 'dark');
   const label = vn.text ?? (element.name || (type?.name ?? ''));
   const icon = ['circle', 'double-circle', 'diamond', 'bar', 'actor'].includes(shape) ? undefined : ((rule.icon ?? type?.icon) || undefined);
+  const editing = renaming === vn.id;
+  if (data.remoteColor && !selected) { css.outline = `2px solid ${data.remoteColor}`; css.outlineOffset = 2; }
+
+  const onLabelDoubleClick = (e: MouseEvent) => {
+    // Con vista de detalle, el doble clic sigue entrando (F2 para renombrar); si no, renombra en línea.
+    if (readOnly || vn.detailViewId) return;
+    e.stopPropagation();
+    setRenaming(vn.id);
+  };
+  const rename = (name: string) => {
+    if (name !== element.name) run({ type: 'patch', collection: 'elements', id: element.id, patch: { name } });
+    setRenaming(null);
+  };
 
   return (
     <div className={`ad-node ad-shape-${shape} ${type?.container ? 'is-container' : ''} ${selected ? 'is-selected' : ''} ${data.dimmed ? 'is-dimmed' : ''} ${rule.bold ? 'r-bold' : ''} ${rule.strike ? 'r-strike' : ''}`} style={css} title={element.doc || undefined}>
+      {!readOnly && <NodeResizer minWidth={24} minHeight={16} isVisible={selected && !editing} lineClassName="ad-resizer__line" handleClassName="ad-resizer__handle" />}
       <ShapeSvg shape={shape} fill={css.background as string} stroke={css.borderColor as string} figure={vn.style.figure} />
       <Handle type="target" position={Position.Top} id="" className="ad-handle ad-handle--body" />
       <Handle type="source" position={Position.Bottom} id="" className="ad-handle ad-handle--body" />
       <div className="ad-node__body">
         {icon && <span className="ad-node__icon">{icon}</span>}
-        <span className="ad-node__label">{label}</span>
+        {editing
+          ? <InlineEdit value={element.name} onCommit={rename} onCancel={() => setRenaming(null)} />
+          : <span className="ad-node__label" onDoubleClick={onLabelDoubleClick}>{label}</span>}
         {rule.badge && <span className="ad-node__badge" style={{ background: rule.badge }}>{rule.badgeText}</span>}
         {type && <span className="ad-node__type">{type.name}</span>}
       </div>

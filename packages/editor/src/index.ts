@@ -5,3 +5,7 @@ export * from './Canvas';
 export { FieldEditor, KeyValueEditor } from './panels/Inspector';
 export { WorkspacePanel, type WorkspaceTab } from './panels/WorkspacePanel';
 export * from './panels/workspace-helpers';
+export { searchWorkspace, scoreText, type SearchHit, type SearchAction } from './search';
+export { propagateTemplate, retypeElements, FALLBACK_TYPE } from './template';
+export type { AwarenessLike, PresenceMe, PresenceState, Peer } from './presence';
+export { usePeers, peersOf, colorFor } from './presence';

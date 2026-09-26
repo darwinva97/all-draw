@@ -1,0 +1,34 @@
+import { useEffect } from 'react';
+
+/** Panel de atajos de teclado (tecla ?). */
+const GROUPS: { title: string; items: [string, string][] }[] = [
+  { title: 'General', items: [['Ctrl+K / Ctrl+F', 'Buscar elementos, vistas y acciones'], ['?', 'Este panel'], ['Esc', 'Cerrar paneles, cancelar'], ['Ctrl+Z / Ctrl+Y', 'Deshacer / rehacer']] },
+  { title: 'Selección', items: [['Ctrl+A', 'Seleccionar todo'], ['Shift+clic', 'Añadir a la selección'], ['Shift+arrastrar', 'Selección por área'], ['F2', 'Renombrar el elemento seleccionado'], ['Supr', 'Quitar de la vista']] },
+  { title: 'Edición', items: [['Ctrl+C / Ctrl+V', 'Copiar / pegar (misma aparición)'], ['Ctrl+Shift+V', 'Pegar como copia (elementos nuevos)'], ['Ctrl+D', 'Duplicar'], ['Flechas', 'Mover la selección 1 px'], ['Shift+flechas', 'Mover la selección 10 px'], ['Alt (mantener)', 'Desactivar el ajuste a rejilla']] },
+  { title: 'Vista', items: [['+ / -', 'Acercar / alejar'], ['Ctrl+0', 'Zoom al 100 %'], ['Ctrl+Shift+F', 'Ajustar a la vista'], ['Doble clic en nodo', 'Entrar en su vista de detalle'], ['Doble clic en el nombre', 'Renombrar en línea'], ['Doble clic en arista', 'Añadir punto de quiebre'], ['Botón derecho', 'Menú del nodo / del lienzo']] },
+];
+
+export function ShortcutsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    window.addEventListener('keydown', h, true);
+    return () => window.removeEventListener('keydown', h, true);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="ad-cmdk-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="ad-cmdk ad-shortcuts" role="dialog" aria-label="Atajos de teclado">
+        <header className="ad-shortcuts__head"><strong>Atajos de teclado</strong><button className="ad-btn ad-btn--ghost" onClick={onClose} aria-label="Cerrar">×</button></header>
+        <div className="ad-shortcuts__grid">
+          {GROUPS.map(g => (
+            <section key={g.title}>
+              <div className="ad-section">{g.title}</div>
+              {g.items.map(([k, d]) => <div key={k} className="ad-shortcuts__row"><kbd>{k}</kbd><span>{d}</span></div>)}
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

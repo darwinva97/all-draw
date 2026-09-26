@@ -47,6 +47,12 @@ export interface NotationPack {
 }
 
 // ---------------------------------------------------------------- Registro
+/** Lo que el registro necesita de una `Library`. */
+export interface LibraryTypes { id: string; elementTypes: ElementType[]; relationTypes: RelationType[]; portTypes: PortType[] }
+
+/** Función suelta equivalente a `reg.syncLibraryTypes(libs)`. */
+export function syncLibraryTypes(reg: NotationRegistry, libs: LibraryTypes[]): NotationRegistry { return reg.syncLibraryTypes(libs); }
+
 export class NotationRegistry {
   private packs = new Map<string, NotationPack>();
   private elementTypes = new Map<string, ElementType>();
@@ -61,13 +67,43 @@ export class NotationRegistry {
     return this;
   }
 
-  /** Tipos definidos en librerías del workspace (no en packs). */
-  registerLibraryTypes(lib: { id: string; elementTypes: ElementType[]; relationTypes: RelationType[]; portTypes: PortType[] }): this {
+  /** Tipos registrados por cada librería (para poder desregistrarlos al cambiar o borrar la librería). */
+  private libTypes = new Map<string, { elements: string[]; relations: string[]; ports: string[] }>();
+
+  /**
+   * Tipos definidos en librerías del workspace (no en packs). Si la librería ya estaba registrada,
+   * primero se retiran sus tipos anteriores: así un tipo borrado de la librería deja de resolverse.
+   */
+  registerLibraryTypes(lib: LibraryTypes): this {
+    this.unregisterLibraryTypes(lib.id);
     for (const t of lib.elementTypes) this.elementTypes.set(t.id, t);
     for (const t of lib.relationTypes) this.relationTypes.set(t.id, t);
     for (const t of lib.portTypes) this.portTypes.set(t.id, t);
+    this.libTypes.set(lib.id, { elements: lib.elementTypes.map(t => t.id), relations: lib.relationTypes.map(t => t.id), ports: lib.portTypes.map(t => t.id) });
     return this;
   }
+
+  /** Retira los tipos que registró una librería (no toca los de los packs). */
+  unregisterLibraryTypes(libId: string): this {
+    const prev = this.libTypes.get(libId);
+    if (!prev) return this;
+    for (const id of prev.elements) this.elementTypes.delete(id);
+    for (const id of prev.relations) this.relationTypes.delete(id);
+    for (const id of prev.ports) this.portTypes.delete(id);
+    this.libTypes.delete(libId);
+    return this;
+  }
+
+  /** Deja registradas exactamente las librerías dadas: registra las actuales y retira las que ya no existen. */
+  syncLibraryTypes(libs: LibraryTypes[]): this {
+    const keep = new Set(libs.map(l => l.id));
+    for (const id of this.libTypes.keys()) if (!keep.has(id)) this.unregisterLibraryTypes(id);
+    for (const lib of libs) this.registerLibraryTypes(lib);
+    return this;
+  }
+
+  /** Ids de librerías registradas. */
+  libraryIds(): string[] { return [...this.libTypes.keys()]; }
 
   pack(id: string): NotationPack | undefined { return this.packs.get(id); }
   allPacks(): NotationPack[] { return [...this.packs.values()]; }

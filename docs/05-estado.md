@@ -19,7 +19,7 @@ Primera implementación funcional de all-draw. Cubre las fases F0, F1 y F2 del p
 | `apps/web` | Vite + React 19, PWA, espacios locales en IndexedDB, demo "Alta de cliente" en 5 dimensiones, importar `.drawer`/JSON, exportar, compartir en línea (sala = id del espacio). | e2e sync |
 | `apps/server` | Node: sirve `apps/web/dist` y sincroniza Yjs por WebSocket en `/ws/<sala>` con persistencia en disco (`~/.alldraw-data`). Sin dependencias de despliegue: el mismo protocolo vale para Durable Objects. | e2e sync |
 
-Total: 110 tests unitarios en verde, `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
+Total: 305 tests unitarios en verde, `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
 
 ## Cómo ejecutarlo
 
@@ -55,3 +55,20 @@ pnpm gen:archimate              # regenera el pack desde _research/archi
 - Panel **Espacio** (botón en la barra): pestañas Librerías (librerías, tipos con campos y pines, componentes reutilizables), Reglas (condiciones, estilo con vista previa, impacto, colisiones) y Personas (asignaciones a elementos, vistas, capas, etapas, tipos, relaciones). Sección Personas en el inspector de elemento.
 - Copiar/pegar (Ctrl+C/V: nuevas apariciones de los mismos elementos; Ctrl+Shift+V y Ctrl+D: clonar), barra de alinear/distribuir/igualar tamaño con ≥2 nodos, bendpoints editables (doble clic en arista inserta, arrastrar mueve, doble clic en manejador elimina).
 - e2e `e2e/ui.mjs` cubre estas funciones; `pnpm e2e` incluye humo y sync.
+
+## Tercera tanda (26 de septiembre de 2026, tarde)
+
+- **Servidor** (`apps/server`, TypeScript con `tsx`): cuentas (registro/login con scrypt, cookie de sesión), API keys, espacios con roles owner/editor/viewer, enlaces compartidos con rol y caducidad, `WorkspaceStore` con adaptadores SQLite (`node:sqlite`) y memoria (esquema pensado para Postgres/Durable Objects, ver `apps/server/README.md`), WebSocket Yjs que descarta escrituras de viewers, API REST de comandos (`POST /api/workspaces/:id/commands`, validada con `CommandSchema` de core), `validate`, SVG por vista, `GET /api/openapi.json`, servidor MCP (`pnpm --filter @all-draw/server mcp`) y `SKILL.md` para agentes. Migración automática de los `.yupdate` antiguos a un usuario `legacy@alldraw.local`. El primer usuario registrado es admin.
+- **Web**: inicio con cuenta (espacios en el servidor + locales, subir un local al servidor), ruta `#/s/<id>` para espacios del servidor (caché IndexedDB local, funciona offline y sincroniza al volver), diálogo Compartir con enlaces de edición/lectura, pantalla de claves API, presencia (cursores y avatares), tema oscuro, layout automático (elkjs, `onRequestLayout`), menú Importar/Exportar con todos los formatos, validadores extra (geometría, bpmnlint, cobertura de trazas). Paquete inicial partido: layout e io se cargan bajo demanda.
+- **io**: importar/exportar `.archimate` (Archi nativo, probado con Archisurance), ArchiMate Open Exchange, BPMN 2.0 XML con DI (`bpmn-moddle`), Structurizr JSON, XState JSON, Mermaid (flowchart y stateDiagram-v2, import y export), draw.io (export), OpenAPI → librería de APIs con pines, `importAny` con detección de formato; SVG (claro/oscuro/dual) y PNG sin DOM; HTML autocontenido navegable; 10 reglas de bpmnlint.
+- **layout**: elkjs (layered/stress/mrtree/force, jerarquía, puertos, por celda en rejilla) y lint geométrico portado de archify.
+- **Notaciones**: BPMN completo (36 tipos, coreografías y conversaciones), y packs nuevos `sequence`, `er`, `uml` (clases), `mindmap`, `flow` (flowchart), `dfd`, más `catalog` con 162 tipos de diagrama del catálogo corporativo. Trazabilidad entre niveles en core (`suggestTraces`, `traceMatrix`, `traceCoverage`).
+- **Editor**: búsqueda global (Ctrl+K), renombrar en línea (F2), visuales (nota, grupo, etiqueta, imagen), redimensionar arrastrando, ajuste a rejilla, menú del lienzo, panel de atajos (?), reglas sobre relaciones, propagación de plantillas a instancias, reasignar tipo al borrarlo, índices en memoria para vistas grandes.
+- **Deudas resueltas**: tipos de librería se desregistran al borrarlos; plantillas propagan; pegado en rejilla asigna celda; bundle partido; `deleteView` ya no falla con nodos de la propia vista.
+- e2e: `smoke`, `ui`, `sync` (cuentas + enlace de edición + presencia) y `readonly` (enlace de lectura). CI en GitHub Actions.
+
+### Pendiente todavía
+- Adaptadores Postgres y Cloudflare Durable Object (interfaz lista, sin implementar).
+- Figuras ArchiMate con iconos propios; matriz de trazabilidad como panel en la interfaz (existe en core y en el validador).
+- Vistas de secuencia con lienzo propio (hoy se pintan como libres).
+- Documentación de usuario, accesibilidad, i18n.

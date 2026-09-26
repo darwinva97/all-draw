@@ -1,0 +1,45 @@
+{
+  "label": "Alta de cliente: proceso BPMN, capa ArchiMate y trazas",
+  "commands": [
+    { "type": "meta", "patch": { "name": "Alta de cliente", "description": "Ejemplo de SKILL.md" } },
+
+    { "type": "set", "collection": "views", "id": "vw_bpmn", "value": { "id": "vw_bpmn", "kind": "freeform", "notationId": "bpmn", "viewpointId": "process", "name": "Alta de cliente (BPMN)" } },
+    { "type": "set", "collection": "views", "id": "vw_arch", "value": { "id": "vw_arch", "kind": "freeform", "notationId": "archimate", "name": "Alta de cliente (ArchiMate)" } },
+    { "type": "set", "collection": "views", "id": "vw_trace", "value": { "id": "vw_trace", "kind": "freeform", "notationId": "freeform", "name": "Trazabilidad BPMN ↔ ArchiMate" } },
+
+    { "type": "addElementToView", "element": { "id": "el_pool", "typeId": "bpmn:Pool", "name": "Banco" }, "node": { "id": "vn_pool", "viewId": "vw_bpmn", "x": 40, "y": 40, "w": 900, "h": 220 } },
+    { "type": "addElementToView", "element": { "id": "el_start", "typeId": "bpmn:StartEvent", "name": "Solicitud recibida" }, "node": { "id": "vn_start", "viewId": "vw_bpmn", "parentNodeId": "vn_pool", "x": 80, "y": 120, "w": 40, "h": 40 } },
+    { "type": "addElementToView", "element": { "id": "el_verificar", "typeId": "bpmn:Task", "name": "Verificar identidad", "fields": { "taskType": "User" } }, "node": { "id": "vn_verificar", "viewId": "vw_bpmn", "parentNodeId": "vn_pool", "x": 180, "y": 100, "w": 160, "h": 80 } },
+    { "type": "addElementToView", "element": { "id": "el_gw", "typeId": "bpmn:ExclusiveGateway", "name": "¿Identidad válida?" }, "node": { "id": "vn_gw", "viewId": "vw_bpmn", "parentNodeId": "vn_pool", "x": 400, "y": 115, "w": 50, "h": 50 } },
+    { "type": "addElementToView", "element": { "id": "el_abrir", "typeId": "bpmn:Task", "name": "Abrir cuenta", "fields": { "taskType": "Service" } }, "node": { "id": "vn_abrir", "viewId": "vw_bpmn", "parentNodeId": "vn_pool", "x": 520, "y": 100, "w": 160, "h": 80 } },
+    { "type": "addElementToView", "element": { "id": "el_end_ok", "typeId": "bpmn:EndEvent", "name": "Cliente dado de alta" }, "node": { "id": "vn_end_ok", "viewId": "vw_bpmn", "parentNodeId": "vn_pool", "x": 760, "y": 120, "w": 40, "h": 40 } },
+    { "type": "addElementToView", "element": { "id": "el_end_ko", "typeId": "bpmn:EndEvent", "name": "Solicitud rechazada" }, "node": { "id": "vn_end_ko", "viewId": "vw_bpmn", "parentNodeId": "vn_pool", "x": 520, "y": 200, "w": 40, "h": 40 } },
+
+    { "type": "connect", "relation": { "id": "rel_f1", "typeId": "bpmn:SequenceFlow", "from": { "elementId": "el_start" }, "to": { "elementId": "el_verificar" } }, "edge": { "id": "ve_f1", "viewId": "vw_bpmn", "fromNodeId": "vn_start", "toNodeId": "vn_verificar" } },
+    { "type": "connect", "relation": { "id": "rel_f2", "typeId": "bpmn:SequenceFlow", "from": { "elementId": "el_verificar" }, "to": { "elementId": "el_gw" } }, "edge": { "id": "ve_f2", "viewId": "vw_bpmn", "fromNodeId": "vn_verificar", "toNodeId": "vn_gw" } },
+    { "type": "connect", "relation": { "id": "rel_f3", "typeId": "bpmn:SequenceFlow", "name": "sí", "from": { "elementId": "el_gw" }, "to": { "elementId": "el_abrir" } }, "edge": { "id": "ve_f3", "viewId": "vw_bpmn", "fromNodeId": "vn_gw", "toNodeId": "vn_abrir", "label": "sí" } },
+    { "type": "connect", "relation": { "id": "rel_f4", "typeId": "bpmn:SequenceFlow", "name": "no", "from": { "elementId": "el_gw" }, "to": { "elementId": "el_end_ko" } }, "edge": { "id": "ve_f4", "viewId": "vw_bpmn", "fromNodeId": "vn_gw", "toNodeId": "vn_end_ko", "label": "no" } },
+    { "type": "connect", "relation": { "id": "rel_f5", "typeId": "bpmn:SequenceFlow", "from": { "elementId": "el_abrir" }, "to": { "elementId": "el_end_ok" } }, "edge": { "id": "ve_f5", "viewId": "vw_bpmn", "fromNodeId": "vn_abrir", "toNodeId": "vn_end_ok" } },
+
+    { "type": "addElementToView", "element": { "id": "el_rol", "typeId": "archimate:BusinessRole", "name": "Gestor de altas" }, "node": { "id": "vn_rol", "viewId": "vw_arch", "x": 40, "y": 40, "w": 160, "h": 60 } },
+    { "type": "addElementToView", "element": { "id": "el_proc", "typeId": "archimate:BusinessProcess", "name": "Alta de cliente" }, "node": { "id": "vn_proc", "viewId": "vw_arch", "x": 280, "y": 40, "w": 180, "h": 60 } },
+    { "type": "addElementToView", "element": { "id": "el_svc", "typeId": "archimate:ApplicationService", "name": "Servicio de onboarding" }, "node": { "id": "vn_svc", "viewId": "vw_arch", "x": 280, "y": 180, "w": 180, "h": 60 } },
+    { "type": "addElementToView", "element": { "id": "el_crm", "typeId": "archimate:ApplicationComponent", "name": "CRM", "fields": { "api": "{\"cliente\":{\"id\":\"string\",\"email\":\"string\"}}" } }, "node": { "id": "vn_crm", "viewId": "vw_arch", "x": 280, "y": 320, "w": 180, "h": 60 } },
+
+    { "type": "connect", "relation": { "id": "rel_a1", "typeId": "archimate:Assignment", "from": { "elementId": "el_rol" }, "to": { "elementId": "el_proc" } }, "edge": { "id": "ve_a1", "viewId": "vw_arch", "fromNodeId": "vn_rol", "toNodeId": "vn_proc" } },
+    { "type": "connect", "relation": { "id": "rel_a2", "typeId": "archimate:Serving", "from": { "elementId": "el_svc" }, "to": { "elementId": "el_proc" } }, "edge": { "id": "ve_a2", "viewId": "vw_arch", "fromNodeId": "vn_svc", "toNodeId": "vn_proc" } },
+    { "type": "connect", "relation": { "id": "rel_a3", "typeId": "archimate:Realization", "from": { "elementId": "el_crm" }, "to": { "elementId": "el_svc" } }, "edge": { "id": "ve_a3", "viewId": "vw_arch", "fromNodeId": "vn_crm", "toNodeId": "vn_svc" } },
+
+    { "type": "set", "collection": "nodes", "id": "vn_t_pool", "value": { "id": "vn_t_pool", "viewId": "vw_trace", "elementId": "el_pool", "x": 40, "y": 40, "w": 180, "h": 60 } },
+    { "type": "set", "collection": "nodes", "id": "vn_t_proc", "value": { "id": "vn_t_proc", "viewId": "vw_trace", "elementId": "el_proc", "x": 340, "y": 40, "w": 180, "h": 60 } },
+    { "type": "set", "collection": "nodes", "id": "vn_t_abrir", "value": { "id": "vn_t_abrir", "viewId": "vw_trace", "elementId": "el_abrir", "x": 40, "y": 180, "w": 180, "h": 60 } },
+    { "type": "set", "collection": "nodes", "id": "vn_t_svc", "value": { "id": "vn_t_svc", "viewId": "vw_trace", "elementId": "el_svc", "x": 340, "y": 180, "w": 180, "h": 60 } },
+    { "type": "connect", "relation": { "id": "rel_t1", "typeId": "core:trace", "name": "es el mismo proceso", "from": { "elementId": "el_pool" }, "to": { "elementId": "el_proc" } }, "edge": { "id": "ve_t1", "viewId": "vw_trace", "fromNodeId": "vn_t_pool", "toNodeId": "vn_t_proc" } },
+    { "type": "connect", "relation": { "id": "rel_t2", "typeId": "core:realizes", "name": "la tarea usa el servicio", "from": { "elementId": "el_abrir" }, "to": { "elementId": "el_svc" } }, "edge": { "id": "ve_t2", "viewId": "vw_trace", "fromNodeId": "vn_t_abrir", "toNodeId": "vn_t_svc" } },
+
+    { "type": "patch", "collection": "nodes", "id": "vn_proc", "patch": { "detailViewId": "vw_bpmn" } },
+    { "type": "set", "collection": "dimensions", "id": "dim_bpmn", "value": { "id": "dim_bpmn", "name": "Proceso", "notationId": "bpmn" } },
+    { "type": "set", "collection": "dimensions", "id": "dim_arch", "value": { "id": "dim_arch", "name": "Arquitectura", "notationId": "archimate" } },
+    { "type": "meta", "patch": { "currentViewId": "vw_bpmn" } }
+  ]
+}

@@ -1,16 +1,25 @@
-import { useMemo, useState, type DragEvent } from 'react';
+import { useMemo, useRef, useState, type DragEvent } from 'react';
 import { paletteFor, orphanElements, type ElementType } from '@all-draw/core';
 import { useEditor } from '../context';
 import { useRecord, useAnyChange } from '../hooks';
-import { DND_TYPE, DND_TEMPLATE, DND_ELEMENT } from '../Canvas';
+import { DND_TYPE, DND_TEMPLATE, DND_ELEMENT, DND_VISUAL } from '../Canvas';
 
-/** Paleta: tipos de la notación de la vista (viewpoint primero), tipos de librerías, componentes reutilizables y elementos existentes. */
+interface VisualItem { visualType: string; text?: string; src?: string }
+const VISUALS: { label: string; icon: string; item: VisualItem; hint: string }[] = [
+  { label: 'Nota', icon: '🗒', item: { visualType: 'core:note', text: 'Nota' }, hint: 'Texto libre; doble clic para editar' },
+  { label: 'Grupo', icon: '▢', item: { visualType: 'core:group', text: 'Grupo' }, hint: 'Marco que agrupa nodos (se mueven con él)' },
+  { label: 'Etiqueta', icon: 'T', item: { visualType: 'core:label', text: 'Etiqueta' }, hint: 'Texto sin fondo ni borde' },
+];
+
+/** Paleta: tipos de la notación de la vista (viewpoint primero), tipos de librerías, componentes reutilizables, elementos existentes y nodos visuales. */
 export function Palette() {
   const { store, registry, viewId } = useEditor();
   const view = useRecord('views', viewId);
   useAnyChange();
   const [q, setQ] = useState('');
-  const [tab, setTab] = useState<'notation' | 'libs' | 'model'>('notation');
+  const [tab, setTab] = useState<'notation' | 'libs' | 'model' | 'visual'>('notation');
+  const [images, setImages] = useState<{ name: string; src: string }[]>([]);
+  const file = useRef<HTMLInputElement>(null);
   const pal = useMemo(() => (view ? paletteFor(store, registry, view) : null), [store, registry, view]);
   const others = useMemo(() => registry.allPacks().filter(p => p.id !== 'core' && p.id !== view?.notationId && p.elementTypes.length), [registry, view]);
   const existing = useMemo(() => store.list('elements').filter(e => !e.template), [store]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -19,6 +28,15 @@ export function Palette() {
   const match = (s: string) => !q || norm(s).includes(norm(q));
 
   const drag = (kind: string, id: string) => (e: DragEvent) => { e.dataTransfer.setData(kind, id); e.dataTransfer.effectAllowed = 'copy'; };
+  const dragVisual = (item: VisualItem) => drag(DND_VISUAL, JSON.stringify(item));
+  const addImageUrl = () => {
+    const url = prompt('URL de la imagen');
+    if (url?.trim()) setImages(xs => [...xs, { name: url.trim().split('/').pop() || 'imagen', src: url.trim() }]);
+  };
+  const addImageFile = async (f: File) => {
+    const src = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(f); });
+    setImages(xs => [...xs, { name: f.name, src }]);
+  };
   const TypeItem = ({ t, dimmed }: { t: ElementType; dimmed?: boolean }) => (
     <div className={`ad-pal__item ${dimmed ? 'is-dimmed' : ''}`} draggable onDragStart={drag(DND_TYPE, t.id)} title={t.doc ?? t.id}>
       <span className="ad-pal__swatch" style={{ background: t.color ?? '#eee' }}>{t.icon ?? ''}</span>
@@ -38,6 +56,7 @@ export function Palette() {
         <button className={tab === 'notation' ? 'is-active' : ''} onClick={() => setTab('notation')}>Notación</button>
         <button className={tab === 'libs' ? 'is-active' : ''} onClick={() => setTab('libs')}>Librerías</button>
         <button className={tab === 'model' ? 'is-active' : ''} onClick={() => setTab('model')}>Modelo</button>
+        <button className={tab === 'visual' ? 'is-active' : ''} onClick={() => setTab('visual')}>Visual</button>
       </div>
       <div className="ad-pal__scroll">
         {tab === 'notation' && <>
@@ -76,6 +95,30 @@ export function Palette() {
               <span>{e.name || '(sin nombre)'}</span><small>{registry.elementType(e.typeId)?.name ?? e.typeId}</small>
             </div>
           ))}
+        </>}
+        {tab === 'visual' && <>
+          <div className="ad-hint">Nodos sin elemento del modelo: solo viven en esta vista.</div>
+          <details open><summary className="ad-pal__cat">Visual</summary>
+            {VISUALS.filter(v => match(v.label)).map(v => (
+              <div key={v.label} className="ad-pal__item" draggable onDragStart={dragVisual(v.item)} title={v.hint}>
+                <span className="ad-pal__swatch ad-pal__swatch--visual">{v.icon}</span><span>{v.label}</span>
+              </div>
+            ))}
+          </details>
+          <details open><summary className="ad-pal__cat">Imágenes</summary>
+            <div className="ad-row">
+              <button className="ad-btn" onClick={addImageUrl} title="Añadir una imagen por URL">＋ URL</button>
+              <button className="ad-btn" onClick={() => file.current?.click()} title="Añadir una imagen desde un fichero (se guarda incrustada)">＋ Fichero</button>
+              <input ref={file} type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void addImageFile(f); e.target.value = ''; }} />
+            </div>
+            {images.length === 0 && <div className="ad-hint">Añade una imagen y arrástrala al lienzo.</div>}
+            {images.filter(i => match(i.name)).map((img, i) => (
+              <div key={i} className="ad-pal__item" draggable onDragStart={dragVisual({ visualType: 'core:image', src: img.src })} title={img.name}>
+                <img className="ad-pal__thumb" src={img.src} alt="" /><span className="ad-pal__ellipsis">{img.name}</span>
+                <button className="ad-btn ad-btn--ghost" onClick={() => setImages(xs => xs.filter((_, j) => j !== i))} title="Quitar de la paleta">×</button>
+              </div>
+            ))}
+          </details>
         </>}
       </div>
     </aside>

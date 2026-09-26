@@ -69,8 +69,51 @@ export function resolveStyle(store: Store, reg: NotationRegistry | undefined, e:
 }
 
 export function ruleImpact(store: Store, reg: NotationRegistry | undefined, rule: StyleRule): number {
+  if (rule.target === 'relation') return store.list('relations').filter(r => relationRuleMatches(store, reg, r, rule)).length;
   return store.list('elements').filter(e => ruleMatches(store, reg, e, rule)).length;
 }
+
+// ---------------------------------------------------------------- reglas sobre relaciones
+/** Fuentes que tienen sentido para una relación: nombre, documentación, tipo, notación, propiedad y campo. */
+const RELATION_SOURCES = new Set<Condition['source']>(['name', 'doc', 'type', 'notation', 'prop', 'field']);
+
+function relationValuesOf(store: Store, reg: NotationRegistry | undefined, r: Relation, cond: Condition, viewId?: string): string[] | null {
+  switch (cond.source) {
+    case 'field': return [fieldText(r.fields[cond.key ?? ''])];
+    case 'name': return [r.name];
+    case 'doc': return [r.doc ?? ''];
+    case 'type': return [reg?.relationType(r.typeId)?.name ?? r.typeId];
+    case 'notation': return [reg?.notationOf(r.typeId) ?? ''];
+    case 'prop': return [r.props[cond.key ?? ''] ?? ''];
+    case 'view': return viewId ? [store.get('views', viewId)?.name ?? ''] : [];
+    default: return null; // fuente sin sentido para relaciones: la condición no casa
+  }
+}
+
+export function relationCondMatches(store: Store, reg: NotationRegistry | undefined, r: Relation, cond: Condition, viewId?: string): boolean {
+  const vals = relationValuesOf(store, reg, r, cond, viewId);
+  if (vals === null) return false;
+  if (vals.length === 0) return OPS_SIN_VALOR.has(cond.op) ? compare('', cond) : cond.op === 'ne' || cond.op === 'notContains';
+  return vals.some(v => compare(v, cond));
+}
+
+export function relationRuleMatches(store: Store, reg: NotationRegistry | undefined, r: Relation, rule: StyleRule, viewId?: string): boolean {
+  if (!rule.enabled || rule.target !== 'relation') return false;
+  if (rule.viewId && viewId && rule.viewId !== viewId) return false;
+  if (rule.conditions.length === 0) return false;
+  return rule.match === 'any' ? rule.conditions.some(c => relationCondMatches(store, reg, r, c, viewId)) : rule.conditions.every(c => relationCondMatches(store, reg, r, c, viewId));
+}
+
+/** Estilo resuelto de una relación: reglas con `target: 'relation'`, de menor a mayor prioridad. */
+export function resolveRelationStyle(store: Store, reg: NotationRegistry | undefined, r: Relation, viewId?: string): { style: RuleStyle; rules: StyleRule[] } {
+  const rules = store.list('rules').filter(x => relationRuleMatches(store, reg, r, x, viewId)).sort((a, b) => a.priority - b.priority);
+  const style: Record<string, unknown> = {};
+  for (const x of rules) for (const [k, v] of Object.entries(x.style)) if (v !== undefined && v !== '') style[k] = v;
+  return { style: style as RuleStyle, rules };
+}
+
+/** ¿La fuente de condición se puede evaluar sobre relaciones? (para la interfaz). */
+export function isRelationSource(source: Condition['source']): boolean { return RELATION_SOURCES.has(source); }
 
 export function overriddenBy(store: Store, rule: StyleRule): { rule: StyleRule; props: string[] }[] {
   const mine = Object.keys(rule.style).filter(k => (rule.style as Record<string, unknown>)[k] !== undefined);

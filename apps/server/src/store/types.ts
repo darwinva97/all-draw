@@ -1,0 +1,110 @@
+/**
+ * `WorkspaceStore`: todo lo que el servidor persiste (usuarios, sesiones, API keys, espacios,
+ * miembros, enlaces y documentos Yjs) detrás de una interfaz asíncrona para poder cambiar
+ * SQLite por Postgres o un Durable Object sin tocar la API.
+ *
+ * Los documentos Yjs se guardan como **update binario completo** (`saveDoc`) más una cola de
+ * updates incrementales (`appendUpdate`) que `loadDoc` funde; así un adaptador puede compactar
+ * cuando quiera. Las tablas están descritas en `apps/server/README.md`.
+ */
+
+export type Role = 'owner' | 'editor' | 'viewer';
+/** Roles asignables a miembros y enlaces (el dueño es `workspaces.owner_id`). */
+export type MemberRole = Exclude<Role, 'owner'>;
+
+export const ROLE_RANK: Record<Role, number> = { viewer: 1, editor: 2, owner: 3 };
+export const atLeast = (role: Role | null | undefined, min: Role): boolean => !!role && ROLE_RANK[role] >= ROLE_RANK[min];
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  /** `scrypt$<saltHex>$<hashHex>`; vacío = la cuenta no puede iniciar sesión con contraseña. */
+  passwordHash: string;
+  isAdmin: boolean;
+  createdAt: string;
+}
+
+export interface Session {
+  /** Hash del token (nunca se guarda el token en claro). */
+  tokenHash: string;
+  userId: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface ApiKey {
+  id: string;
+  userId: string;
+  name: string;
+  /** Primeros caracteres de la clave, para reconocerla en listados. */
+  prefix: string;
+  keyHash: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface WorkspaceRow {
+  id: string;
+  ownerId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Member { workspaceId: string; userId: string; role: MemberRole; createdAt: string }
+
+export interface ShareLink {
+  token: string;
+  workspaceId: string;
+  role: MemberRole;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export interface WorkspaceStore {
+  // Usuarios
+  createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string }): Promise<User>;
+  getUser(id: string): Promise<User | null>;
+  getUserByEmail(email: string): Promise<User | null>;
+  countUsers(): Promise<number>;
+
+  // Sesiones (el token en claro sólo lo ve el cliente; aquí va su hash)
+  createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session>;
+  getSession(tokenHash: string): Promise<Session | null>;
+  deleteSession(tokenHash: string): Promise<void>;
+
+  // API keys
+  createApiKey(k: { userId: string; name: string; prefix: string; keyHash: string }): Promise<ApiKey>;
+  listApiKeys(userId: string): Promise<ApiKey[]>;
+  resolveApiKey(keyHash: string): Promise<ApiKey | null>;
+  deleteApiKey(userId: string, id: string): Promise<boolean>;
+  touchApiKey(id: string): Promise<void>;
+
+  // Espacios
+  listWorkspaces(userId: string): Promise<(WorkspaceRow & { role: Role })[]>;
+  listAllWorkspaces(): Promise<WorkspaceRow[]>;
+  getWorkspace(id: string): Promise<WorkspaceRow | null>;
+  createWorkspace(w: { ownerId: string; name: string; id?: string }): Promise<WorkspaceRow>;
+  updateMeta(id: string, patch: { name?: string; ownerId?: string }): Promise<WorkspaceRow | null>;
+  deleteWorkspace(id: string): Promise<void>;
+
+  // Documento Yjs
+  loadDoc(id: string): Promise<Uint8Array | null>;
+  saveDoc(id: string, update: Uint8Array): Promise<void>;
+  appendUpdate(id: string, update: Uint8Array): Promise<void>;
+
+  // Permisos
+  getRole(workspaceId: string, userId: string): Promise<Role | null>;
+  setRole(workspaceId: string, userId: string, role: MemberRole | null): Promise<void>;
+  listMembers(workspaceId: string): Promise<(Member & { user: Pick<User, 'id' | 'email' | 'name'> | null })[]>;
+
+  // Enlaces compartidos
+  createShareLink(l: { workspaceId: string; role: MemberRole; createdBy: string; token: string; expiresAt?: string | null }): Promise<ShareLink>;
+  listShareLinks(workspaceId: string): Promise<ShareLink[]>;
+  resolveShareLink(token: string): Promise<ShareLink | null>;
+  deleteShareLink(workspaceId: string, token: string): Promise<boolean>;
+
+  close(): Promise<void>;
+}

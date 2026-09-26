@@ -15,7 +15,14 @@
   "license": "MIT",
   "dependencies": {
     "@all-draw/core": "workspace:*",
+    "@all-draw/notation-archimate": "workspace:*",
+    "@all-draw/notation-bpmn": "workspace:*",
+    "@all-draw/notation-c4": "workspace:*",
     "@all-draw/notation-freeform": "workspace:*",
-    "@all-draw/notation-grid": "workspace:*"
+    "@all-draw/notation-grid": "workspace:*",
+    "@all-draw/notation-statechart": "workspace:*",
+    "bpmn-moddle": "^10.3.1",
+    "fast-xml-parser": "^5.11.1",
+    "yaml": "^2.9.1"
   }
 }

@@ -3,7 +3,9 @@
  * la API REST y los agentes emiten exactamente los mismos. `execute` aplica sobre un `Store` y
  * devuelve el inverso, así que el historial de deshacer es una pila de comandos.
  */
+import { z } from 'zod';
 import { newId } from './ids';
+import { COLLECTIONS, Element as ElementSchema, Relation as RelationSchema, ViewEdge as ViewEdgeSchema, ViewNode as ViewNodeSchema } from './model';
 import type { Collection, Element, Relation, View, ViewEdge, ViewNode, RecordOf } from './model';
 import type { Store } from './store';
 
@@ -21,6 +23,28 @@ export type Command =
   | { type: 'deleteView'; id: string }
   | { type: 'moveNodes'; moves: { id: string; x: number; y: number; parentNodeId?: string | null; cell?: ViewNode['cell'] | null }[] }
   | { type: 'connect'; relation: Relation; edge: Omit<ViewEdge, 'relationId'> };
+
+/**
+ * Esquema Zod de `Command`, para validar comandos que llegan de fuera (API REST, MCP, ficheros).
+ * `batch` es recursivo (`z.lazy`). Los registros de `set` no se validan aquí (dependen de la
+ * colección); `addElementToView`/`connect` sí validan elemento, nodo, relación y arista.
+ */
+const CollectionSchema = z.enum(COLLECTIONS);
+const PatchSchema = z.record(z.string(), z.unknown());
+export const CommandSchema: z.ZodType<Command> = z.lazy(() => z.discriminatedUnion('type', [
+  z.object({ type: z.literal('set'), collection: CollectionSchema, id: z.string().min(1), value: z.unknown() }),
+  z.object({ type: z.literal('patch'), collection: CollectionSchema, id: z.string().min(1), patch: PatchSchema }),
+  z.object({ type: z.literal('delete'), collection: CollectionSchema, id: z.string().min(1) }),
+  z.object({ type: z.literal('batch'), label: z.string().optional(), commands: z.array(CommandSchema) }),
+  z.object({ type: z.literal('meta'), patch: PatchSchema }),
+  z.object({ type: z.literal('addElementToView'), element: ElementSchema, node: ViewNodeSchema.omit({ elementId: true }) }),
+  z.object({ type: z.literal('deleteElement'), id: z.string().min(1) }),
+  z.object({ type: z.literal('deleteNode'), id: z.string().min(1) }),
+  z.object({ type: z.literal('deleteRelation'), id: z.string().min(1) }),
+  z.object({ type: z.literal('deleteView'), id: z.string().min(1) }),
+  z.object({ type: z.literal('moveNodes'), moves: z.array(z.object({ id: z.string().min(1), x: z.number(), y: z.number(), parentNodeId: z.string().nullable().optional(), cell: z.object({ layerId: z.string(), stageId: z.string() }).nullable().optional() })) }),
+  z.object({ type: z.literal('connect'), relation: RelationSchema, edge: ViewEdgeSchema.omit({ relationId: true }) }),
+])).meta({ id: 'Command', description: 'Comando de all-draw (ver expand/execute)' }) as z.ZodType<Command>;
 
 function deepPatch<T extends object>(base: T, patch: Record<string, unknown>): T {
   const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
@@ -75,7 +99,7 @@ export function expand(store: Store, cmd: Command): Command[] {
       const out: Command[] = [];
       for (const e of store.list('edges')) if (e.viewId === cmd.id) out.push({ type: 'delete', collection: 'edges', id: e.id });
       for (const n of store.list('nodes')) if (n.viewId === cmd.id) out.push({ type: 'delete', collection: 'nodes', id: n.id });
-      for (const n of store.list('nodes')) if (n.detailViewId === cmd.id) out.push({ type: 'patch', collection: 'nodes', id: n.id, patch: { detailViewId: undefined } });
+      for (const n of store.list('nodes')) if (n.detailViewId === cmd.id && n.viewId !== cmd.id) out.push({ type: 'patch', collection: 'nodes', id: n.id, patch: { detailViewId: undefined } });
       out.push({ type: 'delete', collection: 'views', id: cmd.id });
       return out;
     }

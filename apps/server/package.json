@@ -5,12 +5,41 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "start": "node src/server.mjs"
+    "start": "node src/server.mjs",
+    "mcp": "node --import tsx src/mcp.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@all-draw/core": "workspace:*",
+    "@all-draw/io": "workspace:*",
+    "@all-draw/notation-archimate": "workspace:*",
+    "@all-draw/notation-bpmn": "workspace:*",
+    "@all-draw/notation-c4": "workspace:*",
+    "@all-draw/notation-catalog": "workspace:*",
+    "@all-draw/notation-dfd": "workspace:*",
+    "@all-draw/notation-er": "workspace:*",
+    "@all-draw/notation-flowchart": "workspace:*",
+    "@all-draw/notation-freeform": "workspace:*",
+    "@all-draw/notation-grid": "workspace:*",
+    "@all-draw/notation-mindmap": "workspace:*",
+    "@all-draw/notation-sequence": "workspace:*",
+    "@all-draw/notation-statechart": "workspace:*",
+    "@all-draw/notation-uml-class": "workspace:*",
+    "@all-draw/sync": "workspace:*",
+    "@hono/node-server": "^2.1.1",
+    "@hono/zod-openapi": "^1.6.3",
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "hono": "^4.13.9",
     "lib0": "^0.2.117",
+    "tsx": "^4.23.15",
     "ws": "^8.21.3",
     "y-protocols": "^1.0.7",
-    "yjs": "^13.6.33"
+    "yjs": "^13.6.33",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "y-websocket": "^3.1.0"
   }
 }

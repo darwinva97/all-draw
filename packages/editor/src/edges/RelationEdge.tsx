@@ -1,23 +1,26 @@
-import { memo, useState, useCallback, type PointerEvent as ReactPointerEvent } from 'react';
+import { memo, useState, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, useInternalNode, useReactFlow, type EdgeProps, type Edge } from '@xyflow/react';
 import { floatingEndpoints } from './floating';
 import { bendPath, type Pt } from './bendpath';
-import type { ArrowHead, ViewEdge } from '@all-draw/core';
+import { resolveRelationStyle, type ArrowHead, type RuleStyle, type ViewEdge } from '@all-draw/core';
 import { useEditor } from '../context';
-import { useRecord } from '../hooks';
+import { useRecord, useCollection } from '../hooks';
 
 export type RelationEdgeData = { edge: ViewEdge };
 export type RelationRFEdge = Edge<RelationEdgeData, 'relation'>;
 
 export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEdge>) {
-  const { registry, run, readOnly } = useEditor();
+  const { registry, run, readOnly, store, viewId, effectiveTheme } = useEditor();
   const rf = useReactFlow();
   const ve = p.data!.edge;
   const rel = useRecord('relations', ve.relationId);
   const type = rel ? registry.relationType(rel.typeId) : undefined;
-  const line = ve.style.line ?? type?.line ?? 'solid';
-  const color = ve.style.color ?? type?.color ?? '#444';
-  const width = ve.style.width ?? 1.5;
+  // Reglas con destino "relación": la lista de reglas cambia de identidad al editarlas.
+  const rules = useCollection('rules');
+  const rule: RuleStyle = useMemo(() => (rel ? resolveRelationStyle(store, registry, rel, viewId ?? undefined).style : {}), [store, registry, rel, viewId, rules]);
+  const line = rule.borderStyle ?? ve.style.line ?? type?.line ?? 'solid';
+  const color = rule.border ?? rule.bg ?? ve.style.color ?? type?.color ?? (effectiveTheme === 'dark' ? '#9aa3b2' : '#444');
+  const width = rule.borderWidth ?? ve.style.width ?? 1.5;
   const sh = ve.style.sourceHead ?? type?.sourceHead ?? 'none';
   const th = ve.style.targetHead ?? type?.targetHead ?? 'arrow';
   const router = ve.style.router ?? 'smoothstep';
@@ -76,14 +79,23 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
   const dash = line === 'dashed' ? '8 5' : line === 'dotted' ? '2 4' : undefined;
   const ms = markerId(sh, color), mt = markerId(th, color);
   const mappings = rel?.mappings.length ? rel.mappings.map(m => `${m.fromPath} → ${m.toPath}`).join('\n') : '';
+  const labelStyle: React.CSSProperties = { transform: `translate(-50%,-50%) translate(${lx}px,${ly}px)` };
+  if (rule.bg) labelStyle.background = rule.bg;
+  if (rule.text) labelStyle.color = rule.text;
+  if (rule.border) labelStyle.borderColor = rule.border;
+  if (rule.bold) labelStyle.fontWeight = 700;
+  if (rule.strike) labelStyle.textDecoration = 'line-through';
+  const glow = rule.glow ? `drop-shadow(0 0 4px ${rule.glow})` : undefined;
   return (
     <>
       <defs>{sh !== 'none' && <Marker id={ms} head={sh} color={color} start />}{th !== 'none' && <Marker id={mt} head={th} color={color} />}</defs>
-      <BaseEdge id={p.id} path={path} style={{ stroke: color, strokeWidth: width, strokeDasharray: dash }} markerStart={sh !== 'none' ? `url(#${ms})` : undefined} markerEnd={th !== 'none' ? `url(#${mt})` : undefined} interactionWidth={14} />
-      {(label || mappings || p.selected) && (
+      <BaseEdge id={p.id} path={path} style={{ stroke: color, strokeWidth: width, strokeDasharray: dash, opacity: rule.opacity, filter: glow }} markerStart={sh !== 'none' ? `url(#${ms})` : undefined} markerEnd={th !== 'none' ? `url(#${mt})` : undefined} interactionWidth={14} />
+      {(label || mappings || p.selected || rule.badge || rule.icon) && (
         <EdgeLabelRenderer>
-          <div className={`ad-edge-label ${p.selected ? 'is-selected' : ''}`} style={{ transform: `translate(-50%,-50%) translate(${lx}px,${ly}px)` }} title={mappings || undefined}>
+          <div className={`ad-edge-label ${p.selected ? 'is-selected' : ''}`} style={labelStyle} title={mappings || undefined}>
+            {rule.icon && <span className="ad-edge-label__icon">{rule.icon}</span>}
             {label || (type?.name ?? '')}{mappings && <span className="ad-edge-label__pins">⇄</span>}
+            {rule.badge && <span className="ad-node__badge" style={{ background: rule.badge }}>{rule.badgeText}</span>}
           </div>
         </EdgeLabelRenderer>
       )}

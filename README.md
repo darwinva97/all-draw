@@ -12,6 +12,8 @@ conectables. Funciona offline y online (Yjs).
 - `packages/io` — importadores/exportadores (`.drawer`, ArchiMate, BPMN…).
 - `packages/sync` — Yjs: IndexedDB local y proveedor WebSocket.
 - `apps/web` — aplicación (Vite + React, PWA).
+- `apps/server` — servidor Node: cuentas, permisos, sincronización Yjs, API REST (`/api/openapi.json`), MCP y `SKILL.md` para agentes.
+- `packages/layout` — elkjs y lint geométrico.
 
 ```bash
 pnpm install

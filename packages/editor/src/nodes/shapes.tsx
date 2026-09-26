@@ -1,8 +1,9 @@
 import type { CSSProperties } from 'react';
 import type { ElementType, RuleStyle, Shape, ViewNode } from '@all-draw/core';
 
-export function shapeStyle(shape: Shape, type: ElementType | undefined, vn: ViewNode, rule: RuleStyle): CSSProperties {
-  const fill = rule.bg ?? vn.style.fill ?? type?.color ?? '#ffffff';
+/** `dark`: el relleno por defecto (sin color de tipo ni de regla) es el del panel oscuro; los colores de tipo se mantienen. */
+export function shapeStyle(shape: Shape, type: ElementType | undefined, vn: ViewNode, rule: RuleStyle, dark = false): CSSProperties {
+  const fill = rule.bg ?? vn.style.fill ?? type?.color ?? (dark ? '#1c2230' : '#ffffff');
   const stroke = rule.border ?? vn.style.stroke ?? darken(fill, 0.35);
   const css: CSSProperties = {
     width: vn.w, height: vn.h,
@@ -18,7 +19,7 @@ export function shapeStyle(shape: Shape, type: ElementType | undefined, vn: View
   if (rule.glow) { css.boxShadow = `${css.boxShadow ? css.boxShadow + ',' : ''} 0 0 12px ${rule.glow}`; }
   if (['ellipse', 'diamond', 'hexagon', 'parallelogram', 'cylinder', 'actor', 'circle', 'double-circle', 'bar'].includes(shape)) {
     css.background = 'transparent'; css.borderColor = 'transparent';
-    if (['circle', 'double-circle', 'diamond', 'bar', 'actor'].includes(shape)) css.color = rule.text ?? vn.style.text ?? '#111';
+    if (['circle', 'double-circle', 'diamond', 'bar', 'actor'].includes(shape)) css.color = rule.text ?? vn.style.text ?? (dark ? '#e6e8ec' : '#111');
   }
   return css;
 }

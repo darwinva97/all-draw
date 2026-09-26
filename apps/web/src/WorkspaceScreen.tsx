@@ -1,89 +1,112 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EditorProvider, Editor, useEditor, useMeta, useCollection } from '@all-draw/editor';
-import { openLocalWorkspace, type LocalWorkspace } from '@all-draw/sync';
-import { exportWorkspace, importDrawer, importWorkspace } from '@all-draw/io';
-import { loadInto } from '@all-draw/core';
+import { openLocalWorkspace, type LocalWorkspace, type RemoteConnection } from '@all-draw/sync';
+import { traceCoverage, type Validator } from '@all-draw/core';
 import { createRegistry, bindLibraries } from './registry';
-import { connectRoom, roomFromHash, readOnlyFromHash } from './share';
-import type { RemoteConnection } from '@all-draw/sync';
+import { connectRoom, tokenFromHash } from './share';
+import { api, setBearer, type WorkspaceInfo, type ShareLink } from './api';
+import { ImportExport } from './ImportExport';
 
-export function WorkspaceScreen({ id, viewId }: { id: string; viewId: string | null }) {
+const BASE_VALIDATORS: Validator[] = [traceCoverage];
+/** Los validadores pesados (geometría, bpmnlint) se cargan bajo demanda para no engordar el paquete inicial. */
+async function loadValidators(): Promise<Validator[]> {
+  const [{ geometryLint }, { BPMNLINT_VALIDATORS }] = await Promise.all([import('@all-draw/layout'), import('@all-draw/io')]);
+  return [geometryLint, ...BPMNLINT_VALIDATORS, traceCoverage];
+}
+const ME = { name: localStorage.getItem('alldraw:me') ?? `Anónimo ${Math.floor(Math.random() * 900 + 100)}`, color: `hsl(${Math.floor(Math.random() * 360)} 70% 45%)` };
+
+export function WorkspaceScreen({ id, mode, viewId }: { id: string; mode: 'local' | 'server'; viewId: string | null }) {
   const [lw, setLw] = useState<LocalWorkspace | null>(null);
+  const [info, setInfo] = useState<WorkspaceInfo | null>(null);
+  const [conn, setConn] = useState<RemoteConnection | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const registry = useMemo(() => createRegistry(), []);
+  const [validators, setValidators] = useState<Validator[]>(BASE_VALIDATORS);
+  useEffect(() => { loadValidators().then(setValidators); }, []);
+  const localId = mode === 'server' ? `srv_${id}` : id;
+
   useEffect(() => {
-    let alive = true; let handle: LocalWorkspace | null = null; let unbind = () => {};
-    openLocalWorkspace(id).then(async w => {
+    let alive = true; let handle: LocalWorkspace | null = null; let unbind = () => {}; let c: RemoteConnection | null = null;
+    (async () => {
+      const token = tokenFromHash();
+      if (mode === 'server') {
+        setBearer(token);
+        try { const i = await api.workspace(id); if (alive) setInfo(i); } catch (e) { if (alive) setError((e as Error).message); return; }
+      }
+      const w = await openLocalWorkspace(localId);
       await w.whenSynced;
       if (!alive) { w.destroy(); return; }
       handle = w; unbind = bindLibraries(registry, w.store); setLw(w);
-    });
-    return () => { alive = false; unbind(); handle?.destroy(); };
-  }, [id, registry]);
-  if (!lw) return <div className="home">Abriendo…</div>;
+      if (mode === 'server') { c = connectRoom(w.doc, id, token ?? undefined); setConn(c); }
+    })();
+    return () => { alive = false; unbind(); c?.disconnect(); handle?.destroy(); setBearer(null); };
+  }, [id, mode, localId, registry]);
+
+  if (error) return <div className="home"><h1>No se pudo abrir</h1><p className="err">{error}</p><a className="btn" href="#/">Volver</a></div>;
+  if (!lw || (mode === 'server' && !info)) return <div className="home">Abriendo…</div>;
+  const readOnly = mode === 'server' && info?.role === 'viewer';
   const initial = viewId ?? lw.store.meta().currentViewId ?? lw.store.list('views')[0]?.id ?? null;
+  const onLayout = async () => {
+    const vid = lw.store.meta().currentViewId; if (!vid) return;
+    const v = lw.store.get('views', vid); if (!v) return;
+    const { layoutView, autoLayoutDefaults } = await import('@all-draw/layout');
+    lw.history.run(await layoutView(lw.store, registry, vid, autoLayoutDefaults(v.notationId)));
+  };
   return (
-    <EditorProvider store={lw.store} history={lw.history} registry={registry} initialViewId={initial} readOnly={readOnlyFromHash()}>
-      <Editor toolbarLeft={<LeftTools />} toolbarRight={<RightTools lw={lw} id={id} />} />
+    <EditorProvider store={lw.store} history={lw.history} registry={registry} initialViewId={initial} readOnly={readOnly} validators={validators}
+      presence={conn ? { awareness: conn.awareness, me: ME } : undefined}>
+      <Editor toolbarLeft={<LeftTools />} toolbarRight={<RightTools lw={lw} id={id} mode={mode} info={info} conn={conn} />} onRequestLayout={readOnly ? undefined : onLayout} />
     </EditorProvider>
   );
 }
 
 function LeftTools() {
-  const { store, viewId, openView } = useEditor();
+  const { store, viewId, openView, readOnly } = useEditor();
   const meta = useMeta();
   const views = useCollection('views');
-  useEffect(() => { if (viewId && meta.currentViewId !== viewId) store.setMeta({ currentViewId: viewId }); }, [viewId, meta.currentViewId, store]);
-  // Si el espacio llega por sincronización después de abrirlo vacío, abre su vista actual
+  useEffect(() => { if (viewId && meta.currentViewId !== viewId && !readOnly) store.setMeta({ currentViewId: viewId }); }, [viewId, meta.currentViewId, store, readOnly]);
   useEffect(() => { if (!viewId && views.length) openView((meta.currentViewId && store.get('views', meta.currentViewId)) ? meta.currentViewId : views[0]!.id); }, [viewId, views, meta.currentViewId, store, openView]);
   return <>
     <a className="btn btn--ghost" href="#/" title="Todos los espacios">☰</a>
-    <input className="app-name" value={meta.name} onChange={e => store.setMeta({ name: e.target.value, updatedAt: new Date().toISOString() })} />
+    <input className="app-name" value={meta.name} disabled={readOnly} onChange={e => store.setMeta({ name: e.target.value, updatedAt: new Date().toISOString() })} />
   </>;
 }
 
-function RightTools({ lw, id }: { lw: LocalWorkspace; id: string }) {
-  const { store } = useEditor();
-  const meta = useMeta();
-  const file = useRef<HTMLInputElement>(null);
-  const [conn, setConn] = useState<RemoteConnection | null>(null);
-  const [status, setStatus] = useState<string>('local');
-  const wsId = id;
-  const roomKey = `alldraw:room:${wsId}`;
-  useEffect(() => {
-    const room = roomFromHash() ?? localStorage.getItem(roomKey);
-    if (!room) return;
-    const c = connectRoom(lw.doc, room);
-    setConn(c); localStorage.setItem(roomKey, room);
-    const t = setInterval(() => setStatus(c.status()), 1000);
-    return () => { clearInterval(t); c.disconnect(); setConn(null); };
-  }, [lw, roomKey]);
-  const share = () => {
-    if (conn) { if (confirm('¿Dejar de sincronizar en línea? El espacio sigue en este navegador.')) { localStorage.removeItem(roomKey); location.hash = location.hash.split('?')[0]!; location.reload(); } return; }
-    const room = wsId;
-    localStorage.setItem(roomKey, room);
-    location.hash = `${location.hash.split('?')[0]}?room=${encodeURIComponent(room)}`;
-    location.reload();
-  };
-  const copyLink = (ro = false) => { const base = location.href.split('?')[0]; navigator.clipboard?.writeText(`${base}?room=${encodeURIComponent(wsId)}${ro ? '&ro=1' : ''}`); };
-  if (readOnlyFromHash()) return <span className="app-status">solo lectura · <a href={location.href.replace(/&ro=1/, '')}>editar</a></span>;
-  const download = () => {
-    const blob = new Blob([exportWorkspace(store.snapshot())], { type: 'application/json' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${(meta.name || 'espacio').replace(/[^\w\-]+/g, '_')}.alldraw.json`; a.click(); URL.revokeObjectURL(a.href);
-  };
-  const onFile = async (f: File) => {
-    const text = await f.text();
-    try {
-      const ws = f.name.endsWith('.drawer') ? importDrawer(text).workspace : importWorkspace(text);
-      if (confirm('Esto sustituye el contenido de este espacio por el del fichero. ¿Continuar?')) loadInto(store, ws);
-    } catch (e) { alert(`No se pudo importar: ${(e as Error).message}`); }
+function RightTools({ lw, id, mode, info, conn }: { lw: LocalWorkspace; id: string; mode: 'local' | 'server'; info: WorkspaceInfo | null; conn: RemoteConnection | null }) {
+  const [status, setStatus] = useState('connecting');
+  const [share, setShare] = useState(false);
+  useEffect(() => { if (!conn) return; const t = setInterval(() => setStatus(conn.status()), 1000); return () => clearInterval(t); }, [conn]);
+  const upload = async () => {
+    try { const snap = lw.store.snapshot(); const w = await api.createWorkspace(snap.meta.name || 'Espacio', snap); location.hash = `#/s/${w.id}`; }
+    catch (e) { alert(`Necesitas una cuenta en el servidor: ${(e as Error).message}`); }
   };
   return <>
-    <span className="app-status" title={conn ? 'Sincronizado con el servidor: cualquiera con el enlace edita a la vez' : 'Solo en este navegador'}>{conn ? (status === 'connected' ? '● en línea' : status === 'connecting' ? '◌ conectando…' : '○ sin conexión (se sincroniza al volver)') : 'guardado en este navegador'}</span>
-    {conn && <button className="btn" onClick={() => copyLink(false)} title="Copiar enlace para colaborar">Copiar enlace</button>}
-    {conn && <button className="btn" onClick={() => copyLink(true)} title="Enlace de solo lectura (la interfaz no deja editar; no es un permiso del servidor)">Enlace de lectura</button>}
-    <button className={`btn ${conn ? '' : 'btn--primary'}`} onClick={share}>{conn ? 'Dejar de compartir' : 'Compartir en línea'}</button>
-    <button className="btn" onClick={() => file.current?.click()} title="Sustituir por un fichero">Importar</button>
-    <button className="btn" onClick={download} title="Descargar JSON">Exportar</button>
-    <input ref={file} type="file" accept=".drawer,.json" hidden onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
+    {mode === 'server'
+      ? <span className="app-status" title="Sincronizado con el servidor">{status === 'connected' ? '● en línea' : status === 'connecting' ? '◌ conectando…' : '○ sin conexión (se sincroniza al volver)'} · {info?.role}</span>
+      : <span className="app-status">guardado en este navegador</span>}
+    <ImportExport />
+    {mode === 'server' && info?.role === 'owner' && <button className="btn btn--primary" onClick={() => setShare(true)}>Compartir</button>}
+    {mode === 'local' && <button className="btn btn--primary" onClick={upload} title="Copia este espacio al servidor para compartirlo">Subir al servidor</button>}
+    {share && <ShareDialog id={id} onClose={() => setShare(false)} />}
   </>;
+}
+
+function ShareDialog({ id, onClose }: { id: string; onClose: () => void }) {
+  const [links, setLinks] = useState<ShareLink[]>([]);
+  const copied = useRef<string | null>(null);
+  const refresh = () => api.links(id).then(setLinks).catch(() => setLinks([]));
+  useEffect(() => { refresh(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const create = async (role: 'editor' | 'viewer') => { await api.createLink(id, role); refresh(); };
+  const copy = (l: ShareLink) => { navigator.clipboard?.writeText(l.url); copied.current = l.token; };
+  return (
+    <div className="modal" onClick={onClose}>
+      <div className="modal__box" onClick={e => e.stopPropagation()}>
+        <h2>Compartir</h2>
+        <p className="app-status" style={{ padding: 0 }}>Quien tenga un enlace de edición edita a la vez contigo; el de lectura solo ve. Puedes revocarlos cuando quieras.</p>
+        <div className="row"><button className="btn btn--primary" onClick={() => create('editor')}>Nuevo enlace de edición</button><button className="btn" onClick={() => create('viewer')}>Nuevo enlace de lectura</button></div>
+        {links.map(l => <div key={l.token} className="row"><span style={{ flex: 1 }}>{l.role === 'editor' ? '✎ edición' : '👁 lectura'} <small>{new Date(l.createdAt).toLocaleString()}</small></span><button className="btn" onClick={() => copy(l)}>Copiar enlace</button><button className="btn btn--ghost" onClick={async () => { await api.deleteLink(id, l.token); refresh(); }}>Revocar</button></div>)}
+        <div className="row" style={{ marginTop: 12 }}><span style={{ flex: 1 }} /><button className="btn" onClick={onClose}>Cerrar</button></div>
+      </div>
+    </div>
+  );
 }

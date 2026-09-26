@@ -7,6 +7,7 @@ import type { Library, ElementType, FieldDef, FieldKind, Shape, Element, Command
 import { useEditor } from '../context';
 import { useCollection, useAnyChange } from '../hooks';
 import { FieldEditor } from './Inspector';
+import { propagateTemplate, retypeElements, FALLBACK_TYPE } from '../template';
 import {
   FIELD_KINDS, SHAPES, newElementType, newFieldFromLabel, newLibrary, newTemplate, moveItem, withType, withoutType,
   typeUsage, libraryUsage, templateInstances, clean,
@@ -78,10 +79,31 @@ function LibraryEditor({ lib }: { lib: Library }) {
     const t = newElementType(lib, typeName || 'Tipo nuevo');
     setLib(withType(lib, t)); setTypeId(t.id); setTypeName('');
   };
+  const [removing, setRemoving] = useState<{ type: ElementType; to: string } | null>(null);
   const removeType = (t: ElementType) => {
     const uses = typeUsage(store, t.id);
-    if (!confirm(uses > 0 ? `El tipo "${t.name}" lo usan ${uses} elemento(s), que quedarán con tipo desconocido. ¿Borrar?` : `¿Borrar el tipo "${t.name}"?`)) return;
-    setLib(withoutType(lib, t.id)); if (typeId === t.id) setTypeId(null);
+    if (uses === 0) {
+      if (!confirm(`¿Borrar el tipo "${t.name}"?`)) return;
+      setLib(withoutType(lib, t.id)); if (typeId === t.id) setTypeId(null);
+      return;
+    }
+    // Con usos: se pide a qué tipo pasan sus elementos (otro tipo o caja libre); nunca quedan con tipo desconocido.
+    setRemoving({ type: t, to: lib.elementTypes.find(x => x.id !== t.id)?.id ?? FALLBACK_TYPE });
+  };
+  const confirmRemoveType = () => {
+    if (!removing) return;
+    const cmds: Command[] = [...retypeElements(store, removing.type.id, removing.to), { type: 'set', collection: 'libraries', id: lib.id, value: withoutType(lib, removing.type.id) }];
+    run({ type: 'batch', label: 'borrar tipo', commands: cmds });
+    if (typeId === removing.type.id) setTypeId(null);
+    setRemoving(null);
+  };
+  const retypeOptions = (): { id: string; label: string }[] => {
+    const out: { id: string; label: string }[] = [];
+    for (const t of lib.elementTypes) if (t.id !== removing?.type.id) out.push({ id: t.id, label: `${t.name} (${lib.name})` });
+    for (const l of store.list('libraries')) if (l.id !== lib.id) for (const t of l.elementTypes) out.push({ id: t.id, label: `${t.name} (${l.name})` });
+    for (const t of registry.allElementTypes()) if (t.notationId && !t.abstract && !out.some(o => o.id === t.id)) out.push({ id: t.id, label: `${t.name} (${registry.pack(t.notationId)?.name ?? t.notationId})` });
+    if (!out.some(o => o.id === FALLBACK_TYPE)) out.unshift({ id: FALLBACK_TYPE, label: 'Caja libre (freeform:box)' });
+    return out;
   };
   const addComp = () => {
     const t = lib.elementTypes.find(x => x.id === compType) ?? lib.elementTypes[0];
@@ -120,6 +142,20 @@ function LibraryEditor({ lib }: { lib: Library }) {
             </div>
           ))}
           {lib.elementTypes.length === 0 && <div className="ad-hint">Sin tipos. Un tipo define la forma, el color y los campos de sus elementos.</div>}
+          {removing && (
+            <div className="ad-ws-notice ad-ws-retype" role="dialog" aria-label="Borrar tipo">
+              <div>El tipo <b>{removing.type.name}</b> lo usan {typeUsage(store, removing.type.id)} elemento(s). Antes de borrarlo, ¿a qué tipo pasan?</div>
+              <label className="ad-field"><span>Reasignar a…</span>
+                <select className="ad-input" value={removing.to} onChange={e => setRemoving({ ...removing, to: e.target.value })}>
+                  {retypeOptions().map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </label>
+              <div className="ad-row">
+                <button className="ad-btn ad-ws-danger" onClick={confirmRemoveType}>Reasignar y borrar el tipo</button>
+                <button className="ad-btn" onClick={() => setRemoving(null)}>Cancelar</button>
+              </div>
+            </div>
+          )}
 
           <div className="ad-section">Componentes ({templates.length})</div>
           <div className="ad-hint">Un componente es un elemento plantilla: al arrastrarlo desde la paleta se crea una instancia con sus datos.</div>
@@ -220,15 +256,32 @@ function TemplateEditor({ el, lib }: { el: Element; lib: Library }) {
   const defs = registry.fieldsOf(el.typeId).length ? registry.fieldsOf(el.typeId) : (lib.elementTypes.find(t => t.id === el.typeId)?.fields ?? []);
   const patch = (p: Record<string, unknown>) => run({ type: 'patch', collection: 'elements', id: el.id, patch: p });
   const n = templateInstances(store, el.id);
+  // Estado de la plantilla desde la última propagación: contra él se decide qué campos siguen "sin tocar" en cada instancia.
+  const [baseline, setBaseline] = useState<Element>(() => structuredClone(el));
+  const plan = n > 0 ? propagateTemplate(store, baseline, el) : null;
+  const dirty = JSON.stringify({ n: el.name, d: el.doc, f: el.fields }) !== JSON.stringify({ n: baseline.name, d: baseline.doc, f: baseline.fields });
+  const apply = () => {
+    if (!plan) return;
+    if (plan.commands.length) run({ type: 'batch', label: 'aplicar plantilla a instancias', commands: plan.commands });
+    setBaseline(structuredClone(el));
+  };
   return (
     <>
       <div className="ad-section">Componente · {registry.elementType(el.typeId)?.name ?? el.typeId} · {n} instancia{n === 1 ? '' : 's'}</div>
+      {n > 0 && (
+        <div className={`ad-ws-notice ${dirty ? '' : 'is-ok'}`}>
+          {dirty
+            ? <>Has cambiado el componente. <b>{plan?.touched.length ?? 0}</b> de {n} instancia(s) recibirán los cambios (solo los campos que no habían modificado){plan && plan.skipped.length > 0 ? `; ${plan.skipped.length} los tenían sobreescritos` : ''}.</>
+            : <>Las instancias están al día con el componente.</>}
+          <div className="ad-row"><button className="ad-btn ad-btn--primary" disabled={!dirty || !plan?.commands.length} onClick={apply}>Aplicar a {plan?.touched.length ?? 0} instancia{(plan?.touched.length ?? 0) === 1 ? '' : 's'}</button></div>
+        </div>
+      )}
       <label className="ad-field"><span>Nombre</span><input className="ad-input ad-input--title" value={el.name} onChange={e => patch({ name: e.target.value })} /></label>
       <label className="ad-field"><span>Documentación</span><textarea className="ad-input" rows={3} value={el.doc} onChange={e => patch({ doc: e.target.value })} /></label>
       {defs.map(d => <FieldEditor key={d.key} def={d} value={el.fields[d.key]} onChange={v => patch({ fields: { [d.key]: v } })} />)}
       {defs.length === 0 && <div className="ad-hint">El tipo no tiene campos.</div>}
       <label className="ad-field"><span>Etiquetas</span><input className="ad-input" value={el.tags.join(', ')} onChange={e => patch({ tags: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></label>
-      <div className="ad-hint">Las instancias ya creadas no cambian al editar el componente: copian sus datos al crearse.</div>
+      <div className="ad-hint">Las instancias copian los datos del componente al crearse. Con «Aplicar a instancias» reciben los cambios en los campos que no hayan modificado.</div>
     </>
   );
 }

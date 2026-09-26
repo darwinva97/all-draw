@@ -10,3 +10,4 @@ export * from './rules';
 export * from './diagnostics';
 export * from './migrate';
 export * from './example';
+export * from './traces';

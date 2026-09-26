@@ -89,7 +89,7 @@ function RuleEditor({ r, onSelect, onDuplicate, onDelete }: { r: StyleRule; onSe
           <label className="ad-field"><span>En la vista</span><select className="ad-input" value={r.viewId ?? ''} onChange={e => p({ viewId: e.target.value || null })}><option value="">Todas las vistas</option>{views.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>
         </div>
       </div>
-      {r.target === 'relation' && <div className="ad-hint">Las reglas sobre relaciones todavía no se pintan en el lienzo; se guardan para cuando lo hagan.</div>}
+      {r.target === 'relation' && <div className="ad-hint">Sobre relaciones se evalúan Nombre, Documentación, Tipo, Notación, Propiedad y Campo. Se pintan: Borde → color de la línea, Grosor y Estilo del borde → la línea, Fondo/Texto/Punto/Icono/Negrita/Tachado → la etiqueta.</div>}
 
       <div className="ad-section">Condiciones ({r.conditions.length})</div>
       <label className="ad-field"><span>Debe cumplirse</span><select className="ad-input ad-ws-narrow3" value={r.match} onChange={e => p({ match: e.target.value })}><option value="all">Todas las condiciones</option><option value="any">Alguna condición</option></select></label>

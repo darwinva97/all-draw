@@ -4,11 +4,14 @@
   "description": "Diagramador universal: un modelo, muchas notaciones como dimensiones.",
   "scripts": {
     "dev": "pnpm --filter web dev",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter web build",
     "test": "vitest run",
     "typecheck": "tsc -b",
     "lint": "oxlint .",
-    "gen:archimate": "node packages/notations/archimate/scripts/generate.mjs"
+    "gen:archimate": "node packages/notations/archimate/scripts/generate.mjs",
+    "start": "node apps/server/src/server.mjs",
+    "e2e": "node e2e/smoke.mjs && BASE=http://127.0.0.1:4002 node e2e/sync.mjs",
+    "deploy": "pnpm --filter web build && systemctl --user restart alldraw"
   },
   "license": "MIT",
   "packageManager": "pnpm@12.6.0",

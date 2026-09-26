@@ -15,8 +15,13 @@ conectables. Funciona offline y online (Yjs).
 
 ```bash
 pnpm install
-pnpm test
-pnpm dev
+pnpm test          # unitarios (vitest)
+pnpm dev           # http://127.0.0.1:4173
+pnpm build         # apps/web/dist (PWA)
+pnpm start         # servidor Node: estáticos + sincronización Yjs en /ws/<sala> (puerto 4002)
+pnpm e2e           # pruebas con el chromium del sistema (necesita `pnpm dev` y `pnpm start` levantados)
 ```
+
+Staging: https://alldraw.bezenti.com. Estado detallado y pendientes en `docs/05-estado.md`.
 
 Licencia MIT. Reutiliza código MIT de [archify](https://github.com/tt-a1i/archify) y datos de [Archi](https://github.com/archimatetool/archi).

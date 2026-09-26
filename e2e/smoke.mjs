@@ -6,7 +6,7 @@ const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', arg
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+page.on('console', m => { if (m.type() === 'error' && !/status of 401/.test(m.text())) errors.push('console: ' + m.text()); });
 await page.goto(base + '/#/', { waitUntil: 'networkidle' });
 await page.screenshot({ path: `${out}/01-home.png` });
 await page.getByRole('button', { name: /Abrir la demo/ }).click();

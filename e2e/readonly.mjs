@@ -1,0 +1,15 @@
+import { chromium } from 'playwright-core';
+const base = process.env.BASE ?? 'https://alldraw.bezenti.com';
+const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+const a = await (await browser.newContext()).newPage();
+await a.goto(base + '/#/', { waitUntil: 'networkidle' });
+await a.getByRole('button', { name: /Abrir la demo/ }).click();
+await a.waitForSelector('.react-flow__node');
+await a.getByRole('button', { name: 'Compartir en línea' }).click();
+await a.waitForSelector('.react-flow__node'); await a.waitForTimeout(1500);
+const ro = a.url() + '&ro=1';
+const b = await (await browser.newContext()).newPage();
+await b.goto(ro, { waitUntil: 'networkidle' });
+await b.waitForSelector('.react-flow__node', { timeout: 15000 }); await b.waitForTimeout(800);
+console.log('ro nodes:', await b.locator('.react-flow__node').count(), '| palette:', await b.locator('.ad-pal').count(), '| status:', await b.locator('.app-status').innerText());
+await browser.close();

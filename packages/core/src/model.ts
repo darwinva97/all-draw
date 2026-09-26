@@ -354,7 +354,7 @@ export type WorkspaceMeta = z.infer<typeof WorkspaceMeta>;
 const byId = <T extends z.ZodTypeAny>(s: T) => z.record(z.string(), s).default({});
 
 export const Workspace = z.object({
-  meta: WorkspaceMeta.default({}),
+  meta: WorkspaceMeta.default(() => WorkspaceMeta.parse({})),
   libraries: byId(Library),
   elements: byId(Element),
   relations: byId(Relation),

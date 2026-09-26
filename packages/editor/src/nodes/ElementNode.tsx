@@ -23,7 +23,7 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   const shape = type?.shape ?? 'rounded';
   const css = shapeStyle(shape, type, vn, rule as RuleStyle);
   const label = vn.text ?? (element.name || (type?.name ?? ''));
-  const icon = (rule.icon ?? type?.icon) || undefined;
+  const icon = ['circle', 'double-circle', 'diamond', 'bar', 'actor'].includes(shape) ? undefined : ((rule.icon ?? type?.icon) || undefined);
 
   return (
     <div className={`ad-node ad-shape-${shape} ${type?.container ? 'is-container' : ''} ${selected ? 'is-selected' : ''} ${data.dimmed ? 'is-dimmed' : ''} ${rule.bold ? 'r-bold' : ''} ${rule.strike ? 'r-strike' : ''}`} style={css} title={element.doc || undefined}>

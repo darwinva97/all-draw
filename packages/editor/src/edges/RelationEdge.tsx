@@ -1,5 +1,6 @@
 import { memo } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, type EdgeProps, type Edge } from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, useInternalNode, type EdgeProps, type Edge } from '@xyflow/react';
+import { floatingEndpoints } from './floating';
 import type { ArrowHead, ViewEdge } from '@all-draw/core';
 import { useEditor } from '../context';
 import { useRecord } from '../hooks';
@@ -18,7 +19,9 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
   const sh = ve.style.sourceHead ?? type?.sourceHead ?? 'none';
   const th = ve.style.targetHead ?? type?.targetHead ?? 'arrow';
   const router = ve.style.router ?? 'smoothstep';
-  const args = { sourceX: p.sourceX, sourceY: p.sourceY, targetX: p.targetX, targetY: p.targetY, sourcePosition: p.sourcePosition, targetPosition: p.targetPosition };
+  const sn = useInternalNode(p.source), tn = useInternalNode(p.target);
+  const floating = !ve.fromPortId && !ve.toPortId && sn && tn;
+  const args = floating ? floatingEndpoints(sn, tn) : { sourceX: p.sourceX, sourceY: p.sourceY, targetX: p.targetX, targetY: p.targetY, sourcePosition: p.sourcePosition, targetPosition: p.targetPosition };
   const [path, lx, ly] = router === 'straight' ? getStraightPath(args) : router === 'bezier' ? getBezierPath(args) : getSmoothStepPath({ ...args, borderRadius: 6 });
   const fieldLabel = rel && type ? type.fields.filter(f => ['text', 'select'].includes(f.kind)).map(f => rel.fields[f.key]).filter(v => typeof v === 'string' && v.trim()).join(' · ') : '';
   const label = ve.label ?? (rel?.name || fieldLabel);

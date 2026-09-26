@@ -9,4 +9,6 @@ export interface Env {
   ALLOW_REGISTRATION?: string;
   /** Base de las URLs de los enlaces compartidos; si falta se deduce de la petición. */
   PUBLIC_URL?: string;
+  /** Si está, el registro exige este código de invitación (`wrangler secret put INVITE_CODE`). */
+  INVITE_CODE?: string;
 }

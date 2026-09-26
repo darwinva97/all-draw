@@ -18,7 +18,7 @@
  *   notice and this permission notice shall be included in all copies or substantial portions of
  *   the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
  */
-import type { Command, Diagnostic, NotationRegistry, Store, Validator, ViewEdge, ViewNode } from '@all-draw/core';
+import { indexOf, type Command, type Diagnostic, type NotationRegistry, type Store, type Validator, type ViewEdge, type ViewNode } from '@all-draw/core';
 
 // ---------------------------------------------------------------- Geometría (port de archify)
 export interface Rect { x: number; y: number; width: number; height: number }
@@ -208,8 +208,9 @@ interface Ctx {
 
 function context(store: Store, reg: NotationRegistry | undefined, viewId: string): Ctx {
   const view = store.get('views', viewId);
-  const nodes = store.list('nodes').filter(n => n.viewId === viewId);
-  const edges = store.list('edges').filter(e => e.viewId === viewId);
+  const index = indexOf(store);
+  const nodes = index.nodesOfView(viewId);
+  const edges = index.edgesOfView(viewId);
   const byId = new Map(nodes.map(n => [n.id, n] as const));
   const parentOf = (n: ViewNode) => (n.parentNodeId ? byId.get(n.parentNodeId) : undefined);
   const hasKids = new Set(nodes.map(n => parentOf(n)?.id).filter((x): x is string => !!x));
@@ -248,8 +249,11 @@ function overlaps(ctx: Ctx): Diagnostic[] {
     groups.set(key, [...(groups.get(key) ?? []), n]);
   }
   for (const list of groups.values()) {
+    // Barrido por x: ordenados por x, un nodo solo puede solapar con los que empiezan antes de su borde derecho.
+    list.sort((a, b) => a.x - b.x || a.id.localeCompare(b.id));
     for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
       const a = list[i]!, b = list[j]!;
+      if (b.x >= a.x + a.w) break;
       if (!rectsOverlap(rectOf(a), rectOf(b))) continue;
       const rightX = Math.round(a.x + a.w + 8), belowY = Math.round(a.y + a.h + 8);
       out.push({
@@ -309,10 +313,14 @@ function edgesThroughNodes(ctx: Ctx): Diagnostic[] {
     const end = edgePoint(rb, bends[bends.length - 1] ?? centerOf(ra));
     const pts = normalizeRoutePoints([start, ...bends, end]);
     const skip = new Set([a.id, b.id, ...ancestors(ctx, a), ...ancestors(ctx, b)]);
+    // Caja de la ruta: los nodos fuera de ella no pueden cortarla (evita el recorte Liang–Barsky en la mayoría).
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of pts) { if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0]; if (p[1] < minY) minY = p[1]; if (p[1] > maxY) maxY = p[1]; }
     const hit: string[] = [];
     for (const n of ctx.nodes) {
-      if (skip.has(n.id) || ctx.isContainer(n) || ctx.system.get(n.id) !== sysA) continue;
+      if (skip.has(n.id) || ctx.system.get(n.id) !== sysA || ctx.isContainer(n)) continue;
       const r = ctx.abs.get(n.id)!;
+      if (r.x > maxX || r.x + r.width < minX || r.y > maxY || r.y + r.height < minY) continue;
       let crossed = 0;
       for (let i = 0; i < pts.length - 1; i++) crossed += segmentRectIntersectionLength({ start: pts[i]!, end: pts[i + 1]! }, r) ?? 0;
       if (crossed > 4) hit.push(n.id);
@@ -377,10 +385,11 @@ function tooSmall(ctx: Ctx): Diagnostic[] {
   return out;
 }
 
-/** Validador: lint geométrico de todas las vistas del workspace. */
+/** Validador: lint geométrico de todas las vistas del workspace (o solo de `ctx.viewId` si se da). */
 export const geometryLint: Validator = {
   id: 'layout.geometry',
-  run({ store, reg }) {
+  run({ store, reg, viewId }) {
+    if (viewId) return store.get('views', viewId) ? lintView(store, reg, viewId) : [];
     return store.list('views').flatMap(v => lintView(store, reg, v.id));
   },
 };

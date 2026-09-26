@@ -10,16 +10,21 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
 import { setCookie, deleteCookie } from 'hono/cookie';
+import { bodyLimit } from 'hono/body-limit';
 import { CommandSchema, Workspace as WorkspaceSchema, type Command, type NotationPack, type Workspace } from '@all-draw/core';
 import type { DocHost } from './host';
 import { ALL_PACKS, describePacks } from './notations';
 import { CommandError, normalizeCommand } from './ops';
 import {
-  APIKEY_PREFIX, LEGACY_EMAIL, LINK_PREFIX, RateLimiter, SESSION_COOKIE, SESSION_DAYS, SESSION_PREFIX,
-  hashPassword, needsRehash, randomToken, resolveToken, roleFor, tokenFromRequest, verifyPassword,
+  APIKEY_PREFIX, CSRF_HEADER, CSRF_VALUE, LEGACY_EMAIL, LINK_PREFIX, RateLimiter, SAFE_ID, SESSION_COOKIE, SESSION_MS, SESSION_PREFIX,
+  credentialsFromRequest, hashPassword, isTrustedOrigin, needsRehash, randomToken, resolveToken, roleFor, safeEqualString, sessionNeedsRenewal, verifyPassword,
   type Hasher, type Principal,
 } from './auth';
-import { atLeast, type Role, type User, type WorkspaceStore } from './store/types';
+import { atLeast, type Role, type SnapshotMeta, type User, type WorkspaceStore } from './store/types';
+
+/** Tamaños máximos de cuerpo: 5 MB para Workspace JSON completos, 1 MB para el resto (comandos incluidos). */
+export const MAX_BODY_SNAPSHOT = 5 * 1024 * 1024;
+export const MAX_BODY_DEFAULT = 1024 * 1024;
 
 /** Lo que la API necesita saber del despliegue (subconjunto de la `Config` de cada runtime). */
 export interface ApiConfig {
@@ -28,6 +33,8 @@ export interface ApiConfig {
   cookieSecure: boolean;
   /** URL pública (para construir enlaces compartidos); si falta se deduce de la petición. */
   publicUrl: string | null;
+  /** Si está, el registro exige este código (`inviteCode` en el cuerpo); `GET /api/auth/config` lo anuncia como `invite`. */
+  inviteCode?: string | null;
 }
 export interface ApiDeps {
   store: WorkspaceStore;
@@ -49,7 +56,10 @@ const WorkspaceOut = z.object({ id: z.string(), name: z.string(), ownerId: z.str
 const MemberOut = z.object({ userId: z.string(), role: MemberRoleSchema, createdAt: z.string(), user: z.object({ id: z.string(), email: z.string(), name: z.string() }).nullable() });
 const LinkOut = z.object({ token: z.string(), url: z.string(), workspaceId: z.string(), role: MemberRoleSchema, createdAt: z.string(), expiresAt: z.string().nullable() });
 const ErrorOut = z.object({ error: z.string(), issues: z.array(z.unknown()).optional() }).meta({ id: 'Error' });
-const Id = z.object({ id: z.string().min(1).max(120) });
+const SnapshotOut = z.object({ id: z.string(), workspaceId: z.string(), createdAt: z.string(), authorId: z.string().nullable(), author: z.object({ id: z.string(), name: z.string() }).nullable(), label: z.string().nullable(), size: z.number() }).meta({ id: 'Snapshot' });
+const SafeId = z.string().regex(SAFE_ID, 'id no válido');
+const Id = z.object({ id: SafeId });
+const SnapshotParams = Id.extend({ sid: SafeId });
 const Email = z.string().trim().toLowerCase().email().max(200);
 const Password = z.string().min(8).max(200);
 const jsonBody = <T extends z.ZodTypeAny>(schema: T, description?: string) => ({ required: true, content: { 'application/json': { schema } }, ...(description ? { description } : {}) });
@@ -62,7 +72,7 @@ const errors = {
 };
 const bearer: Record<string, string[]>[] = [{ bearerAuth: [] }, { cookieAuth: [] }];
 
-const fail = (status: 400 | 401 | 403 | 404 | 409 | 422 | 429 | 501, error: string, extra: Record<string, unknown> = {}) =>
+const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 429 | 501, error: string, extra: Record<string, unknown> = {}) =>
   new HTTPException(status, { res: Response.json({ error, ...extra }, { status }) });
 
 const publicUser = (u: User) => ({ id: u.id, email: u.email, name: u.name, isAdmin: u.isAdmin, createdAt: u.createdAt });
@@ -74,7 +84,11 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
     },
   });
   const loginLimiter = new RateLimiter(10, 15 * 60_000);
+  const registerLimiter = new RateLimiter(10, 60 * 60_000);
+  const passwordLimiter = new RateLimiter(10, 15 * 60_000);
+  const linkLimiter = new RateLimiter(30, 15 * 60_000);
   const auth = { store, hash };
+  const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) return err.getResponse();
@@ -84,8 +98,28 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
   });
   app.notFound(c => c.json({ error: 'ruta desconocida' }, 404));
 
+  // Tamaño máximo del cuerpo (413) antes de leer nada.
   app.use('/api/*', async (c, next) => {
-    c.set('principal', await resolveToken(auth, tokenFromRequest(c.req.raw.headers, new URL(c.req.url))));
+    if (SAFE_METHODS.has(c.req.method)) return next();
+    const p = c.req.path;
+    const big = p === '/api/workspaces' || /\/snapshot$/.test(p) || /\/snapshots\/[^/]+\/restore$/.test(p);
+    return bodyLimit({ maxSize: big ? MAX_BODY_SNAPSHOT : MAX_BODY_DEFAULT, onError: () => { throw fail(413, 'Cuerpo demasiado grande'); } })(c, next);
+  });
+
+  // Identidad + CSRF + renovación deslizante de la sesión.
+  app.use('/api/*', async (c, next) => {
+    const url = new URL(c.req.url);
+    const cred = credentialsFromRequest(c.req.raw.headers, url);
+    if (cred.source === 'cookie' && !SAFE_METHODS.has(c.req.method) && !isTrustedOrigin(c.req.raw.headers, url)) {
+      throw fail(403, `Petición con cookie desde otro origen rechazada (CSRF): añade la cabecera ${CSRF_HEADER}: ${CSRF_VALUE} o usa Authorization: Bearer`);
+    }
+    const p = await resolveToken(auth, cred.token);
+    if (p?.kind === 'user' && p.session && p.sessionHash && sessionNeedsRenewal(p.session)) {
+      const expires = new Date(Date.now() + SESSION_MS);
+      void store.touchSession(p.sessionHash, expires.toISOString()).catch(() => { /* se reintenta en la siguiente */ });
+      if (cred.source === 'cookie') setCookie(c, SESSION_COOKIE, cred.token!, { httpOnly: true, sameSite: 'Lax', secure: cookieSecure(c), path: '/', expires });
+    }
+    c.set('principal', p);
     await next();
   });
 
@@ -105,14 +139,27 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
     return { ws, role, principal: p! };
   };
   const cookieSecure = (c: { req: { header(n: string): string | undefined } }) => config.cookieSecure || c.req.header('x-forwarded-proto') === 'https';
+  const clientIp = (c: { req: { header(n: string): string | undefined } }) => c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'local';
+  const requireAdmin = (c: { get(k: 'principal'): Principal | null }) => { const p = requireUser(c); if (!p.user.isAdmin) throw fail(403, 'Sólo administradores'); return p; };
+  /** Estado del registro para `GET /api/auth/config` y para `register`. */
+  const registrationState = async (): Promise<'open' | 'invite' | 'closed'> => {
+    const n = (await store.countUsers()) - ((await store.getUserByEmail(LEGACY_EMAIL)) ? 1 : 0);
+    if (n > 0 && !config.allowRegistration) return 'closed';
+    return config.inviteCode ? 'invite' : 'open';
+  };
+  const authorOf = async (m: SnapshotMeta) => {
+    const u = m.authorId ? await store.getUser(m.authorId) : null;
+    return { ...m, author: u ? { id: u.id, name: u.name } : null };
+  };
   const baseUrl = (c: { req: { header(n: string): string | undefined } }) => config.publicUrl ?? `${c.req.header('x-forwarded-proto') ?? 'http'}://${c.req.header('x-forwarded-host') ?? c.req.header('host') ?? 'localhost'}`;
   const linkUrl = (c: { req: { header(n: string): string | undefined } }, workspaceId: string, token: string) => `${baseUrl(c)}/#/s/${encodeURIComponent(workspaceId)}?token=${encodeURIComponent(token)}`;
 
   async function startSession(c: Parameters<typeof setCookie>[0], user: User) {
     const token = randomToken(SESSION_PREFIX);
-    const expires = new Date(Date.now() + SESSION_DAYS * 86_400_000);
+    const expires = new Date(Date.now() + SESSION_MS);
     await store.createSession(user.id, await hash(token), expires.toISOString());
     setCookie(c, SESSION_COOKIE, token, { httpOnly: true, sameSite: 'Lax', secure: cookieSecure(c), path: '/', expires });
+    void store.purgeExpiredSessions().catch(() => { /* limpieza oportunista */ });
     return token;
   }
 
@@ -127,14 +174,21 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
 
   // ---------------------------------------------------------------- Auth
   app.openapi(createRoute({
+    method: 'get', path: '/api/auth/config', tags: ['auth'], summary: 'Qué necesita el registro: abierto, con código de invitación o cerrado',
+    responses: { 200: jsonRes(z.object({ registration: z.enum(['open', 'invite', 'closed']), passwordMinLength: z.number() }), 'Configuración pública') },
+  }), async c => c.json({ registration: await registrationState(), passwordMinLength: 8 }, 200));
+
+  app.openapi(createRoute({
     method: 'post', path: '/api/auth/register', tags: ['auth'], summary: 'Crear cuenta (el primer usuario es admin)',
-    request: { body: jsonBody(z.object({ email: Email, name: z.string().trim().min(1).max(120), password: Password })) },
-    responses: { 201: jsonRes(AuthOut, 'Cuenta creada y sesión iniciada'), 400: errors[400], 403: errors[403], 409: jsonRes(ErrorOut, 'Email ya registrado') },
+    request: { body: jsonBody(z.object({ email: Email, name: z.string().trim().min(1).max(120), password: Password, inviteCode: z.string().max(200).optional() })) },
+    responses: { 201: jsonRes(AuthOut, 'Cuenta creada y sesión iniciada'), 400: errors[400], 403: errors[403], 409: jsonRes(ErrorOut, 'Email ya registrado'), 429: jsonRes(ErrorOut, 'Demasiados registros') },
   }), async c => {
     const body = c.req.valid('json');
+    if (!registerLimiter.check(`ip:${clientIp(c)}`)) throw fail(429, 'Demasiados registros desde esta dirección; espera un rato');
     // El usuario técnico de la migración heredada no cuenta: el primer humano es admin.
     const n = (await store.countUsers()) - ((await store.getUserByEmail(LEGACY_EMAIL)) ? 1 : 0);
     if (n > 0 && !config.allowRegistration) throw fail(403, 'El registro está cerrado');
+    if (config.inviteCode && !safeEqualString(body.inviteCode ?? '', config.inviteCode)) throw fail(403, 'Código de invitación incorrecto');
     if (await store.getUserByEmail(body.email)) throw fail(409, 'Ese email ya está registrado');
     const user = await store.createUser({ email: body.email, name: body.name, passwordHash: await hashPassword(body.password), isAdmin: n === 0 });
     const token = await startSession(c, user);
@@ -147,8 +201,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
     responses: { 200: jsonRes(AuthOut, 'Sesión iniciada'), 400: errors[400], 401: errors[401], 429: jsonRes(ErrorOut, 'Demasiados intentos') },
   }), async c => {
     const { email, password } = c.req.valid('json');
-    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'local';
-    if (!loginLimiter.check(`ip:${ip}`) || !loginLimiter.check(`email:${email}`)) throw fail(429, 'Demasiados intentos; espera unos minutos');
+    if (!loginLimiter.check(`ip:${clientIp(c)}`) || !loginLimiter.check(`email:${email}`)) throw fail(429, 'Demasiados intentos; espera unos minutos');
     const user = await store.getUserByEmail(email);
     if (!user || !user.passwordHash || !(await verifyPassword(password, user.passwordHash))) throw fail(401, 'Email o contraseña incorrectos');
     loginLimiter.reset(`email:${email}`);
@@ -169,9 +222,60 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
   });
 
   app.openapi(createRoute({
+    method: 'delete', path: '/api/auth/sessions', tags: ['auth'], summary: 'Cerrar todas mis sesiones (en todos los navegadores)', security: bearer,
+    responses: { 204: { description: 'Sesiones cerradas' }, 401: errors[401], 403: errors[403] },
+  }), async c => {
+    const p = requireUser(c);
+    await store.deleteUserSessions(p.user.id);
+    deleteCookie(c, SESSION_COOKIE, { path: '/' });
+    return c.body(null, 204);
+  });
+
+  app.openapi(createRoute({
     method: 'get', path: '/api/auth/me', tags: ['auth'], summary: 'Quién soy', security: bearer,
     responses: { 200: jsonRes(z.object({ user: UserOut, via: z.enum(['session', 'apikey']) }), 'Usuario'), 401: errors[401], 403: errors[403] },
   }), c => { const p = requireUser(c); return c.json({ user: publicUser(p.user), via: p.via }, 200); });
+
+  app.openapi(createRoute({
+    method: 'post', path: '/api/auth/password', tags: ['auth'], summary: 'Cambiar mi contraseña (actual + nueva); cierra las demás sesiones', security: bearer,
+    request: { body: jsonBody(z.object({ current: z.string().min(1), password: Password })) },
+    responses: { 200: jsonRes(z.object({ ok: z.literal(true) }), 'Cambiada'), 400: errors[400], 401: errors[401], 403: errors[403], 429: jsonRes(ErrorOut, 'Demasiados intentos') },
+  }), async c => {
+    const p = requireUser(c);
+    if (p.via !== 'session') throw fail(403, 'Cambia la contraseña desde una sesión, no con una API key');
+    if (!passwordLimiter.check(`user:${p.user.id}`)) throw fail(429, 'Demasiados intentos; espera unos minutos');
+    const { current, password } = c.req.valid('json');
+    if (!p.user.passwordHash || !(await verifyPassword(current, p.user.passwordHash))) throw fail(403, 'La contraseña actual no es correcta');
+    await store.setPasswordHash(p.user.id, await hashPassword(password));
+    await store.deleteUserSessions(p.user.id, p.sessionHash);
+    passwordLimiter.reset(`user:${p.user.id}`);
+    return c.json({ ok: true as const }, 200);
+  });
+
+  // ---------------------------------------------------------------- Administración
+  app.openapi(createRoute({
+    method: 'get', path: '/api/admin/users', tags: ['admin'], summary: 'Todas las cuentas (admin)', security: bearer,
+    responses: { 200: jsonRes(z.object({ users: z.array(UserOut) }), 'Usuarios'), 401: errors[401], 403: errors[403] },
+  }), async c => {
+    requireAdmin(c);
+    return c.json({ users: (await store.listUsers()).filter(u => u.email !== LEGACY_EMAIL).map(publicUser) }, 200);
+  });
+
+  app.openapi(createRoute({
+    method: 'post', path: '/api/admin/users/{id}/reset', tags: ['admin'], summary: 'Restablecer la contraseña de un usuario: devuelve una temporal y cierra sus sesiones (admin, desde sesión)', security: bearer,
+    request: { params: Id },
+    responses: { 200: jsonRes(z.object({ password: z.string() }), 'Contraseña temporal (sólo se muestra aquí)'), 401: errors[401], 403: errors[403], 404: errors[404] },
+  }), async c => {
+    const p = requireAdmin(c);
+    if (p.via !== 'session') throw fail(403, 'Restablece contraseñas desde una sesión, no con una API key');
+    const id = c.req.valid('param').id;
+    const u = await store.getUser(id);
+    if (!u || u.email === LEGACY_EMAIL) throw fail(404, 'Usuario desconocido');
+    const password = randomToken('', 16);
+    await store.setPasswordHash(u.id, await hashPassword(password));
+    await store.deleteUserSessions(u.id);
+    return c.json({ password }, 200);
+  });
 
   // ---------------------------------------------------------------- API keys
   app.openapi(createRoute({
@@ -308,10 +412,11 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
   app.openapi(createRoute({
     method: 'post', path: '/api/workspaces/{id}/links', tags: ['permisos'], summary: 'Crear enlace compartido con rol (owner)', security: bearer,
     request: { params: Id, body: jsonBody(z.object({ role: MemberRoleSchema, expiresAt: z.string().datetime().optional() })) },
-    responses: { 201: jsonRes(LinkOut, 'Enlace'), ...errors },
+    responses: { 201: jsonRes(LinkOut, 'Enlace'), ...errors, 429: jsonRes(ErrorOut, 'Demasiados enlaces') },
   }), async c => {
     const id = c.req.valid('param').id; const body = c.req.valid('json');
     const { principal } = await requireRole(c, id, 'owner');
+    if (!linkLimiter.check(principal.kind === 'user' ? `user:${principal.user.id}` : `ip:${clientIp(c)}`)) throw fail(429, 'Demasiados enlaces creados; espera unos minutos');
     const link = await store.createShareLink({ workspaceId: id, role: body.role, createdBy: principal.kind === 'user' ? principal.user.id : 'link', token: randomToken(LINK_PREFIX), expiresAt: body.expiresAt ?? null });
     return c.json({ ...link, url: linkUrl(c, id, link.token) }, 201);
   });
@@ -398,6 +503,61 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
     const svg = await docs.renderSvg(id, viewId, { ...(theme ? { theme } : {}), ...(padding !== undefined ? { padding } : {}) });
     if (svg === null) throw fail(404, 'La vista no existe');
     return c.body(svg, 200, { 'content-type': 'image/svg+xml; charset=utf-8', 'cache-control': 'no-cache' });
+  });
+
+  // ---------------------------------------------------------------- Historial de versiones
+  app.openapi(createRoute({
+    method: 'get', path: '/api/workspaces/{id}/snapshots', tags: ['historial'], summary: 'Instantáneas del espacio, la más reciente primero (viewer+)', security: bearer, request: { params: Id },
+    responses: { 200: jsonRes(z.object({ snapshots: z.array(SnapshotOut) }), 'Instantáneas'), ...errors },
+  }), async c => {
+    const id = c.req.valid('param').id;
+    await requireRole(c, id, 'viewer');
+    return c.json({ snapshots: await Promise.all((await docs.listSnapshots(id)).map(authorOf)) }, 200);
+  });
+
+  app.openapi(createRoute({
+    method: 'post', path: '/api/workspaces/{id}/snapshots', tags: ['historial'], summary: 'Guardar una instantánea del estado actual, con etiqueta opcional (editor+)', security: bearer,
+    request: { params: Id, body: jsonBody(z.object({ label: z.string().trim().min(1).max(120).optional() })) },
+    responses: { 201: jsonRes(SnapshotOut, 'Instantánea creada'), ...errors },
+  }), async c => {
+    const id = c.req.valid('param').id;
+    const { principal } = await requireRole(c, id, 'editor');
+    const meta = await docs.createSnapshot(id, principal.kind === 'user' ? principal.user.id : null, c.req.valid('json').label ?? null);
+    return c.json(await authorOf(meta), 201);
+  });
+
+  app.openapi(createRoute({
+    method: 'get', path: '/api/workspaces/{id}/snapshots/{sid}', tags: ['historial'], summary: 'Workspace JSON de una instantánea (viewer+)', security: bearer, request: { params: SnapshotParams },
+    responses: { 200: jsonRes(WorkspaceSchema, 'Workspace'), ...errors },
+  }), async c => {
+    const { id, sid } = c.req.valid('param');
+    await requireRole(c, id, 'viewer');
+    const ws = await docs.getSnapshot(id, sid);
+    if (!ws) throw fail(404, 'No existe esa instantánea');
+    return c.json(ws, 200);
+  });
+
+  app.openapi(createRoute({
+    method: 'post', path: '/api/workspaces/{id}/snapshots/{sid}/restore', tags: ['historial'], summary: 'Restaurar una instantánea sobre el documento vivo; antes guarda una automática del estado actual (editor+)', security: bearer,
+    request: { params: SnapshotParams },
+    responses: { 200: jsonRes(z.object({ ok: z.literal(true) }), 'Restaurada'), ...errors },
+  }), async c => {
+    const { id, sid } = c.req.valid('param');
+    const { principal } = await requireRole(c, id, 'editor');
+    const ws = await docs.restoreSnapshot(id, sid, principal.kind === 'user' ? principal.user.id : null);
+    if (!ws) throw fail(404, 'No existe esa instantánea');
+    if (ws.meta.name) await store.updateMeta(id, { name: ws.meta.name });
+    return c.json({ ok: true as const }, 200);
+  });
+
+  app.openapi(createRoute({
+    method: 'delete', path: '/api/workspaces/{id}/snapshots/{sid}', tags: ['historial'], summary: 'Borrar una instantánea (owner)', security: bearer, request: { params: SnapshotParams },
+    responses: { 204: { description: 'Borrada' }, ...errors },
+  }), async c => {
+    const { id, sid } = c.req.valid('param');
+    await requireRole(c, id, 'owner');
+    if (!(await docs.deleteSnapshot(id, sid))) throw fail(404, 'No existe esa instantánea');
+    return c.body(null, 204);
   });
 
   // ---------------------------------------------------------------- OpenAPI

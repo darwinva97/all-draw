@@ -8,14 +8,28 @@
  */
 import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
+import { loadInto, type Workspace } from '@all-draw/core';
 import { YjsStore } from '@all-draw/sync';
-import type { WorkspaceStore } from './store/types';
+import type { SnapshotMeta, SnapshotStore, WorkspaceStore } from './store/types';
 
 export const SAVE_DEBOUNCE_MS = 500;
 const IDLE_UNLOAD_MS = 60_000;
+/** Instantáneas por espacio; al pasarse se podan las automáticas (sin etiqueta) más antiguas. */
+export const MAX_SNAPSHOTS = 100;
+/** Instantánea automática cuando llega un cambio y han pasado ≥ 30 min desde la última. */
+export const AUTO_SNAPSHOT_MS = 30 * 60_000;
 
-/** Lo único que un doc vivo necesita de la persistencia. */
-export type DocPersistence = Pick<WorkspaceStore, 'loadDoc' | 'saveDoc'>;
+/** Lo único que un doc vivo necesita de la persistencia: el estado del doc y sus instantáneas. */
+export type DocPersistence = Pick<WorkspaceStore, 'loadDoc' | 'saveDoc'> & SnapshotStore;
+
+/** Reconstruye el Workspace JSON a partir de un update Yjs completo (lo que guarda una instantánea). */
+export function workspaceFromUpdate(update: Uint8Array): Workspace {
+  const d = new Y.Doc();
+  Y.applyUpdate(d, update);
+  const ws = new YjsStore(d).snapshot();
+  d.destroy();
+  return ws;
+}
 
 /** Conexión registrada en un doc: lo que `ysync` y la API necesitan poder hacer con ella. */
 export interface DocConnection { close(code?: number, reason?: string): void }
@@ -29,16 +43,19 @@ export class LiveDoc {
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private dirty = false;
   private saving: Promise<void> = Promise.resolve();
+  private lastSnapshotAt = Date.now();
+  private snapshotting: Promise<unknown> = Promise.resolve();
 
-  constructor(readonly id: string, private persist: DocPersistence, private onIdle: () => void = () => {}, private debounceMs = SAVE_DEBOUNCE_MS) {
+  constructor(readonly id: string, private persist: DocPersistence, private onIdle: () => void = () => {}, private debounceMs = SAVE_DEBOUNCE_MS, private autoSnapshotMs = AUTO_SNAPSHOT_MS) {
     this.doc = new Y.Doc({ gc: true });
     this.store = new YjsStore(this.doc);
     this.awareness = new awarenessProtocol.Awareness(this.doc);
     this.awareness.setLocalState(null);
-    this.doc.on('update', () => {
+    this.doc.on('update', (_u: Uint8Array, origin: unknown) => {
       this.dirty = true;
       if (this.saveTimer) clearTimeout(this.saveTimer);
       this.saveTimer = setTimeout(() => { void this.flush(); }, this.debounceMs);
+      if (origin !== 'load' && Date.now() - this.lastSnapshotAt >= this.autoSnapshotMs) void this.createSnapshot(null, null).catch(e => console.error('instantánea automática', this.id, e));
     });
   }
 
@@ -47,7 +64,43 @@ export class LiveDoc {
     if (update) Y.applyUpdate(this.doc, update, 'load');
     if (this.saveTimer) { clearTimeout(this.saveTimer); this.saveTimer = null; }
     this.dirty = false;
+    this.lastSnapshotAt = Date.now();
   }
+
+  // ---------------------------------------------------------------- Historial de versiones
+  listSnapshots(): Promise<SnapshotMeta[]> { return this.persist.listSnapshots(this.id); }
+
+  /** Guarda el estado actual como instantánea (update Yjs completo) y poda las automáticas sobrantes. Serializadas. */
+  createSnapshot(authorId: string | null, label: string | null): Promise<SnapshotMeta> {
+    this.lastSnapshotAt = Date.now();
+    const data = Y.encodeStateAsUpdate(this.doc);
+    const p = this.snapshotting.then(async () => {
+      const meta = await this.persist.createSnapshot({ workspaceId: this.id, authorId, label, data });
+      await this.persist.pruneSnapshots(this.id, MAX_SNAPSHOTS);
+      return meta;
+    });
+    this.snapshotting = p.catch(() => { /* ya se informa al llamador */ });
+    return p;
+  }
+
+  async snapshotWorkspace(sid: string): Promise<Workspace | null> {
+    const s = await this.persist.getSnapshot(this.id, sid);
+    return s ? workspaceFromUpdate(s.data) : null;
+  }
+
+  /**
+   * Restaura una instantánea sobre el doc vivo con `loadInto` (los clientes conectados lo ven como un
+   * cambio más y el historial Yjs se conserva). Antes guarda una instantánea automática del estado actual.
+   */
+  async restoreSnapshot(sid: string, authorId: string | null): Promise<Workspace | null> {
+    const ws = await this.snapshotWorkspace(sid);
+    if (!ws) return null;
+    await this.createSnapshot(authorId, null);
+    loadInto(this.store, ws);
+    return ws;
+  }
+
+  deleteSnapshot(sid: string): Promise<boolean> { return this.persist.deleteSnapshot(this.id, sid); }
 
   get isDirty() { return this.dirty; }
 

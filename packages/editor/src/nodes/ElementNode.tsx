@@ -13,6 +13,22 @@ import { useT } from '@all-draw/i18n';
 export type ElementNodeData = { node: ViewNode; dimmed?: boolean; /** Color de otro participante que lo tiene seleccionado. */ remoteColor?: string };
 export type ElementRFNode = Node<ElementNodeData, 'element'>;
 
+/**
+ * Comparación de props para `memo`: `data` se compara campo a campo (el `node` del índice conserva su
+ * identidad mientras no cambie el registro), y el resto de props de React Flow por igualdad simple.
+ * Así, mover o seleccionar un nodo no vuelve a pintar los otros cientos de la vista. Los cambios del
+ * elemento (nombre, tipo…) llegan por `useRecord` dentro del componente, no por props.
+ */
+export function elementNodePropsEqual(a: NodeProps<ElementRFNode>, b: NodeProps<ElementRFNode>): boolean {
+  if (a.data !== b.data) {
+    if (a.data.node !== b.data.node || a.data.dimmed !== b.data.dimmed || a.data.remoteColor !== b.data.remoteColor) return false;
+  }
+  const ka = Object.keys(a) as (keyof NodeProps<ElementRFNode>)[];
+  if (ka.length !== Object.keys(b).length) return false;
+  for (const k of ka) if (k !== 'data' && !Object.is(a[k], b[k])) return false;
+  return true;
+}
+
 /** Nodo genérico: pinta cualquier elemento según su tipo (forma, color, icono), las reglas de estilo y sus puertos. */
 export const ElementNode = memo(function ElementNode({ data, selected }: NodeProps<ElementRFNode>) {
   const { registry, store, viewId, readOnly, run, renaming, setRenaming, effectiveTheme } = useEditor();
@@ -85,7 +101,7 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
       {vn.detailViewId && <span className="ad-node__drill" title={t('Tiene vista de detalle')}>⤵</span>}
     </div>
   );
-});
+}, elementNodePropsEqual);
 
 /** Puertos visibles: los elegidos en la vista, o los usados por alguna arista, o ninguno. */
 function visiblePorts(ports: Port[], vn: ViewNode): Port[] {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from './api';
+import { api, type RegistrationMode } from './api';
 import { useT } from '@all-draw/i18n';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -33,12 +33,15 @@ export function useDialog(onClose: () => void) {
 export function AuthDialog({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState(''); const [name, setName] = useState(''); const [password, setPassword] = useState('');
+  const [invite, setInvite] = useState('');
+  const [registration, setRegistration] = useState<RegistrationMode>('open');
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const box = useDialog(onClose);
   const t = useT();
+  useEffect(() => { api.authConfig().then(setRegistration); }, []);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setErr('');
-    try { if (mode === 'login') await api.login(email, password); else await api.register(email, name, password); onClose(); }
+    try { if (mode === 'login') await api.login(email, password); else await api.register(email, name, password, registration === 'invite' ? invite : undefined); onClose(); }
     catch (x) { setErr((x as Error).message); setBusy(false); }
   };
   return (
@@ -48,9 +51,11 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
         <label className="field"><span>{t('Correo')}</span><input type="email" name="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} autoFocus /></label>
         {mode === 'register' && <label className="field"><span>{t('Nombre')}</span><input name="name" autoComplete="name" required value={name} onChange={e => setName(e.target.value)} /></label>}
         <label className="field"><span>{t('Contraseña')}</span><input type="password" name="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={8} value={password} onChange={e => setPassword(e.target.value)} /></label>
+        {mode === 'register' && registration === 'invite' && <label className="field"><span>{t('Código de invitación')}</span><input name="invite" autoComplete="off" required value={invite} onChange={e => setInvite(e.target.value)} /></label>}
+        {mode === 'register' && registration === 'closed' && <p className="err" role="status">{t('El registro está cerrado en este servidor.')}</p>}
         <div className="err" role="alert" aria-live="assertive">{err}</div>
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn btn--primary" disabled={busy} type="submit">{mode === 'login' ? t('Entrar') : t('Registrarme')}</button>
+          <button className="btn btn--primary" disabled={busy || (mode === 'register' && registration === 'closed')} type="submit">{mode === 'login' ? t('Entrar') : t('Registrarme')}</button>
           <button className="btn btn--ghost" type="button" onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}>{mode === 'login' ? t('No tengo cuenta') : t('Ya tengo cuenta')}</button>
           <span style={{ flex: 1 }} /><button className="btn btn--ghost" type="button" onClick={onClose}>{t('Cerrar')}</button>
         </div>

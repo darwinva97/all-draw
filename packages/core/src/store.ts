@@ -32,6 +32,8 @@ export class MemoryStore implements Store {
   private listeners = new Set<Listener>();
   private pending: Map<string, Set<string>> | null = null;
   private origin = 'local';
+  /** `list()` devuelve la misma matriz hasta que la colección cambia (no la mutes). */
+  private listCache = new Map<Collection, unknown[]>();
 
   constructor(ws: Workspace = emptyWorkspace()) { this.ws = ws; }
 
@@ -40,14 +42,20 @@ export class MemoryStore implements Store {
   }
   set<C extends Collection>(c: C, id: string, value: RecordOf<C>): void {
     (this.ws[c] as Record<string, RecordOf<C>>)[id] = value;
+    this.listCache.delete(c);
     this.touch(c, id);
   }
   delete(c: Collection, id: string): void {
     if (!(id in this.ws[c])) return;
     delete (this.ws[c] as Record<string, unknown>)[id];
+    this.listCache.delete(c);
     this.touch(c, id);
   }
-  list<C extends Collection>(c: C): RecordOf<C>[] { return Object.values(this.ws[c]) as RecordOf<C>[]; }
+  list<C extends Collection>(c: C): RecordOf<C>[] {
+    let cached = this.listCache.get(c);
+    if (!cached) { cached = Object.values(this.ws[c]); this.listCache.set(c, cached); }
+    return cached as RecordOf<C>[];
+  }
   ids(c: Collection): string[] { return Object.keys(this.ws[c]); }
   meta(): WorkspaceMeta { return this.ws.meta; }
   setMeta(patch: Partial<WorkspaceMeta>): void { this.ws.meta = { ...this.ws.meta, ...patch }; this.touch('meta', '*'); }

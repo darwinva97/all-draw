@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { makeView, newId } from '@all-draw/core';
 import { Canvas } from './Canvas';
 import { Palette } from './panels/Palette';
 import { Inspector } from './panels/Inspector';
 import { ViewsPanel } from './panels/ViewsPanel';
 import { Problems } from './panels/Problems';
-import { Toolbar } from './panels/Toolbar';
+import { Toolbar, Crumbs, ToolbarTools } from './panels/Toolbar';
 import { WorkspacePanel } from './panels/WorkspacePanel';
 import { CommandPalette } from './panels/CommandPalette';
 import { ShortcutsPanel } from './panels/ShortcutsPanel';
@@ -23,6 +23,48 @@ export interface EditorProps {
   onRequestLayout?: () => void;
 }
 
+/** Rangos de pantalla: escritorio (≥ 1100 px), tableta (700–1099 px, paneles colapsables) y móvil (< 700 px, lienzo completo con hojas). */
+export type LayoutMode = 'desktop' | 'tablet' | 'mobile';
+const MQ_MOBILE = '(max-width: 699px)';
+const MQ_TABLET = '(max-width: 1099px)';
+
+function readMode(): LayoutMode {
+  try {
+    if (globalThis.matchMedia?.(MQ_MOBILE).matches) return 'mobile';
+    if (globalThis.matchMedia?.(MQ_TABLET).matches) return 'tablet';
+  } catch { /* sin matchMedia (tests) */ }
+  return 'desktop';
+}
+
+/** Modo de disposición según el ancho de la ventana; se actualiza al redimensionar. */
+export function useLayoutMode(): LayoutMode {
+  const [mode, setMode] = useState<LayoutMode>(readMode);
+  useEffect(() => {
+    const mqs = [MQ_MOBILE, MQ_TABLET].map(q => globalThis.matchMedia?.(q)).filter((m): m is MediaQueryList => !!m);
+    const h = () => setMode(readMode());
+    for (const m of mqs) m.addEventListener('change', h);
+    h();
+    return () => { for (const m of mqs) m.removeEventListener('change', h); };
+  }, []);
+  return mode;
+}
+
+const PANELS_KEY = 'alldraw:panels';
+interface PanelsState { left: boolean; right: boolean }
+function readPanels(): PanelsState {
+  try {
+    const raw = globalThis.localStorage?.getItem(PANELS_KEY);
+    if (raw) { const p = JSON.parse(raw) as Partial<PanelsState>; return { left: p.left !== false, right: p.right !== false }; }
+  } catch { /* sin almacenamiento o JSON inválido */ }
+  return { left: true, right: true };
+}
+
+/** Hojas del modo móvil (barra inferior). */
+type Sheet = 'views' | 'add' | 'inspector' | 'more';
+
+/** Color de la barra del navegador (PWA / móvil) acorde al tema del editor. */
+const THEME_COLOR: Record<'light' | 'dark', string> = { light: '#ffffff', dark: '#161a22' };
+
 /** Disposición completa del editor. La app envuelve esto en `EditorProvider`. */
 export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: EditorProps) {
   const ed = useEditor();
@@ -31,7 +73,28 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
   const { readOnly, effectiveTheme, setTheme, registry, run, openView, canvas, selection, setRenaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel } = ed;
   const [searchOpen, setSearchOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
+  const mode = useLayoutMode();
+  const [panels, setPanels] = useState<PanelsState>(readPanels);
+  const [sheet, setSheet] = useState<Sheet | null>(null);
   useEffect(() => { if (theme) setTheme(theme); }, [theme, setTheme]);
+  useEffect(() => { if (mode !== 'mobile') setSheet(null); }, [mode]);
+
+  // theme-color del navegador sigue al tema del editor; al salir se restaura el valor estático del HTML.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const metas = [...document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')];
+    if (!metas.length) return;
+    const saved = metas.map(m => m.getAttribute('content'));
+    for (const m of metas) m.setAttribute('content', THEME_COLOR[effectiveTheme]);
+    return () => { metas.forEach((m, i) => { if (saved[i] != null) m.setAttribute('content', saved[i]!); }); };
+  }, [effectiveTheme]);
+
+  const togglePanel = useCallback((side: 'left' | 'right') => setPanels(p => {
+    const next = { ...p, [side]: !p[side] };
+    try { globalThis.localStorage?.setItem(PANELS_KEY, JSON.stringify(next)); } catch { /* sin almacenamiento */ }
+    return next;
+  }), []);
+  const panelToggles = useMemo(() => ({ left: panels.left, right: panels.right, toggleLeft: () => togglePanel('left'), toggleRight: () => togglePanel('right') }), [panels, togglePanel]);
 
   // Atajos globales: Ctrl+K / Ctrl+F abren la búsqueda; ? los atajos.
   useEffect(() => {
@@ -79,21 +142,102 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
     else if (id === 'shortcuts') setKeysOpen(true);
   }, [registry, run, openView, onRequestLayout, canvas, setTheme, effectiveTheme, openWorkspacePanel, t]);
 
+  // En la hoja "Añadir" del móvil no hay arrastre: un toque sobre un elemento de la paleta lo suelta en el centro del lienzo
+  // reutilizando el mismo `dragstart`/`drop` que en escritorio (DataTransfer sintético), sin tocar la paleta ni el lienzo.
+  const tapToAdd = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    const item = (e.target as HTMLElement).closest<HTMLElement>('.ad-pal__item[draggable]');
+    if (!item || (e.target as HTMLElement).closest('button, input, a')) return;
+    const pane = document.querySelector<HTMLElement>('.ad-canvas .react-flow__pane');
+    if (!pane || typeof DataTransfer === 'undefined' || typeof DragEvent === 'undefined') return;
+    const dt = new DataTransfer();
+    item.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    const r = pane.getBoundingClientRect();
+    pane.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+    setSheet(null);
+  }, []);
+
   const left = readOnly ? toolbarLeft : <>
-    <button className="ad-btn" onClick={() => openWorkspacePanel()} title={t('Librerías, reglas de estilo, personas y trazabilidad')}>{t('Espacio')}</button>
+    {mode !== 'mobile' && <button className="ad-btn" onClick={() => openWorkspacePanel()} title={t('Librerías, reglas de estilo, personas y trazabilidad')}>{t('Espacio')}</button>}
     {toolbarLeft}
   </>;
+  const mobile = mode === 'mobile', tablet = mode === 'tablet';
+  const showLeft = !mobile && (!tablet || panels.left);
+  const showRight = !mobile && (!tablet || panels.right);
+  const sheetTitle: Record<Sheet, string> = { views: t('Vistas'), add: t('Añadir'), inspector: t('Inspector'), more: t('Más') };
   return (
-    <div className={`ad-editor theme-${effectiveTheme} ${readOnly ? 'is-readonly' : ''}`}>
-      <Toolbar left={left} right={toolbarRight} onSearch={() => setSearchOpen(true)} onShortcuts={() => setKeysOpen(true)} />
+    <div className={`ad-editor theme-${effectiveTheme} ad-editor--${mode} ${readOnly ? 'is-readonly' : ''} ${showLeft ? '' : 'is-left-hidden'} ${showRight ? '' : 'is-right-hidden'}`}>
+      <Toolbar left={left} right={mobile ? undefined : toolbarRight} onSearch={() => setSearchOpen(true)} onShortcuts={() => setKeysOpen(true)}
+        panels={tablet ? panelToggles : undefined} compact={mobile} onMore={() => setSheet(s => (s === 'more' ? null : 'more'))} />
       <div className="ad-editor__body">
-        <div className="ad-editor__left"><ViewsPanel />{!readOnly && <Palette />}</div>
+        {showLeft && <div className="ad-editor__left"><ViewsPanel />{!readOnly && <Palette />}</div>}
         <main className="ad-editor__main"><Canvas onRequestLayout={onRequestLayout} /><Problems /></main>
-        <Inspector />
+        {showRight && <Inspector />}
       </div>
+      {mobile && (
+        <nav className="ad-tabbar" aria-label={t('Paneles')}>
+          <button className={`ad-tabbar__btn ${sheet === 'views' ? 'is-on' : ''}`} aria-pressed={sheet === 'views'} onClick={() => setSheet(s => (s === 'views' ? null : 'views'))}><span aria-hidden="true">▤</span>{t('Vistas')}</button>
+          {!readOnly && <button className={`ad-tabbar__btn ${sheet === 'add' ? 'is-on' : ''}`} aria-pressed={sheet === 'add'} onClick={() => setSheet(s => (s === 'add' ? null : 'add'))}><span aria-hidden="true">＋</span>{t('Añadir')}</button>}
+          <button className={`ad-tabbar__btn ${sheet === 'inspector' ? 'is-on' : ''}`} aria-pressed={sheet === 'inspector'} onClick={() => setSheet(s => (s === 'inspector' ? null : 'inspector'))}><span aria-hidden="true">☰</span>{t('Inspector')}</button>
+          <button className={`ad-tabbar__btn ${sheet === 'more' ? 'is-on' : ''}`} aria-pressed={sheet === 'more'} onClick={() => setSheet(s => (s === 'more' ? null : 'more'))}><span aria-hidden="true">⋯</span>{t('Más')}</button>
+        </nav>
+      )}
+      {mobile && sheet && (
+        <BottomSheet title={sheetTitle[sheet]} onClose={() => setSheet(null)}>
+          {sheet === 'views' && <ViewsPanel />}
+          {sheet === 'add' && <div className="ad-sheet__pal" onClick={tapToAdd}><div className="ad-hint">{t('Toca un elemento para añadirlo al centro del lienzo.')}</div><Palette /></div>}
+          {sheet === 'inspector' && <Inspector />}
+          {sheet === 'more' && (
+            <div className="ad-sheet__more">
+              <Crumbs />
+              <div className="ad-sheet__row">
+                {!readOnly && <button className="ad-btn" onClick={() => { setSheet(null); openWorkspacePanel(); }}>▦<span className="ad-btn__label">{t('Espacio')}</span></button>}
+                <ToolbarTools labels onSearch={() => { setSheet(null); setSearchOpen(true); }} onShortcuts={() => { setSheet(null); setKeysOpen(true); }} />
+                <button className="ad-btn" onClick={() => { setSheet(null); canvas.current?.fitView(); }}>⤢<span className="ad-btn__label">{t('Ajustar a la vista')}</span></button>
+                {onRequestLayout && !readOnly && <button className="ad-btn" onClick={() => { setSheet(null); onRequestLayout(); }}>⇶<span className="ad-btn__label">{t('Layout automático')}</span></button>}
+              </div>
+              {toolbarRight && <div className="ad-sheet__row ad-sheet__app">{toolbarRight}</div>}
+            </div>
+          )}
+        </BottomSheet>
+      )}
       {!readOnly && <WorkspacePanel open={workspaceTab !== null} onClose={closeWorkspacePanel} initialTab={workspaceTab ?? 'libraries'} />}
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} actions={actions} onAction={onAction} />
       <ShortcutsPanel open={keysOpen} onClose={() => setKeysOpen(false)} />
+    </div>
+  );
+}
+
+/** Hoja deslizante desde abajo (móvil): 70 % de alto; se cierra con Escape, tocando fuera o arrastrando el asa hacia abajo. */
+function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const t = useT();
+  const box = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ y0: number; dy: number } | null>(null);
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    window.addEventListener('keydown', h, true);
+    return () => window.removeEventListener('keydown', h, true);
+  }, [onClose]);
+  const onTouchStart = (e: ReactTouchEvent) => { drag.current = { y0: e.touches[0]!.clientY, dy: 0 }; };
+  const onTouchMove = (e: ReactTouchEvent) => {
+    if (!drag.current || !box.current) return;
+    drag.current.dy = Math.max(0, e.touches[0]!.clientY - drag.current.y0);
+    box.current.style.transform = drag.current.dy ? `translateY(${drag.current.dy}px)` : '';
+  };
+  const onTouchEnd = () => {
+    const dy = drag.current?.dy ?? 0; drag.current = null;
+    if (box.current) box.current.style.transform = '';
+    if (dy > 80) onClose();
+  };
+  return (
+    <div className="ad-sheet__backdrop" onClick={onClose}>
+      <div ref={box} className="ad-sheet" role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}>
+        <div className="ad-sheet__grip" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
+          <span className="ad-sheet__handle" aria-hidden="true" />
+          <span className="ad-sheet__title">{title}</span>
+          <button className="ad-btn ad-btn--ghost ad-sheet__close" onClick={onClose} aria-label={t('Cerrar')}>×</button>
+        </div>
+        <div className="ad-sheet__body">{children}</div>
+      </div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import type { Command } from './commands';
 import { allPorts, compatibleRelationTypes } from './ports';
 import type { NotationRegistry } from './notation';
 import type { Store } from './store';
+import { indexOf } from './query';
 
 export type Severity = 'error' | 'warning' | 'info';
 export interface Diagnostic {
@@ -17,7 +18,12 @@ export interface Diagnostic {
   supportedFixes: { label: string; command: Command }[];
 }
 
-export interface Validator { id: string; run(ctx: { store: Store; reg: NotationRegistry }): Diagnostic[] }
+/**
+ * Contexto de un validador. `viewId` es opcional: los validadores geométricos (por vista) pueden
+ * limitarse a esa vista cuando la interfaz lo pide; los del modelo lo ignoran.
+ */
+export interface ValidatorContext { store: Store; reg: NotationRegistry; viewId?: string | null }
+export interface Validator { id: string; run(ctx: ValidatorContext): Diagnostic[] }
 
 const fix = (label: string, command: Command) => ({ label, command });
 
@@ -60,6 +66,7 @@ export const typeValidity: Validator = {
   id: 'core.types',
   run({ store, reg }) {
     const out: Diagnostic[] = [];
+    let portRules: ReturnType<typeof reg.allPacks>[number]['portRules'] | undefined;
     for (const e of store.list('elements')) if (!reg.elementType(e.typeId))
       out.push({ code: 'unknown-element-type', severity: 'warning', subject: { collection: 'elements', id: e.id }, message: `"${e.name}" es de un tipo desconocido (${e.typeId})`, evidence: { typeId: e.typeId }, supportedFixes: [] });
     for (const r of store.list('relations')) {
@@ -85,8 +92,8 @@ export const typeValidity: Validator = {
         const pt = b && r.to.portId ? allPorts(b, reg.fieldsOf(b.typeId)).find(p => p.id === r.to.portId) : undefined;
         if ((r.from.portId && !pf) || (r.to.portId && !pt))
           out.push({ code: 'relation-missing-port', severity: 'warning', subject: { collection: 'relations', id: r.id }, message: `La relación usa un puerto que ya no existe`, supportedFixes: [fix('Quitar puertos', { type: 'patch', collection: 'relations', id: r.id, patch: { from: { portId: undefined }, to: { portId: undefined } } })] });
-        const rules = reg.allPacks().flatMap(p => p.portRules ?? []);
-        const compat = compatibleRelationTypes(rules, pf?.portTypeId, pt?.portTypeId);
+        portRules ??= reg.allPacks().flatMap(p => p.portRules ?? []);
+        const compat = compatibleRelationTypes(portRules, pf?.portTypeId, pt?.portTypeId);
         if (compat && !compat.includes(r.typeId))
           out.push({ code: 'incompatible-ports', severity: 'warning', subject: { collection: 'relations', id: r.id }, message: `Los puertos ${pf?.key} y ${pt?.key} no admiten ${r.typeId}`, evidence: { compat }, supportedFixes: [] });
       }
@@ -100,6 +107,7 @@ export const hygiene: Validator = {
   id: 'core.hygiene',
   run({ store, reg }) {
     const out: Diagnostic[] = [];
+    const index = indexOf(store);
     const used = new Set(store.list('nodes').map(n => n.elementId));
     for (const e of store.list('elements')) {
       if (e.template) continue;
@@ -113,13 +121,13 @@ export const hygiene: Validator = {
     const usedRel = new Set(store.list('edges').map(e => e.relationId));
     for (const r of store.list('relations')) if (!usedRel.has(r.id))
       out.push({ code: 'relation-unused', severity: 'info', subject: { collection: 'relations', id: r.id }, message: `Relación no dibujada en ninguna vista`, supportedFixes: [fix('Borrar relación', { type: 'deleteRelation', id: r.id })] });
-    for (const v of store.list('views')) if (!store.list('nodes').some(n => n.viewId === v.id))
+    for (const v of store.list('views')) if (index.nodesOfView(v.id).length === 0)
       out.push({ code: 'view-empty', severity: 'info', subject: { collection: 'views', id: v.id }, message: `La vista "${v.name}" está vacía`, supportedFixes: [] });
     // Viewpoint
     for (const v of store.list('views')) {
       if (!v.viewpointId) continue;
-      for (const n of store.list('nodes')) {
-        if (n.viewId !== v.id || !n.elementId) continue;
+      for (const n of index.nodesOfView(v.id)) {
+        if (!n.elementId) continue;
         const e = store.get('elements', n.elementId); if (!e) continue;
         if (reg.notationOf(e.typeId) === v.notationId && !reg.inViewpoint(v.notationId, v.viewpointId, e.typeId))
           out.push({ code: 'viewpoint-violation', severity: 'warning', subject: { collection: 'nodes', id: n.id }, message: `"${e.name}" no pertenece al viewpoint de la vista`, supportedFixes: [fix('Quitar de la vista', { type: 'deleteNode', id: n.id })] });
@@ -131,6 +139,7 @@ export const hygiene: Validator = {
 
 export const DEFAULT_VALIDATORS: Validator[] = [referentialIntegrity, typeValidity, hygiene];
 
-export function validate(store: Store, reg: NotationRegistry, validators = DEFAULT_VALIDATORS): Diagnostic[] {
-  return validators.flatMap(v => v.run({ store, reg }));
+/** Ejecuta los validadores. `viewId` (opcional) acota los validadores por vista a esa vista. */
+export function validate(store: Store, reg: NotationRegistry, validators = DEFAULT_VALIDATORS, viewId?: string | null): Diagnostic[] {
+  return validators.flatMap(v => v.run({ store, reg, viewId }));
 }

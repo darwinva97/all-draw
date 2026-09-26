@@ -5,10 +5,10 @@ import { DocManager } from '../src/docs';
 import { LocalDocHost } from '../src/host';
 import { MemoryWorkspaceStore } from '../src/store/memory';
 
-export function makeApi(opts: { allowRegistration?: boolean; secret?: string | null; publicUrl?: string | null } = {}) {
+export function makeApi(opts: { allowRegistration?: boolean; secret?: string | null; publicUrl?: string | null; inviteCode?: string | null } = {}) {
   const store = new MemoryWorkspaceStore();
   const docs = new DocManager(store);
-  const app = createApi({ store, docs: new LocalDocHost(docs), hash: makeHasher(opts.secret ?? null), config: { allowRegistration: opts.allowRegistration ?? true, cookieSecure: false, publicUrl: opts.publicUrl ?? null } });
+  const app = createApi({ store, docs: new LocalDocHost(docs), hash: makeHasher(opts.secret ?? null), config: { allowRegistration: opts.allowRegistration ?? true, cookieSecure: false, publicUrl: opts.publicUrl ?? null, inviteCode: opts.inviteCode ?? null } });
   const j = async (res: Response) => ({ status: res.status, body: res.status === 204 ? null : await res.json().catch(() => null) as any, headers: res.headers });
   const req = (p: string, init: RequestInit) => Promise.resolve(app.request(p, init));
   const client = (token?: string) => {

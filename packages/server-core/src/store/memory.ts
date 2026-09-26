@@ -1,7 +1,7 @@
 /** Adaptador en memoria: tests y pruebas rápidas. Referencia de semántica para los demás adaptadores. */
 import * as Y from 'yjs';
 import { newId } from '@all-draw/core';
-import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, User, WorkspaceRow, WorkspaceStore } from './types';
+import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, Snapshot, SnapshotMeta, User, WorkspaceRow, WorkspaceStore } from './types';
 
 const now = () => new Date().toISOString();
 
@@ -14,6 +14,7 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
   links = new Map<string, ShareLink>();
   docs = new Map<string, Uint8Array>();
   pending = new Map<string, Uint8Array[]>();
+  snapshots = new Map<string, Snapshot>();
 
   async createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string }): Promise<User> {
     const email = u.email.trim().toLowerCase();
@@ -25,6 +26,7 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
   async getUser(id: string) { return this.users.get(id) ?? null; }
   async getUserByEmail(email: string) { const e = email.trim().toLowerCase(); return [...this.users.values()].find(u => u.email === e) ?? null; }
   async countUsers() { return this.users.size; }
+  async listUsers() { return [...this.users.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt)); }
   async setPasswordHash(userId: string, passwordHash: string) { const u = this.users.get(userId); if (u) u.passwordHash = passwordHash; }
 
   async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
@@ -37,7 +39,16 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     if (s.expiresAt < now()) { this.sessions.delete(tokenHash); return null; }
     return s;
   }
+  async touchSession(tokenHash: string, expiresAt: string) { const s = this.sessions.get(tokenHash); if (s) s.expiresAt = expiresAt; }
   async deleteSession(tokenHash: string) { this.sessions.delete(tokenHash); }
+  async deleteUserSessions(userId: string, exceptTokenHash?: string) {
+    for (const [k, s] of this.sessions) if (s.userId === userId && k !== exceptTokenHash) this.sessions.delete(k);
+  }
+  async purgeExpiredSessions() {
+    const t = now(); let n = 0;
+    for (const [k, s] of this.sessions) if (s.expiresAt < t) { this.sessions.delete(k); n++; }
+    return n;
+  }
 
   async createApiKey(k: { userId: string; name: string; prefix: string; keyHash: string }): Promise<ApiKey> {
     const key: ApiKey = { id: newId('key'), ...k, createdAt: now(), lastUsedAt: null };
@@ -73,6 +84,7 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     this.workspaces.delete(id); this.docs.delete(id); this.pending.delete(id);
     for (const [k, m] of this.members) if (m.workspaceId === id) this.members.delete(k);
     for (const [k, l] of this.links) if (l.workspaceId === id) this.links.delete(k);
+    for (const [k, sn] of this.snapshots) if (sn.workspaceId === id) this.snapshots.delete(k);
   }
 
   async loadDoc(id: string) {
@@ -116,6 +128,23 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     return l;
   }
   async deleteShareLink(workspaceId: string, token: string) { const l = this.links.get(token); if (!l || l.workspaceId !== workspaceId) return false; this.links.delete(token); return true; }
+
+  async createSnapshot(s: { workspaceId: string; authorId: string | null; label: string | null; data: Uint8Array; id?: string }): Promise<SnapshotMeta> {
+    const snap: Snapshot = { id: s.id ?? newId('snp'), workspaceId: s.workspaceId, createdAt: now(), authorId: s.authorId, label: s.label, size: s.data.byteLength, data: s.data };
+    this.snapshots.set(snap.id, snap);
+    const { data: _d, ...meta } = snap; return meta;
+  }
+  async listSnapshots(workspaceId: string): Promise<SnapshotMeta[]> {
+    return [...this.snapshots.values()].filter(s => s.workspaceId === workspaceId).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)).map(({ data: _d, ...m }) => m);
+  }
+  async getSnapshot(workspaceId: string, id: string) { const s = this.snapshots.get(id); return s && s.workspaceId === workspaceId ? s : null; }
+  async deleteSnapshot(workspaceId: string, id: string) { const s = this.snapshots.get(id); if (!s || s.workspaceId !== workspaceId) return false; this.snapshots.delete(id); return true; }
+  async pruneSnapshots(workspaceId: string, keep: number) {
+    const all = await this.listSnapshots(workspaceId);
+    let excess = all.length - keep, n = 0;
+    for (const s of [...all].reverse()) { if (excess <= 0) break; if (s.label === null) { this.snapshots.delete(s.id); excess--; n++; } }
+    return n;
+  }
 
   async close() { /* nada */ }
 }

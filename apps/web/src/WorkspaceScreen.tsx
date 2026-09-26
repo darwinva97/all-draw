@@ -3,9 +3,10 @@ import { EditorProvider, Editor, useEditor, useMeta, useCollection } from '@all-
 import { openLocalWorkspace, type LocalWorkspace, type RemoteConnection } from '@all-draw/sync';
 import { traceCoverage, type Validator } from '@all-draw/core';
 import { createRegistry, bindLibraries } from './registry';
-import { connectRoom, tokenFromHash } from './share';
+import { connectRoom, takeShareToken } from './share';
 import { api, setBearer, type WorkspaceInfo, type ShareLink } from './api';
 import { ImportExport } from './ImportExport';
+import { HistoryDialog } from './History';
 import { useDialog } from './Auth';
 import { LangSelect } from './App';
 import { useT, useLang } from '@all-draw/i18n';
@@ -36,7 +37,7 @@ export function WorkspaceScreen({ id, mode, viewId }: { id: string; mode: 'local
   useEffect(() => {
     let alive = true; let handle: LocalWorkspace | null = null; let unbind = () => {}; let c: RemoteConnection | null = null;
     (async () => {
-      const token = tokenFromHash();
+      const token = mode === 'server' ? takeShareToken(id) : null;
       if (mode === 'server') {
         setBearer(token);
         try { const i = await api.workspace(id); if (alive) setInfo(i); } catch (e) { if (alive) setError((e as Error).message); return; }
@@ -85,6 +86,7 @@ function RightTools({ lw, id, mode, info, conn }: { lw: LocalWorkspace; id: stri
   const t = useT();
   const [status, setStatus] = useState('connecting');
   const [share, setShare] = useState(false);
+  const [history, setHistory] = useState(false);
   useEffect(() => { if (!conn) return; const t = setInterval(() => setStatus(conn.status()), 1000); return () => clearInterval(t); }, [conn]);
   const upload = async () => {
     try { const snap = lw.store.snapshot(); const w = await api.createWorkspace(snap.meta.name || t('Espacio'), snap); location.hash = `#/s/${w.id}`; }
@@ -95,10 +97,12 @@ function RightTools({ lw, id, mode, info, conn }: { lw: LocalWorkspace; id: stri
       ? <span className="app-status" role="status" aria-live="polite" title={t('Sincronizado con el servidor')}>{status === 'connected' ? `● ${t('en línea')}` : status === 'connecting' ? `◌ ${t('conectando…')}` : `○ ${t('sin conexión (se sincroniza al volver)')}`} · {info?.role ? t(info.role) : ''}</span>
       : <span className="app-status" role="status">{t('guardado en este navegador')}</span>}
     <ImportExport />
+    {mode === 'server' && info && <button className="btn" aria-haspopup="dialog" onClick={() => setHistory(true)}>{t('Historial')}</button>}
     {mode === 'server' && info?.role === 'owner' && <button className="btn btn--primary" aria-haspopup="dialog" onClick={() => setShare(true)}>{t('Compartir')}</button>}
     {mode === 'local' && <button className="btn btn--primary" onClick={upload} title={t('Copia este espacio al servidor para compartirlo')}>{t('Subir al servidor')}</button>}
     <LangSelect className="lang-select--bar" />
     {share && <ShareDialog id={id} onClose={() => setShare(false)} />}
+    {history && info && <HistoryDialog id={id} role={info.role} onClose={() => setHistory(false)} />}
   </>;
 }
 

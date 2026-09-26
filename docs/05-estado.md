@@ -19,7 +19,7 @@ Primera implementación funcional de all-draw. Cubre las fases F0, F1 y F2 del p
 | `apps/web` | Vite + React 19, PWA, espacios locales en IndexedDB, demo "Alta de cliente" en 5 dimensiones, importar `.drawer`/JSON, exportar, compartir en línea (sala = id del espacio). | e2e sync |
 | `apps/server` | Node: sirve `apps/web/dist` y sincroniza Yjs por WebSocket en `/ws/<sala>` con persistencia en disco (`~/.alldraw-data`). Sin dependencias de despliegue: el mismo protocolo vale para Durable Objects. | e2e sync |
 
-Total: 347 tests unitarios en verde (más 3 del worker en workerd), `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
+Total: 380 tests unitarios en verde (más 3 del worker en workerd), `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
 
 ## Cómo ejecutarlo
 
@@ -91,3 +91,12 @@ pnpm gen:archimate              # regenera el pack desde _research/archi
 - Detalles: título del inspector etiquetado; mensajes a uno mismo en secuencia (handle "self" en la cabecera de la línea de vida).
 - Los e2e fuerzan `locale: 'es-ES'`.
 - Los nombres ArchiMate se mantienen en inglés en ambos idiomas (así los nombra la especificación). Los valores que se guardan en el modelo (papeles sugeridos, nombres iniciales de capas y etapas) se crean en el idioma activo.
+
+## Sexta tanda: operaciones, rendimiento, seguridad, historial y móvil
+
+- **Operaciones (VPS)**: `apps/server/scripts/backup.mjs` (copia consistente de la SQLite + JSON por espacio, gzip, retención 30 días) en cron diario a las 3:17; `healthcheck.mjs` cada 5 minutos reinicia el servicio tras 3 fallos; `restore.mjs`; `apps/worker/scripts/migrate-from-sqlite.mjs` para migrar a D1. Copias en `~/.alldraw-backups/`.
+- **Rendimiento** (`docs/06-rendimiento.md`): generador determinista de 1.000 elementos × 50 vistas (`?bench=1` en el inicio), benchmarks con umbral, `validate` 4× más rápido, lint geométrico con barrido, `list()` cacheado, reglas precompiladas, panel de problemas con debounce y acotado a la vista, React Flow solo pinta lo visible a partir de 300 nodos.
+- **Seguridad** (`docs/07-seguridad.md`): CSRF por cabecera/origen, sesiones de 30 días deslizantes y cierre de todas, CSP y cabeceras, rate limit en registro/enlaces, límites de cuerpo, token de enlace fuera de la URL, cambio y restablecimiento de contraseña, pantalla Cuenta con usuarios (admin), `INVITE_CODE`. Producción con `SESSION_SECRET` y `PUBLIC_URL` en la unidad systemd.
+- **Historial**: instantáneas automáticas cada 30 min de actividad y manuales con etiqueta, restaurar y descargar (diálogo Historial).
+- **Responsive y táctil**: tableta con paneles colapsables; móvil con barra inferior y hojas deslizantes, pulsación larga para el menú, áreas táctiles de 44 px; `e2e/mobile.mjs`.
+- **Cloudflare**: el worker está listo pero la cuenta tiene agotada la cuota de bases D1 (10); hace falta liberar una o subir de plan.

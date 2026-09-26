@@ -18,6 +18,8 @@ export interface Config extends ApiConfig {
   cookieSecure: boolean;
   /** URL pública (para construir enlaces compartidos); si falta se deduce de la petición. */
   publicUrl: string | null;
+  /** Si está, el registro exige este código de invitación. */
+  inviteCode: string | null;
 }
 
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
@@ -33,5 +35,6 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
     allowRegistration: env.ALLOW_REGISTRATION !== 'false',
     cookieSecure: env.COOKIE_SECURE === 'true',
     publicUrl: env.PUBLIC_URL || null,
+    inviteCode: env.INVITE_CODE || null,
   };
 }

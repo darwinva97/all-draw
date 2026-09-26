@@ -14,6 +14,24 @@ export function tokenFromHash(): string | null {
   return q ? new URLSearchParams(q).get('token') : null;
 }
 
+const tokenKey = (room: string) => `alldraw:token:${room}`;
+
+/**
+ * Token del enlace compartido para una sala: si viene en la URL (`#/s/<id>?token=lnk_…`) se guarda en
+ * `sessionStorage` y se **borra de la URL** (así no queda en el historial, en marcadores ni en capturas);
+ * si no, se usa el guardado en esta pestaña.
+ */
+export function takeShareToken(room: string): string | null {
+  const fromUrl = tokenFromHash();
+  if (fromUrl) {
+    try { sessionStorage.setItem(tokenKey(room), fromUrl); } catch { /* sin almacenamiento: se usa sólo en memoria */ }
+    const [path] = location.hash.split('?');
+    history.replaceState(history.state, '', `${location.pathname}${location.search}${path}`);
+    return fromUrl;
+  }
+  try { return sessionStorage.getItem(tokenKey(room)); } catch { return null; }
+}
+
 export function connectRoom(doc: Y.Doc, room: string, token?: string): RemoteConnection {
   return connectRemote(doc, { url: syncUrl(), room, token });
 }

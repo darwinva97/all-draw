@@ -9,6 +9,7 @@ export { MemoryWorkspaceStore } from './store/memory';
 export * from './auth';
 export * from './docs';
 export * from './host';
+export * from './headers';
 export * from './ops';
 export * from './ysync';
 export * from './notations';

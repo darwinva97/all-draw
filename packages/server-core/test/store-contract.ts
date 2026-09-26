@@ -22,8 +22,21 @@ export function storeContractTests(name: string, factory: () => WorkspaceStore |
       expect((await s.getSession('th'))?.userId).toBe(u.id);
       await s.createSession(u.id, 'old', new Date(Date.now() - 10_000).toISOString());
       expect(await s.getSession('old')).toBeNull();
+      await s.touchSession('th', new Date(Date.now() + 99_000).toISOString());
+      expect(Date.parse((await s.getSession('th'))!.expiresAt)).toBeGreaterThan(Date.now() + 50_000);
       await s.deleteSession('th');
       expect(await s.getSession('th')).toBeNull();
+      // Varias sesiones: cerrar todas menos una; purgar caducadas
+      await s.createSession(u.id, 's1', new Date(Date.now() + 10_000).toISOString());
+      await s.createSession(u.id, 's2', new Date(Date.now() + 10_000).toISOString());
+      await s.createSession(u.id, 's3', new Date(Date.now() - 10_000).toISOString());
+      expect(await s.purgeExpiredSessions()).toBe(1);
+      await s.deleteUserSessions(u.id, 's2');
+      expect(await s.getSession('s1')).toBeNull();
+      expect((await s.getSession('s2'))?.userId).toBe(u.id);
+      await s.deleteUserSessions(u.id);
+      expect(await s.getSession('s2')).toBeNull();
+      expect((await s.listUsers()).map(x => x.email)).toEqual(['a@x.io']);
       const k = await s.createApiKey({ userId: u.id, name: 'k', prefix: 'adk_12', keyHash: 'kh' });
       expect((await s.resolveApiKey('kh'))?.id).toBe(k.id);
       expect(await s.resolveApiKey('nope')).toBeNull();
@@ -83,10 +96,31 @@ export function storeContractTests(name: string, factory: () => WorkspaceStore |
       expect(again.getMap('meta').get('name')).toBe('dos');
       expect(again.getMap('meta').get('x')).toBeUndefined();
 
+      // Instantáneas: orden, datos, poda de las no etiquetadas más antiguas
+      const data = (n: number) => new Uint8Array([n, n, n]);
+      const s1 = await s.createSnapshot({ workspaceId: w.id, authorId: a.id, label: null, data: data(1) });
+      await new Promise(r => setTimeout(r, 5));
+      const s2 = await s.createSnapshot({ workspaceId: w.id, authorId: null, label: 'hito', data: data(2) });
+      await new Promise(r => setTimeout(r, 5));
+      const s3 = await s.createSnapshot({ workspaceId: w.id, authorId: a.id, label: null, data: new Uint8Array([3, 3, 3, 3]) });
+      expect(s3.size).toBe(4);
+      expect((await s.listSnapshots(w.id)).map(x => x.id)).toEqual([s3.id, s2.id, s1.id]);
+      expect((await s.listSnapshots(w.id))[1]).toMatchObject({ label: 'hito', authorId: null, size: 3 });
+      expect([...(await s.getSnapshot(w.id, s2.id))!.data]).toEqual([2, 2, 2]);
+      expect(await s.getSnapshot('ws_otro', s2.id)).toBeNull();
+      expect(await s.pruneSnapshots(w.id, 3)).toBe(0);
+      expect(await s.pruneSnapshots(w.id, 1)).toBe(2); // s1 y s3 (sin etiqueta); 'hito' se queda aunque sea la más antigua
+      expect((await s.listSnapshots(w.id)).map(x => x.id)).toEqual([s2.id]);
+      expect(await s.deleteSnapshot('ws_otro', s2.id)).toBe(false);
+      expect(await s.deleteSnapshot(w.id, s2.id)).toBe(true);
+      expect(await s.listSnapshots(w.id)).toEqual([]);
+      await s.createSnapshot({ workspaceId: w.id, authorId: null, label: null, data: data(9) });
+
       await s.deleteWorkspace(w.id);
       expect(await s.getWorkspace(w.id)).toBeNull();
       expect(await s.loadDoc(w.id)).toBeNull();
       expect(await s.listShareLinks(w.id)).toEqual([]);
+      expect(await s.listSnapshots(w.id)).toEqual([]);
       await s.close();
     });
   });

@@ -1,5 +1,9 @@
 /** Diccionario inglés. Clave = texto en español de la interfaz. Se completa a medida que se traducen pantallas. */
 export const en: Record<string, string> = {
+  // ---- rendimiento (panel de problemas, listas largas, espacio de prueba)
+  'calculando…': 'computing…',
+  'Mostrar más ({n} de {total})': 'Show more ({n} of {total})',
+  'Espacio grande de prueba (1000 × 50)': 'Large test workspace (1000 × 50)',
   // ---- comunes (app y editor)
   'Nuevo espacio': 'New workspace',
   'Abrir la demo': 'Open the demo',
@@ -687,3 +691,54 @@ export const enPacks: Record<string, string> = {
   'Composite / Other': 'Composite / Other', 'Interacción': 'Interaction', 'Sistemas': 'Systems',
 };
 Object.assign(en, enPacks);
+
+/** Interfaz adaptable (tableta y móvil). */
+export const enResponsive: Record<string, string> = {
+  'Añadir': 'Add', 'Inspector': 'Inspector', 'Más': 'More', 'Más opciones': 'More options', 'Paneles': 'Panels',
+  'Rejilla': 'Grid', 'Atajos': 'Shortcuts',
+  'Mostrar u ocultar vistas y paleta': 'Show or hide views and palette', 'Mostrar u ocultar el inspector': 'Show or hide the inspector',
+  'Toca un elemento para añadirlo al centro del lienzo.': 'Tap an item to add it to the centre of the canvas.',
+};
+Object.assign(en, enResponsive);
+
+/** Seguridad e historial de versiones (Auth.tsx, Keys.tsx, History.tsx, WorkspaceScreen.tsx). */
+export const enSecurity: Record<string, string> = {
+  'Código de invitación': 'Invite code',
+  'El registro está cerrado en este servidor.': 'Registration is closed on this server.',
+  'Cuenta': 'Account',
+  'Cambiar contraseña': 'Change password',
+  'Contraseña actual': 'Current password',
+  'Nueva contraseña': 'New password',
+  'Repite la nueva contraseña': 'Repeat the new password',
+  'Cambiar': 'Change',
+  'Las contraseñas no coinciden': 'Passwords do not match',
+  'Contraseña cambiada; las demás sesiones se han cerrado.': 'Password changed; your other sessions have been signed out.',
+  'Cerrar todas las sesiones': 'Sign out everywhere',
+  'Cierra la sesión en todos los navegadores, incluido este': 'Signs out of every browser, including this one',
+  'Usuarios del servidor': 'Server users',
+  'administrador': 'administrator',
+  'Restablecer': 'Reset',
+  'Restablecer la contraseña de {email}': 'Reset the password of {email}',
+  '¿Restablecer la contraseña de {email}? Se cerrarán sus sesiones y tendrás que darle la contraseña temporal.': 'Reset the password of {email}? Their sessions will be closed and you will have to hand them the temporary password.',
+  'Contraseña temporal (cópiala ahora):': 'Temporary password (copy it now):',
+  'Historial': 'History',
+  'El servidor guarda una instantánea automática cada 30 minutos de actividad y antes de cada restauración; las etiquetadas no se podan.': 'The server keeps an automatic snapshot every 30 minutes of activity and before each restore; labelled ones are never pruned.',
+  'Etiqueta de la instantánea': 'Snapshot label',
+  'Etiqueta (opcional)': 'Label (optional)',
+  'Crear instantánea': 'Create snapshot',
+  'Instantáneas': 'Snapshots',
+  'Instantánea creada': 'Snapshot created',
+  'Instantánea restaurada': 'Snapshot restored',
+  '¿Restaurar el espacio al estado del {date}? El estado actual se guarda antes como instantánea automática.': 'Restore the workspace to its state as of {date}? The current state is saved first as an automatic snapshot.',
+  '¿Borrar esta instantánea?': 'Delete this snapshot?',
+  'Automática': 'Automatic',
+  'Cargando…': 'Loading…',
+  'Todavía no hay instantáneas.': 'No snapshots yet.',
+  'sistema': 'system',
+  'Restaurar': 'Restore',
+  'Restaurar {what}': 'Restore {what}',
+  'Descargar JSON': 'Download JSON',
+  'Descargar JSON de {what}': 'Download JSON of {what}',
+  'Borrar {what}': 'Delete {what}',
+};
+Object.assign(en, enSecurity);

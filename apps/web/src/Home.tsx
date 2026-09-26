@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { newId, loadInto } from '@all-draw/core';
+import { newId, loadInto, generateLargeWorkspace } from '@all-draw/core';
 import { listLocalWorkspaces, openLocalWorkspace, deleteLocalWorkspace, type LocalWorkspaceEntry } from '@all-draw/sync';
 import { demoWorkspace } from './demo';
 import { api, type User, type WorkspaceInfo } from './api';
 import { AuthDialog } from './Auth';
 import { LangSelect } from './App';
+import { createRegistry } from './registry';
 import { useT } from '@all-draw/i18n';
 
 export function Home() {
@@ -47,6 +48,9 @@ export function Home() {
       if (user) await createRemote(workspace, workspace.meta.name); else await createLocal(workspace);
     } catch (e) { setErr(t('No se pudo importar: {error}', { error: (e as Error).message })); setBusy(false); }
   };
+  /** Espacio grande de prueba (1.000 elementos × 50 vistas), solo con `?bench=1` en la URL. */
+  const bench = location.search.includes('bench=1');
+  const createBench = () => createLocal(generateLargeWorkspace({ elements: 1000, views: 50, perView: 60, notation: 'archimate', registry: createRegistry() }));
   const upload = async (w: LocalWorkspaceEntry) => {
     setBusy(true);
     const lw = await openLocalWorkspace(w.id); await lw.whenSynced;
@@ -70,6 +74,7 @@ export function Home() {
       </div>
       <p className="err" role="alert" aria-live="assertive">{err}</p>
       <p className="app-status" style={{ padding: 0 }}>{t('Formatos: .drawer (Drawer), .alldraw.json, .archimate (Archi), Open Exchange, BPMN 2.0 XML, Structurizr JSON, XState JSON, Mermaid, OpenAPI.')}</p>
+      {bench && <p className="app-status" style={{ padding: 0 }}><button className="btn btn--ghost" data-bench="create" disabled={busy} onClick={createBench}>{t('Espacio grande de prueba (1000 × 50)')}</button></p>}
       {remote && <>
         <h2 className="home__section">{t('En el servidor')}</h2>
         <div className="home__list">

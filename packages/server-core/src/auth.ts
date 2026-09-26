@@ -10,7 +10,7 @@
  *   `SESSION_SECRET`). El hasher es asíncrono porque WebCrypto lo es.
  * - Principal: sesión (cookie o Bearer), API key (Bearer `adk_…`) o enlace compartido (`?token=` / Bearer `lnk_…`).
  */
-import type { Role, ShareLink, User, WorkspaceStore } from './store/types';
+import type { Role, Session, ShareLink, User, WorkspaceStore } from './store/types';
 
 export const PBKDF2_ITERATIONS = 100_000;
 const subtle = globalThis.crypto.subtle;
@@ -72,7 +72,13 @@ export const SESSION_PREFIX = 'ads_';
 export const APIKEY_PREFIX = 'adk_';
 export const LINK_PREFIX = 'lnk_';
 export const SESSION_COOKIE = 'alldraw_session';
+/** Caducidad deslizante: cada uso renueva 30 días (a lo sumo una vez por `SESSION_RENEW_MS`). */
 export const SESSION_DAYS = 30;
+export const SESSION_MS = SESSION_DAYS * 86_400_000;
+export const SESSION_RENEW_MS = 86_400_000;
+/** Cabecera que manda la SPA en toda petición: una web de otro origen no puede añadirla a un envío con cookie. */
+export const CSRF_HEADER = 'x-requested-with';
+export const CSRF_VALUE = 'all-draw';
 /** Usuario técnico dueño de los espacios importados de la persistencia antigua (no cuenta como humano). */
 export const LEGACY_EMAIL = 'legacy@alldraw.local';
 
@@ -85,7 +91,7 @@ export function makeHasher(secret: string | null): Hasher {
 
 // ---------------------------------------------------------------- Principal
 export type Principal =
-  | { kind: 'user'; user: User; via: 'session' | 'apikey'; sessionHash?: string }
+  | { kind: 'user'; user: User; via: 'session' | 'apikey'; sessionHash?: string; session?: Session }
   | { kind: 'link'; link: ShareLink };
 
 export interface AuthContext { store: WorkspaceStore; hash: Hasher }
@@ -109,8 +115,11 @@ export async function resolveToken(ctx: AuthContext, token: string | null | unde
   const session = await ctx.store.getSession(h);
   if (!session) return null;
   const user = await ctx.store.getUser(session.userId);
-  return user ? { kind: 'user', user, via: 'session', sessionHash: h } : null;
+  return user ? { kind: 'user', user, via: 'session', sessionHash: h, session } : null;
 }
+
+/** ¿Toca renovar la caducidad de esta sesión? (ha pasado más de `SESSION_RENEW_MS` desde la última renovación). */
+export const sessionNeedsRenewal = (session: Session, now = Date.now()): boolean => Date.parse(session.expiresAt) - now < SESSION_MS - SESSION_RENEW_MS;
 
 export function parseCookies(header: string | null | undefined): Record<string, string> {
   const out: Record<string, string> = {};
@@ -121,13 +130,43 @@ export function parseCookies(header: string | null | undefined): Record<string, 
   return out;
 }
 
-/** Token de una petición HTTP: `Authorization: Bearer`, luego cookie de sesión, luego `?token=`. */
-export function tokenFromRequest(headers: { get(n: string): string | null }, url: URL): string | null {
+export type CredentialSource = 'bearer' | 'cookie' | 'query';
+/** Token de una petición HTTP y de dónde salió: `Authorization: Bearer`, luego cookie de sesión, luego `?token=`. */
+export function credentialsFromRequest(headers: { get(n: string): string | null }, url: URL): { token: string | null; source: CredentialSource | null } {
   const auth = headers.get('authorization');
-  if (auth?.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
+  if (auth?.toLowerCase().startsWith('bearer ')) return { token: auth.slice(7).trim(), source: 'bearer' };
   const cookie = parseCookies(headers.get('cookie'))[SESSION_COOKIE];
-  if (cookie) return cookie;
-  return url.searchParams.get('token');
+  if (cookie) return { token: cookie, source: 'cookie' };
+  const q = url.searchParams.get('token');
+  return q ? { token: q, source: 'query' } : { token: null, source: null };
+}
+export const tokenFromRequest = (headers: { get(n: string): string | null }, url: URL): string | null => credentialsFromRequest(headers, url).token;
+
+/** Host público de la petición (detrás de un proxy, el que vio el navegador). */
+export const requestHost = (headers: { get(n: string): string | null }, url: URL): string => headers.get('x-forwarded-host')?.split(',')[0]?.trim() ?? headers.get('host') ?? url.host;
+
+/**
+ * Defensa CSRF para peticiones autenticadas **por cookie**: se aceptan si traen la cabecera de la SPA
+ * (`X-Requested-With: all-draw`, imposible de añadir desde otro origen sin CORS), si el navegador declara
+ * `Sec-Fetch-Site: same-origin`/`none`, o si `Origin`/`Referer` apuntan al mismo host que la petición.
+ * Sin ninguna de esas señales (o con `Sec-Fetch-Site: cross-site`/`same-site`) se rechaza.
+ */
+export function isTrustedOrigin(headers: { get(n: string): string | null }, url: URL): boolean {
+  if (headers.get(CSRF_HEADER) === CSRF_VALUE) return true;
+  const sfs = headers.get('sec-fetch-site');
+  if (sfs) return sfs === 'same-origin' || sfs === 'none';
+  const src = headers.get('origin') ?? headers.get('referer');
+  if (!src) return false;
+  try { return new URL(src).host === requestHost(headers, url); } catch { return false; }
+}
+
+/** Comparación de secretos cortos (códigos de invitación) sin fugas de tiempo por longitud. */
+export function safeEqualString(a: string, b: string): boolean {
+  const ea = te.encode(a), eb = te.encode(b);
+  const n = Math.max(ea.length, eb.length, 1);
+  const pa = new Uint8Array(n), pb = new Uint8Array(n);
+  pa.set(ea); pb.set(eb);
+  return timingSafeEqual(pa, pb) && ea.length === eb.length;
 }
 
 /** Rol efectivo de un principal sobre un espacio (los admins actúan como dueños). */

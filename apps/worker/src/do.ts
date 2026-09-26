@@ -9,18 +9,42 @@
  *   POST /init {name, initial}       PUT /snapshot (Workspace)    POST /meta {patch}
  *   GET  /snapshot                   POST /commands {commands, label}   GET /validate
  *   GET  /svg?viewId&theme&padding   POST /drop
+ *   GET  /snapshots                  POST /snapshots {authorId, label}
+ *   GET  /snapshots/:sid             POST /snapshots/:sid/restore {authorId}   DELETE /snapshots/:sid
+ *
+ * Las instantáneas (historial de versiones) también viven en el storage del DO: `snap:<id>` (meta) +
+ * `snapd:<id>:<n>` (trozos del update Yjs).
  */
 import { DurableObject } from 'cloudflare:workers';
 import type { Command, Workspace, WorkspaceMeta } from '@all-draw/core';
 import {
   CommandError, LiveDoc, attachConnection, closeConn, opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, parseCommands, parseWorkspaceJson,
-  type DocPersistence, type Role, type SyncHandlers, type SyncSocket,
+  type DocPersistence, type Role, type Snapshot, type SnapshotMeta, type SyncHandlers, type SyncSocket,
 } from '@all-draw/server-core';
+import { newId } from '@all-draw/core';
 import type { Env } from './env';
 
 export const ROLE_HEADER = 'x-alldraw-role';
 const CHUNK = 96 * 1024; // < 128 KiB por valor, vale para KV y SQLite
 const META_KEY = 'doc:meta';
+const SNAP_PREFIX = 'snap:';
+const snapDataKey = (id: string, n: number) => `snapd:${id}:${n}`;
+type StoredSnapshot = SnapshotMeta & { chunks: number };
+
+/** Trocea un update en valores < 128 KiB. */
+function chunk(update: Uint8Array, key: (n: number) => string): { entries: Record<string, ArrayBuffer>; n: number } {
+  const entries: Record<string, ArrayBuffer> = {};
+  let n = 0;
+  for (let off = 0; off < update.length; off += CHUNK, n++) entries[key(n)] = update.slice(off, off + CHUNK).buffer as ArrayBuffer;
+  return { entries, n };
+}
+async function readChunks(storage: DurableObjectStorage, keys: string[], size: number): Promise<Uint8Array | null> {
+  const got = await storage.get<ArrayBuffer>(keys);
+  const out = new Uint8Array(size);
+  let off = 0;
+  for (const k of keys) { const part = got.get(k); if (!part) return null; out.set(new Uint8Array(part), off); off += part.byteLength; }
+  return out;
+}
 
 /** Persistencia del doc en el storage del DO, troceada. */
 function storagePersistence(storage: DurableObjectStorage): DocPersistence {
@@ -28,21 +52,47 @@ function storagePersistence(storage: DurableObjectStorage): DocPersistence {
     async loadDoc() {
       const meta = await storage.get<{ chunks: number; size: number }>(META_KEY);
       if (!meta || meta.chunks === 0) return null;
-      const keys = Array.from({ length: meta.chunks }, (_, i) => `doc:${i}`);
-      const got = await storage.get<ArrayBuffer>(keys);
-      const out = new Uint8Array(meta.size);
-      let off = 0;
-      for (const k of keys) { const part = got.get(k); if (!part) return null; out.set(new Uint8Array(part), off); off += part.byteLength; }
-      return out;
+      return readChunks(storage, Array.from({ length: meta.chunks }, (_, i) => `doc:${i}`), meta.size);
     },
     async saveDoc(_id, update) {
       const prev = await storage.get<{ chunks: number }>(META_KEY);
-      const entries: Record<string, ArrayBuffer | { chunks: number; size: number }> = {};
-      let n = 0;
-      for (let off = 0; off < update.length; off += CHUNK, n++) entries[`doc:${n}`] = update.slice(off, off + CHUNK).buffer as ArrayBuffer;
-      entries[META_KEY] = { chunks: n, size: update.length };
-      await storage.put(entries);
+      const { entries, n } = chunk(update, i => `doc:${i}`);
+      await storage.put({ ...entries, [META_KEY]: { chunks: n, size: update.length } });
       if (prev && prev.chunks > n) await storage.delete(Array.from({ length: prev.chunks - n }, (_, i) => `doc:${n + i}`));
+    },
+
+    // ---- instantáneas
+    async createSnapshot(s) {
+      const id = s.id ?? newId('snp');
+      const { entries, n } = chunk(s.data, i => snapDataKey(id, i));
+      const stored: StoredSnapshot = { id, workspaceId: s.workspaceId, createdAt: new Date().toISOString(), authorId: s.authorId, label: s.label, size: s.data.byteLength, chunks: n };
+      await storage.put({ ...entries, [SNAP_PREFIX + id]: stored });
+      const { chunks: _c, ...meta } = stored;
+      return meta;
+    },
+    async listSnapshots() {
+      const all = await storage.list<StoredSnapshot>({ prefix: SNAP_PREFIX });
+      return [...all.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)).map(({ chunks: _c, ...m }) => m);
+    },
+    async getSnapshot(_ws, id): Promise<Snapshot | null> {
+      const stored = await storage.get<StoredSnapshot>(SNAP_PREFIX + id);
+      if (!stored) return null;
+      const data = await readChunks(storage, Array.from({ length: stored.chunks }, (_, i) => snapDataKey(id, i)), stored.size);
+      if (!data) return null;
+      const { chunks: _c, ...meta } = stored;
+      return { ...meta, data };
+    },
+    async deleteSnapshot(_ws, id) {
+      const stored = await storage.get<StoredSnapshot>(SNAP_PREFIX + id);
+      if (!stored) return false;
+      await storage.delete([SNAP_PREFIX + id, ...Array.from({ length: stored.chunks }, (_, i) => snapDataKey(id, i))]);
+      return true;
+    },
+    async pruneSnapshots(ws, keep) {
+      const all = await this.listSnapshots(ws);
+      let excess = all.length - keep, n = 0;
+      for (const s of [...all].reverse()) { if (excess <= 0) break; if (s.label === null && (await this.deleteSnapshot(ws, s.id))) { excess--; n++; } }
+      return n;
     },
   };
 }
@@ -97,6 +147,23 @@ export class WorkspaceDO extends DurableObject<Env> {
     }
 
     try {
+      // Historial de versiones
+      const snap = /^\/snapshots(?:\/([^/]+)(\/restore)?)?$/.exec(url.pathname);
+      if (snap) {
+        const sid = snap[1] ? decodeURIComponent(snap[1]) : null;
+        if (!sid && request.method === 'GET') return json({ snapshots: await live.listSnapshots() });
+        if (!sid && request.method === 'POST') { const b = await request.json() as { authorId: string | null; label: string | null }; return json(await live.createSnapshot(b.authorId ?? null, b.label ?? null)); }
+        if (sid && !snap[2] && request.method === 'GET') { const ws = await live.snapshotWorkspace(sid); return ws ? json(ws) : json({ error: 'No existe esa instantánea' }, 404); }
+        if (sid && snap[2] && request.method === 'POST') {
+          const b = await request.json() as { authorId: string | null };
+          const ws = await live.restoreSnapshot(sid, b.authorId ?? null);
+          if (!ws) return json({ error: 'No existe esa instantánea' }, 404);
+          await live.flush();
+          return json(ws);
+        }
+        if (sid && !snap[2] && request.method === 'DELETE') return (await live.deleteSnapshot(sid)) ? json({ ok: true }) : json({ error: 'No existe esa instantánea' }, 404);
+        return json({ error: 'ruta desconocida en el DO' }, 404);
+      }
       switch (`${request.method} ${url.pathname}`) {
         case 'POST /init': {
           const body = await request.json() as { name: string; initial: unknown };

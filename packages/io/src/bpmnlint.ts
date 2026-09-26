@@ -6,7 +6,7 @@
  * El "ámbito" de un nodo es su proceso: la Pool, el `Process` o el subproceso más cercano (según los
  * nodos de las vistas o `features.bpmnParent`); las lanes y los grupos no cuentan.
  */
-import type { Diagnostic, Element, Relation, Store, Validator } from '@all-draw/core';
+import { indexOf, type Diagnostic, type Element, type Relation, type Store, type Validator } from '@all-draw/core';
 
 const SEQ = 'bpmn:SequenceFlow';
 const SUBPROCESSES = new Set(['bpmn:SubProcess', 'bpmn:EventSubProcess', 'bpmn:AdHocSubProcess', 'bpmn:Transaction']);
@@ -41,16 +41,15 @@ export function indexBpmn(store: Store): BpmnIndex {
     inc.set(f.to.elementId!, [...(inc.get(f.to.elementId!) ?? []), f]);
   }
   // Padre de cada elemento: nodos de las vistas (saltando grupos) o `features.bpmnParent`.
-  const nodes = store.list('nodes');
-  const nodeById = new Map(nodes.map(n => [n.id, n]));
+  const index = indexOf(store);
+  const nodeById = (id: string) => store.get('nodes', id);
   const parent = new Map<string, string | undefined>();
   const parentOf = (id: string): string | undefined => {
     if (parent.has(id)) return parent.get(id);
     let found: string | undefined;
-    for (const n of nodes) {
-      if (n.elementId !== id) continue;
-      let p = n.parentNodeId ? nodeById.get(n.parentNodeId) : undefined;
-      while (p && (!p.elementId || byId.get(p.elementId)?.typeId === 'bpmn:Group')) p = p.parentNodeId ? nodeById.get(p.parentNodeId) : undefined;
+    for (const n of index.nodesOfElement(id)) {
+      let p = n.parentNodeId ? nodeById(n.parentNodeId) : undefined;
+      while (p && (!p.elementId || byId.get(p.elementId)?.typeId === 'bpmn:Group')) p = p.parentNodeId ? nodeById(p.parentNodeId) : undefined;
       if (p?.elementId && byId.has(p.elementId)) { found = p.elementId; break; }
       const root = store.get('views', n.viewId)?.rootElementId;
       if (root && byId.has(root) && root !== id) { found = root; break; }

@@ -11,3 +11,4 @@ export * from './diagnostics';
 export * from './migrate';
 export * from './example';
 export * from './traces';
+export * from './bench';

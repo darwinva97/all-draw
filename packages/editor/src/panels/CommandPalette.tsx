@@ -8,6 +8,9 @@ import { useEditor } from '../context';
 import { useAnyChange } from '../hooks';
 import { searchWorkspace, type SearchAction, type SearchHit } from '../search';
 
+/** Resultados que se pintan de golpe; el resto sale con "mostrar más". */
+export const CMDK_PAGE = 200;
+
 export interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
@@ -22,12 +25,13 @@ export function CommandPalette({ open, onClose, actions, onAction }: CommandPale
   const [q, setQ] = useState('');
   const [idx, setIdx] = useState(0);
   const [pending, setPending] = useState<Extract<SearchHit, { kind: 'element' }> | null>(null);
+  const [shown, setShown] = useState(CMDK_PAGE);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
 
   useEffect(() => { if (open) { setQ(''); setIdx(0); setPending(null); setTimeout(() => input.current?.focus(), 0); } }, [open]);
   const hits = useMemo(() => (open ? searchWorkspace(store, registry, q, { viewId, actions }) : []), [open, store, registry, q, viewId, actions]);
-  useEffect(() => { setIdx(0); }, [q]);
+  useEffect(() => { setIdx(0); setShown(CMDK_PAGE); }, [q]);
   useEffect(() => { list.current?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' }); }, [idx]);
 
   if (!open) return null;
@@ -70,13 +74,14 @@ export function CommandPalette({ open, onClose, actions, onAction }: CommandPale
         <input ref={input} className="ad-cmdk__input" aria-label={t('Buscar elementos, vistas o acciones')} placeholder={pending ? t('«{name}» aparece en… (elige una vista)', { name: pending.label }) : t('Buscar elementos, vistas o acciones…')} value={q} onChange={e => setQ(e.target.value)} disabled={!!pending} />
         <div ref={list} className="ad-cmdk__list">
           {items.length === 0 && <div className="ad-empty">{t('Sin resultados para «{q}».', { q })}</div>}
-          {items.map((it, i) => (
+          {items.slice(0, shown).map((it, i) => (
             <button key={it.key} className={`ad-cmdk__item ${i === idx ? 'is-active' : ''}`} onMouseEnter={() => setIdx(i)} onClick={it.onPick}>
               <span className="ad-cmdk__icon">{it.icon}</span>
               <span className="ad-cmdk__label">{it.label}</span>
               <small>{it.hint}</small>
             </button>
           ))}
+          {items.length > shown && <button className="ad-cmdk__item ad-cmdk__more" onClick={() => setShown(n => n + CMDK_PAGE)}>{t('Mostrar más ({n} de {total})', { n: shown, total: items.length })}</button>}
         </div>
         <div className="ad-cmdk__foot">{t('↑↓ moverse · Enter elegir · Esc cerrar')}</div>
       </div>

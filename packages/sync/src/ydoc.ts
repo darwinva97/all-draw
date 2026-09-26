@@ -28,6 +28,24 @@ export function resolveOrigin(origin: unknown): string {
   return 'remote';
 }
 
+/** Clona los valores anidados que el parseo dejó compartidos con el original (hasta dos niveles). */
+function detachShared(parsed: Record<string, unknown>, raw: Record<string, unknown> | undefined): void {
+  if (!raw) return;
+  for (const k of Object.keys(parsed)) {
+    const v = parsed[k];
+    if (!v || typeof v !== 'object') continue;
+    if (v === raw[k]) { parsed[k] = structuredClone(v); continue; }
+    if (Array.isArray(v)) continue;
+    const rv = raw[k];
+    if (!rv || typeof rv !== 'object') continue;
+    const inner = v as Record<string, unknown>, rinner = rv as Record<string, unknown>;
+    for (const kk of Object.keys(inner)) {
+      const x = inner[kk];
+      if (x && typeof x === 'object' && x === rinner[kk]) inner[kk] = structuredClone(x);
+    }
+  }
+}
+
 export class YjsStore implements Store {
   readonly doc: Y.Doc;
   readonly maps: Record<Collection, Y.Map<unknown>>;
@@ -90,11 +108,21 @@ export class YjsStore implements Store {
   }
   subscribe(l: Listener): () => void { this.listeners.add(l); return () => { this.listeners.delete(l); }; }
 
-  /** Copia validada (`parseWorkspace`), desligada del documento. */
+  /**
+   * Copia validada (`parseWorkspace`), desligada del documento. Zod ya construye objetos nuevos para
+   * todo lo tipado; solo los valores `unknown` (campos, rasgos, meta, estilo de vista) se devuelven
+   * por referencia, así que se clonan únicamente esos en vez de clonar todo el documento dos veces.
+   */
   snapshot(): Workspace {
-    const raw: Record<string, unknown> = { meta: Object.fromEntries(this.metaMap.entries()) };
-    for (const c of COLLECTIONS) raw[c] = Object.fromEntries(this.maps[c].entries());
-    return parseWorkspace(structuredClone(raw));
+    const raw: Record<string, Record<string, Record<string, unknown>>> = { meta: Object.fromEntries(this.metaMap.entries()) as Record<string, Record<string, unknown>> };
+    for (const c of COLLECTIONS) raw[c] = Object.fromEntries(this.maps[c].entries()) as Record<string, Record<string, unknown>>;
+    const ws = parseWorkspace(raw);
+    for (const c of COLLECTIONS) {
+      const src = raw[c]!;
+      for (const [id, rec] of Object.entries(ws[c])) detachShared(rec as Record<string, unknown>, src[id]);
+    }
+    detachShared(ws.meta as Record<string, unknown>, raw.meta as unknown as Record<string, unknown>);
+    return ws;
   }
 
   private emit(ch: StoreChange) { for (const l of this.listeners) l(ch); }

@@ -50,3 +50,31 @@ body { font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 /* Texto solo para lectores de pantalla. */
 .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* ---- Responsive y táctil (app) ---- */
+@media (max-width: 699px) {
+  .home { padding: 20px 16px calc(24px + env(safe-area-inset-bottom)); }
+  .home h1 { font-size: 24px; }
+  .home__lang { position: static; display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  .home__actions { flex-direction: column; align-items: stretch; }
+  .home__actions > span[style] { display: none; }
+  .home__actions .btn { width: 100%; text-align: center; }
+  .home__actions .app-status { text-align: center; }
+  .home__item { flex-direction: column; align-items: stretch; gap: 8px; }
+  .home__item > span { display: flex; flex-wrap: wrap; gap: 4px; }
+  .modal { align-items: flex-end; }
+  .modal__box { width: 100%; max-height: calc(100dvh - 16px); border-radius: 14px 14px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
+  .menu { position: fixed; left: 0; right: 0; top: auto; bottom: 0; min-width: 0; border-radius: 14px 14px 0 0; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 32px rgba(0,0,0,.18); max-height: 70dvh; overflow: auto; z-index: 75; }
+  .menu button { padding: 10px 12px; }
+  .ad-toolbar--compact .app-name { min-width: 0; width: auto; flex: 1 1 auto; }
+}
+@media (max-width: 1099px) { .app-status { display: none; } .ad-sheet__app .app-status { display: inline; } }
+@media (pointer: coarse) {
+  .btn, .lang-select, .menu button, .field input { min-height: 44px; }
+  .home__item { min-height: 44px; }
+}
+@media (max-width: 1099px) {
+  .ad-toolbar .btn { white-space: nowrap; padding: 6px 10px; }
+  .ad-toolbar .app-name { min-width: 60px; width: 140px; flex: 0 1 140px; overflow: hidden; text-overflow: ellipsis; }
+  .ad-toolbar .lang-select--bar { padding: 4px 2px; }
+}

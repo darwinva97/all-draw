@@ -215,11 +215,15 @@ export function traceGaps(store: Store, reg: NotationRegistry): TraceGap[] {
   const notations = new Set<string>();
   for (const e of elements) { const n = semanticNotation(reg, e); if (n) notations.add(n); }
   if (notations.size < 2) return [];
+  // Parejas trazadas de todos los elementos en una pasada (en vez de recorrer las relaciones por elemento).
+  const partnersOf = new Map<string, Set<string>>();
+  const link = (a: string, b: string) => { let s = partnersOf.get(a); if (!s) partnersOf.set(a, (s = new Set())); s.add(b); };
+  for (const r of bridgeRelations(store)) { link(r.from.elementId!, r.to.elementId!); link(r.to.elementId!, r.from.elementId!); }
   const out: TraceGap[] = [];
   for (const e of elements) {
     const notationId = semanticNotation(reg, e);
     if (!notationId) continue;
-    const partners = tracedPartners(store, e.id);
+    const partners = partnersOf.get(e.id) ?? new Set<string>();
     const crossTraced = [...partners].some(id => { const p = store.get('elements', id); return p && reg.notationOf(p.typeId) !== notationId; });
     if (crossTraced) continue;
     out.push({ element: e, notationId, suggestions: suggestTraces(store, reg, e.id) });

@@ -8,7 +8,7 @@
 import pg from 'pg';
 import * as Y from 'yjs';
 import { newId } from '@all-draw/core';
-import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, User, WorkspaceRow, WorkspaceStore } from '@all-draw/server-core';
+import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, Snapshot, SnapshotMeta, User, WorkspaceRow, WorkspaceStore } from '@all-draw/server-core';
 
 const { Pool } = pg;
 const now = () => new Date().toISOString();
@@ -79,6 +79,23 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS doc_updates_ws ON doc_updates(workspace_id);
   `,
+  // v2 — índice para purgar sesiones caducadas
+  `
+  CREATE INDEX IF NOT EXISTS sessions_expires ON sessions(expires_at);
+  `,
+  // v3 — historial de versiones
+  `
+  CREATE TABLE IF NOT EXISTS snapshots (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    author_id TEXT,
+    label TEXT,
+    data BYTEA NOT NULL,
+    size INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS snapshots_ws ON snapshots(workspace_id, created_at);
+  `,
 ];
 
 type Row = Record<string, unknown>;
@@ -112,7 +129,7 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
 
   /** Vacía todas las tablas (sólo para tests). */
   async truncateAll() {
-    await this.pool.query('TRUNCATE users, sessions, api_keys, workspaces, workspace_members, share_links, docs, doc_updates CASCADE');
+    await this.pool.query('TRUNCATE users, sessions, api_keys, workspaces, workspace_members, share_links, docs, doc_updates, snapshots CASCADE');
   }
 
   private async one<T = Row>(sql: string, params: unknown[] = []): Promise<T | null> { return ((await this.pool.query(sql, params)).rows[0] as T | undefined) ?? null; }
@@ -131,6 +148,9 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
   private link(r: Row | null): ShareLink | null {
     return r ? { token: r.token as string, workspaceId: r.workspace_id as string, role: r.role as MemberRole, createdBy: r.created_by as string, createdAt: r.created_at as string, expiresAt: (r.expires_at as string | null) ?? null } : null;
   }
+  private snapshotMeta(r: Row): SnapshotMeta {
+    return { id: r.id as string, workspaceId: r.workspace_id as string, createdAt: r.created_at as string, authorId: (r.author_id as string | null) ?? null, label: (r.label as string | null) ?? null, size: Number(r.size) };
+  }
 
   async createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string }): Promise<User> {
     const user: User = { id: u.id ?? newId('usr'), email: u.email.trim().toLowerCase(), name: u.name, passwordHash: u.passwordHash, isAdmin: !!u.isAdmin, createdAt: now() };
@@ -142,6 +162,7 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
   async getUser(id: string) { return this.user(await this.one('SELECT * FROM users WHERE id = $1', [id])); }
   async getUserByEmail(email: string) { return this.user(await this.one('SELECT * FROM users WHERE email = $1', [email.trim().toLowerCase()])); }
   async countUsers() { return Number((await this.one<{ n: string }>('SELECT COUNT(*) AS n FROM users'))!.n); }
+  async listUsers() { return (await this.all('SELECT * FROM users ORDER BY created_at')).map(r => this.user(r)!); }
   async setPasswordHash(userId: string, passwordHash: string) { await this.run('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]); }
 
   async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
@@ -155,7 +176,13 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
     if ((r.expires_at as string) < now()) { await this.run('DELETE FROM sessions WHERE token_hash = $1', [tokenHash]); return null; }
     return { tokenHash, userId: r.user_id as string, createdAt: r.created_at as string, expiresAt: r.expires_at as string };
   }
+  async touchSession(tokenHash: string, expiresAt: string) { await this.run('UPDATE sessions SET expires_at = $1 WHERE token_hash = $2', [expiresAt, tokenHash]); }
   async deleteSession(tokenHash: string) { await this.run('DELETE FROM sessions WHERE token_hash = $1', [tokenHash]); }
+  async deleteUserSessions(userId: string, exceptTokenHash?: string) {
+    if (exceptTokenHash) await this.run('DELETE FROM sessions WHERE user_id = $1 AND token_hash != $2', [userId, exceptTokenHash]);
+    else await this.run('DELETE FROM sessions WHERE user_id = $1', [userId]);
+  }
+  async purgeExpiredSessions() { return this.run('DELETE FROM sessions WHERE expires_at < $1', [now()]); }
 
   async createApiKey(k: { userId: string; name: string; prefix: string; keyHash: string }): Promise<ApiKey> {
     const key: ApiKey = { id: newId('key'), ...k, createdAt: now(), lastUsedAt: null };
@@ -244,6 +271,25 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
     return l;
   }
   async deleteShareLink(workspaceId: string, token: string) { return (await this.run('DELETE FROM share_links WHERE token = $1 AND workspace_id = $2', [token, workspaceId])) > 0; }
+
+  async createSnapshot(s: { workspaceId: string; authorId: string | null; label: string | null; data: Uint8Array; id?: string }): Promise<SnapshotMeta> {
+    const meta: SnapshotMeta = { id: s.id ?? newId('snp'), workspaceId: s.workspaceId, createdAt: now(), authorId: s.authorId, label: s.label, size: s.data.byteLength };
+    await this.run('INSERT INTO snapshots (id, workspace_id, created_at, author_id, label, data, size) VALUES ($1, $2, $3, $4, $5, $6, $7)', [meta.id, meta.workspaceId, meta.createdAt, meta.authorId, meta.label, Buffer.from(s.data.buffer, s.data.byteOffset, s.data.byteLength), meta.size]);
+    return meta;
+  }
+  async listSnapshots(workspaceId: string) {
+    return (await this.all('SELECT id, workspace_id, created_at, author_id, label, size FROM snapshots WHERE workspace_id = $1 ORDER BY created_at DESC, id DESC', [workspaceId])).map(r => this.snapshotMeta(r));
+  }
+  async getSnapshot(workspaceId: string, id: string): Promise<Snapshot | null> {
+    const r = await this.one('SELECT * FROM snapshots WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
+    return r ? { ...this.snapshotMeta(r), data: bytes(r.data) } : null;
+  }
+  async deleteSnapshot(workspaceId: string, id: string) { return (await this.run('DELETE FROM snapshots WHERE id = $1 AND workspace_id = $2', [id, workspaceId])) > 0; }
+  async pruneSnapshots(workspaceId: string, keep: number) {
+    const total = Number((await this.one<{ n: string }>('SELECT COUNT(*) AS n FROM snapshots WHERE workspace_id = $1', [workspaceId]))!.n);
+    if (total <= keep) return 0;
+    return this.run('DELETE FROM snapshots WHERE id IN (SELECT id FROM snapshots WHERE workspace_id = $1 AND label IS NULL ORDER BY created_at ASC, id ASC LIMIT $2)', [workspaceId, total - keep]);
+  }
 
   async close() { await this.pool.end(); }
 }

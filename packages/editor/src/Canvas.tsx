@@ -38,6 +38,8 @@ export const DND_ELEMENT = 'application/x-all-draw-element';
 export const DND_VISUAL = 'application/x-all-draw-visual';
 
 export const SNAP_GRID: [number, number] = [8, 8];
+/** A partir de tantos nodos en la vista, React Flow solo monta los que caen dentro del viewport. */
+export const VIRTUALIZE_FROM = 300;
 
 export interface CanvasProps {
   /** La app conecta aquí su layout automático (menú del lienzo y paleta de comandos). */
@@ -494,6 +496,27 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
     setMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
   }, []);
 
+  // Táctil: pulsación larga (500 ms sin mover el dedo) sobre un nodo abre el mismo menú contextual que el botón derecho.
+  // Escucha en fase de captura porque d3-drag (React Flow) corta la propagación del touchstart al empezar a arrastrar.
+  useEffect(() => {
+    const el = wrapper.current; if (!el) return;
+    let lp: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | null = null;
+    const cancel = () => { if (lp) { clearTimeout(lp.timer); lp = null; } };
+    const start = (e: TouchEvent) => {
+      cancel();
+      if (e.touches.length !== 1) return;
+      const nodeId = (e.target as HTMLElement).closest<HTMLElement>('.react-flow__node')?.dataset.id;
+      if (!nodeId || store.get('nodes', nodeId)?.visualType === 'core:cell') return;
+      const { clientX: x, clientY: y } = e.touches[0]!;
+      lp = { x, y, timer: setTimeout(() => { lp = null; setPaneMenu(null); setMenu({ x, y, nodeId }); }, 500) };
+    };
+    const move = (e: TouchEvent) => { if (lp && Math.hypot(e.touches[0]!.clientX - lp.x, e.touches[0]!.clientY - lp.y) > 10) cancel(); };
+    const opts = { capture: true, passive: true } as const;
+    el.addEventListener('touchstart', start, opts); el.addEventListener('touchmove', move, opts);
+    el.addEventListener('touchend', cancel, opts); el.addEventListener('touchcancel', cancel, opts);
+    return () => { cancel(); el.removeEventListener('touchstart', start, opts); el.removeEventListener('touchmove', move, opts); el.removeEventListener('touchend', cancel, opts); el.removeEventListener('touchcancel', cancel, opts); };
+  }, [store]);
+
   const onPaneContextMenu = useCallback((e: MouseEvent | globalThis.MouseEvent) => {
     e.preventDefault();
     setMenu(null);
@@ -525,6 +548,7 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
         onPaneContextMenu={onPaneContextMenu}
         onPaneClick={() => { setPicker(null); setMenu(null); setPaneMenu(null); }}
         fitView minZoom={0.05} maxZoom={4} deleteKeyCode={null} multiSelectionKeyCode="Shift" selectionKeyCode="Shift"
+        onlyRenderVisibleElements={rfNodes.length > VIRTUALIZE_FROM}
         nodesDraggable={!readOnly} nodesConnectable={!readOnly} elementsSelectable
         snapToGrid={snap && !alt} snapGrid={SNAP_GRID}
         colorMode={effectiveTheme}

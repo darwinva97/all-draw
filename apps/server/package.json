@@ -8,7 +8,8 @@
     "start": "node src/server.mjs",
     "mcp": "node --import tsx src/mcp.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "backup": "node scripts/backup.mjs"
   },
   "dependencies": {
     "@all-draw/core": "workspace:*",

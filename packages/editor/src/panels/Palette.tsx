@@ -6,6 +6,8 @@ import { useRecord, useAnyChange } from '../hooks';
 import { DND_TYPE, DND_TEMPLATE, DND_ELEMENT, DND_VISUAL } from '../Canvas';
 
 interface VisualItem { visualType: string; text?: string; src?: string }
+/** Elementos que se pintan de golpe en la pestaña Modelo; el resto sale con "mostrar más". */
+export const PALETTE_PAGE = 200;
 /** Etiquetas en español: se traducen con `t()` al pintarlas (y el texto inicial del nodo también). */
 const VISUALS: { label: string; icon: string; visualType: string; hint: string }[] = [
   { label: 'Nota', icon: '🗒', visualType: 'core:note', hint: 'Texto libre; doble clic para editar' },
@@ -22,6 +24,7 @@ export function Palette() {
   const [q, setQ] = useState('');
   const [tab, setTab] = useState<'notation' | 'libs' | 'model' | 'visual'>('notation');
   const [images, setImages] = useState<{ name: string; src: string }[]>([]);
+  const [shown, setShown] = useState(PALETTE_PAGE);
   const file = useRef<HTMLInputElement>(null);
   const pal = useMemo(() => (view ? paletteFor(store, registry, view) : null), [store, registry, view]);
   const others = useMemo(() => registry.allPacks().filter(p => p.id !== 'core' && p.id !== view?.notationId && p.elementTypes.length), [registry, view]);
@@ -91,15 +94,19 @@ export function Palette() {
             ))}
           </details>}
         </>}
-        {tab === 'model' && <>
-          <div className="ad-hint">{t('Arrastra un elemento existente para que aparezca también en esta vista.')}</div>
-          {existing.filter(e => match(e.name)).map(e => (
-            <div key={e.id} className={`ad-pal__item ${orphans.has(e.id) ? 'is-orphan' : ''}`} draggable onDragStart={drag(DND_ELEMENT, e.id)} title={e.doc}>
-              <span className="ad-pal__swatch" style={{ background: registry.elementType(e.typeId)?.color ?? '#eee' }} />
-              <span>{e.name || t('(sin nombre)')}</span><small>{registry.elementType(e.typeId)?.name ?? e.typeId}</small>
-            </div>
-          ))}
-        </>}
+        {tab === 'model' && (() => {
+          const filtered = existing.filter(e => match(e.name));
+          return <>
+            <div className="ad-hint">{t('Arrastra un elemento existente para que aparezca también en esta vista.')}</div>
+            {filtered.slice(0, shown).map(e => (
+              <div key={e.id} className={`ad-pal__item ${orphans.has(e.id) ? 'is-orphan' : ''}`} draggable onDragStart={drag(DND_ELEMENT, e.id)} title={e.doc}>
+                <span className="ad-pal__swatch" style={{ background: registry.elementType(e.typeId)?.color ?? '#eee' }} />
+                <span>{e.name || t('(sin nombre)')}</span><small>{registry.elementType(e.typeId)?.name ?? e.typeId}</small>
+              </div>
+            ))}
+            {filtered.length > shown && <button className="ad-btn ad-pal__more" onClick={() => setShown(n => n + PALETTE_PAGE)}>{t('Mostrar más ({n} de {total})', { n: shown, total: filtered.length })}</button>}
+          </>;
+        })()}
         {tab === 'visual' && <>
           <div className="ad-hint">{t('Nodos sin elemento del modelo: solo viven en esta vista.')}</div>
           <details open><summary className="ad-pal__cat">{t('Visual')}</summary>

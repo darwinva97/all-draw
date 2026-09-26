@@ -8,7 +8,7 @@
  */
 import * as Y from 'yjs';
 import { newId } from '@all-draw/core';
-import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, User, WorkspaceRow, WorkspaceStore } from '@all-draw/server-core';
+import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, Snapshot, SnapshotMeta, User, WorkspaceRow, WorkspaceStore } from '@all-draw/server-core';
 
 const now = () => new Date().toISOString();
 type Row = Record<string, unknown>;
@@ -35,6 +35,9 @@ export class D1WorkspaceStore implements WorkspaceStore {
   private link(r: Row | null): ShareLink | null {
     return r ? { token: r.token as string, workspaceId: r.workspace_id as string, role: r.role as MemberRole, createdBy: r.created_by as string, createdAt: r.created_at as string, expiresAt: (r.expires_at as string | null) ?? null } : null;
   }
+  private snapshotMeta(r: Row): SnapshotMeta {
+    return { id: r.id as string, workspaceId: r.workspace_id as string, createdAt: r.created_at as string, authorId: (r.author_id as string | null) ?? null, label: (r.label as string | null) ?? null, size: Number(r.size) };
+  }
 
   async createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string }): Promise<User> {
     const user: User = { id: u.id ?? newId('usr'), email: u.email.trim().toLowerCase(), name: u.name, passwordHash: u.passwordHash, isAdmin: !!u.isAdmin, createdAt: now() };
@@ -46,6 +49,7 @@ export class D1WorkspaceStore implements WorkspaceStore {
   async getUser(id: string) { return this.user(await this.one('SELECT * FROM users WHERE id = ?', id)); }
   async getUserByEmail(email: string) { return this.user(await this.one('SELECT * FROM users WHERE email = ?', email.trim().toLowerCase())); }
   async countUsers() { return Number((await this.one<{ n: number }>('SELECT COUNT(*) AS n FROM users'))!.n); }
+  async listUsers() { return (await this.all('SELECT * FROM users ORDER BY created_at')).map(r => this.user(r)!); }
   async setPasswordHash(userId: string, passwordHash: string) { await this.run('UPDATE users SET password_hash = ? WHERE id = ?', passwordHash, userId); }
 
   async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
@@ -59,7 +63,13 @@ export class D1WorkspaceStore implements WorkspaceStore {
     if ((r.expires_at as string) < now()) { await this.run('DELETE FROM sessions WHERE token_hash = ?', tokenHash); return null; }
     return { tokenHash, userId: r.user_id as string, createdAt: r.created_at as string, expiresAt: r.expires_at as string };
   }
+  async touchSession(tokenHash: string, expiresAt: string) { await this.run('UPDATE sessions SET expires_at = ? WHERE token_hash = ?', expiresAt, tokenHash); }
   async deleteSession(tokenHash: string) { await this.run('DELETE FROM sessions WHERE token_hash = ?', tokenHash); }
+  async deleteUserSessions(userId: string, exceptTokenHash?: string) {
+    if (exceptTokenHash) await this.run('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?', userId, exceptTokenHash);
+    else await this.run('DELETE FROM sessions WHERE user_id = ?', userId);
+  }
+  async purgeExpiredSessions() { return this.run('DELETE FROM sessions WHERE expires_at < ?', now()); }
 
   async createApiKey(k: { userId: string; name: string; prefix: string; keyHash: string }): Promise<ApiKey> {
     const key: ApiKey = { id: newId('key'), ...k, createdAt: now(), lastUsedAt: null };
@@ -145,6 +155,27 @@ export class D1WorkspaceStore implements WorkspaceStore {
     return l;
   }
   async deleteShareLink(workspaceId: string, token: string) { return (await this.run('DELETE FROM share_links WHERE token = ? AND workspace_id = ?', token, workspaceId)) > 0; }
+
+  // Instantáneas: en el worker las guarda el Durable Object en su storage (`do.ts`); esta implementación
+  // mantiene el contrato `WorkspaceStore` (copia de respaldo / migraciones desde SQLite).
+  async createSnapshot(s: { workspaceId: string; authorId: string | null; label: string | null; data: Uint8Array; id?: string }): Promise<SnapshotMeta> {
+    const meta: SnapshotMeta = { id: s.id ?? newId('snp'), workspaceId: s.workspaceId, createdAt: now(), authorId: s.authorId, label: s.label, size: s.data.byteLength };
+    await this.run('INSERT INTO snapshots (id, workspace_id, created_at, author_id, label, data, size) VALUES (?, ?, ?, ?, ?, ?, ?)', meta.id, meta.workspaceId, meta.createdAt, meta.authorId, meta.label, blob(s.data), meta.size);
+    return meta;
+  }
+  async listSnapshots(workspaceId: string) {
+    return (await this.all('SELECT id, workspace_id, created_at, author_id, label, size FROM snapshots WHERE workspace_id = ? ORDER BY created_at DESC, id DESC', workspaceId)).map(r => this.snapshotMeta(r));
+  }
+  async getSnapshot(workspaceId: string, id: string): Promise<Snapshot | null> {
+    const r = await this.one('SELECT * FROM snapshots WHERE id = ? AND workspace_id = ?', id, workspaceId);
+    return r ? { ...this.snapshotMeta(r), data: bytes(r.data) } : null;
+  }
+  async deleteSnapshot(workspaceId: string, id: string) { return (await this.run('DELETE FROM snapshots WHERE id = ? AND workspace_id = ?', id, workspaceId)) > 0; }
+  async pruneSnapshots(workspaceId: string, keep: number) {
+    const total = Number((await this.one<{ n: number }>('SELECT COUNT(*) AS n FROM snapshots WHERE workspace_id = ?', workspaceId))!.n);
+    if (total <= keep) return 0;
+    return this.run('DELETE FROM snapshots WHERE id IN (SELECT id FROM snapshots WHERE workspace_id = ? AND label IS NULL ORDER BY created_at ASC, id ASC LIMIT ?)', workspaceId, total - keep);
+  }
 
   async close() { /* D1 no tiene conexión que cerrar */ }
 }

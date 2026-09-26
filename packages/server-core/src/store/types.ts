@@ -63,19 +63,51 @@ export interface ShareLink {
   expiresAt: string | null;
 }
 
-export interface WorkspaceStore {
+/** Instantánea del contenido de un espacio (historial de versiones). `data` es un update Yjs completo. */
+export interface SnapshotMeta {
+  id: string;
+  workspaceId: string;
+  createdAt: string;
+  /** Usuario que la creó; `null` si fue automática o por enlace compartido. */
+  authorId: string | null;
+  /** Etiqueta puesta por el usuario; `null` = automática (candidata a poda). */
+  label: string | null;
+  /** Bytes de `data`. */
+  size: number;
+}
+export interface Snapshot extends SnapshotMeta { data: Uint8Array }
+
+/** Persistencia de instantáneas: la implementan los `WorkspaceStore` y el storage del Durable Object. */
+export interface SnapshotStore {
+  createSnapshot(s: { workspaceId: string; authorId: string | null; label: string | null; data: Uint8Array; id?: string }): Promise<SnapshotMeta>;
+  /** Más recientes primero. */
+  listSnapshots(workspaceId: string): Promise<SnapshotMeta[]>;
+  getSnapshot(workspaceId: string, id: string): Promise<Snapshot | null>;
+  deleteSnapshot(workspaceId: string, id: string): Promise<boolean>;
+  /** Borra las instantáneas **sin etiqueta** más antiguas hasta que no queden más de `keep`; devuelve cuántas borró. */
+  pruneSnapshots(workspaceId: string, keep: number): Promise<number>;
+}
+
+export interface WorkspaceStore extends SnapshotStore {
   // Usuarios
   createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string }): Promise<User>;
   getUser(id: string): Promise<User | null>;
   getUserByEmail(email: string): Promise<User | null>;
   countUsers(): Promise<number>;
+  listUsers(): Promise<User[]>;
   /** Cambia el hash de contraseña (p. ej. al migrar de scrypt a PBKDF2 tras un login correcto). */
   setPasswordHash(userId: string, passwordHash: string): Promise<void>;
 
-  // Sesiones (el token en claro sólo lo ve el cliente; aquí va su hash)
+  // Sesiones (el token en claro sólo lo ve el cliente; aquí va su hash). `getSession` no devuelve caducadas.
   createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session>;
   getSession(tokenHash: string): Promise<Session | null>;
+  /** Renueva la caducidad (sesión deslizante). */
+  touchSession(tokenHash: string, expiresAt: string): Promise<void>;
   deleteSession(tokenHash: string): Promise<void>;
+  /** Cierra todas las sesiones de un usuario (salvo `exceptTokenHash`, si se da). */
+  deleteUserSessions(userId: string, exceptTokenHash?: string): Promise<void>;
+  /** Borra las sesiones caducadas; devuelve cuántas. */
+  purgeExpiredSessions(): Promise<number>;
 
   // API keys
   createApiKey(k: { userId: string; name: string; prefix: string; keyHash: string }): Promise<ApiKey>;

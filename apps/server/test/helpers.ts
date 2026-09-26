@@ -1,16 +1,19 @@
 import { createApp, type App } from '../src/app';
-import { configFromEnv } from '../src/config';
+import { configFromEnv, type Config } from '../src/config';
 import { MemoryWorkspaceStore } from '../src/store/memory';
+import type { WorkspaceStore } from '../src/store/types';
 
-export interface TestServer { app: App; store: MemoryWorkspaceStore; url: string; wsUrl: string; close(): Promise<void> }
+export interface TestServer<S extends WorkspaceStore = MemoryWorkspaceStore> { app: App; store: S; url: string; wsUrl: string; close(): Promise<void> }
 
-export async function startServer(): Promise<TestServer> {
-  const store = new MemoryWorkspaceStore();
-  const config = { ...configFromEnv({}), staticDir: '/nonexistent', allowRegistration: true };
+export async function startServer(): Promise<TestServer>;
+export async function startServer<S extends WorkspaceStore>(opts: { store: S; config?: Partial<Config> }): Promise<TestServer<S>>;
+export async function startServer(opts: { store?: WorkspaceStore; config?: Partial<Config> } = {}): Promise<TestServer<WorkspaceStore>> {
+  const store = opts.store ?? new MemoryWorkspaceStore();
+  const config = { ...configFromEnv({}), staticDir: '/nonexistent', allowRegistration: true, ...opts.config };
   const app = createApp(config, store);
   await new Promise<void>(r => app.server.listen(0, '127.0.0.1', () => r()));
   const port = (app.server.address() as { port: number }).port;
-  return { app, store, url: `http://127.0.0.1:${port}`, wsUrl: `ws://127.0.0.1:${port}/ws`, close: () => app.close() };
+  return { app, store, url: `http://127.0.0.1:${port}`, wsUrl: `ws://127.0.0.1:${port}/ws`, close: async () => { await app.close(); await store.close(); } };
 }
 
 export function client(base: string, token?: string) {

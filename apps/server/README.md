@@ -180,6 +180,66 @@ Pasos para el despliegue:
    Crea enlaces nuevos con `POST …/links`.
 5. Opcional: define `SESSION_SECRET` y `ALLOW_REGISTRATION=false` una vez creadas las cuentas.
 
+## Operaciones (VPS)
+
+Producción: unidad de usuario `alldraw` (puerto 4002, `DB_PATH=~/.alldraw-data/alldraw.sqlite`). Los
+scripts de `scripts/` no necesitan parar el servicio: abren la SQLite en solo lectura y usan la API.
+
+### Copias de seguridad (`scripts/backup.mjs`)
+
+```bash
+pnpm --filter @all-draw/server backup        # = node scripts/backup.mjs
+```
+
+Escribe `~/.alldraw-backups/<fecha>/` (`BACKUP_DIR`) con:
+
+- `alldraw.sqlite.gz`: copia consistente de la BD con `sqlite.backup()` de `node:sqlite` (no bloquea
+  al servidor; si el Node no la tuviera, `VACUUM INTO`), pasada a journal `DELETE` y comprobada con
+  `integrity_check`.
+- `<workspaceId>.json.gz` por espacio: `{ format: "all-draw-backup/1", workspace: {id, name, dueño,
+  members, links}, snapshot: Workspace }` con el Workspace JSON sacado del doc Yjs (`docs.state` +
+  `doc_updates`, `YjsStore.snapshot()`). Si un doc no valida, se guarda el update crudo como
+  `<id>.yupdate.gz` y el script sale con 1.
+- `manifest.json` con el resumen.
+
+Variables: `DB_PATH`/`DATA_DIR` (como el servidor), `BACKUP_DIR` (`~/.alldraw-backups`), `KEEP_DAYS`
+(30; `0` desactiva el borrado). Se borran las carpetas `<fecha>` más antiguas que `KEEP_DAYS` días.
+
+Cron (instalado en el crontab de `maka`, a las 03:17):
+
+```
+17 3 * * * cd /home/maka/projects/all-draw/apps/server && node scripts/backup.mjs >> ~/.alldraw-backups/backup.log 2>&1
+```
+
+### Restaurar un espacio (`scripts/restore.mjs`)
+
+Sube un JSON de la copia a un servidor en marcha (Node o worker) con una API key:
+
+```bash
+ALLDRAW_URL=https://alldraw.bezenti.com ALLDRAW_API_KEY=adk_… \
+  node scripts/restore.mjs ~/.alldraw-backups/<fecha>/<id>.json.gz            # crea un espacio nuevo (POST /api/workspaces {initial})
+ALLDRAW_URL=… ALLDRAW_API_KEY=… node scripts/restore.mjs <fichero> --into ws_… # reemplaza el contenido (PUT /api/workspaces/:id/snapshot)
+```
+
+`--name` cambia el nombre. Miembros y enlaces no se restauran (se listan). Acepta también un Workspace
+JSON a secas (la exportación de la app). Para restaurar **toda** la instalación, para el servicio,
+descomprime `alldraw.sqlite.gz` sobre `DB_PATH` (borrando `-wal`/`-shm`) y arranca.
+
+### Vigilante (`scripts/healthcheck.mjs`)
+
+Pide `GET /healthz` (`ALLDRAW_URL`, por defecto `http://127.0.0.1:4002`); a la tercera falta seguida
+(`HEALTH_FAILS`) hace `systemctl --user restart alldraw` (`ALLDRAW_UNIT`). El contador vive en
+`~/.alldraw-backups/health.state`; sólo escribe en el log cuando falla, reinicia o se recupera. Cron
+instalado (cada 5 minutos):
+
+```
+*/5 * * * * cd /home/maka/projects/all-draw/apps/server && node scripts/healthcheck.mjs >> ~/.alldraw-backups/health.log 2>&1
+```
+
+### Migrar a Cloudflare
+
+`apps/worker/scripts/migrate-from-sqlite.mjs` (ver `apps/worker/README.md`, sección *Migración*).
+
 ## MCP
 
 ```bash

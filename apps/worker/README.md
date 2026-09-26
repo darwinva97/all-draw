@@ -84,14 +84,50 @@ aún no soporta vitest 5) y por eso el `vitest.config.ts` de la raíz excluye `a
 - Las operaciones de la API son las mismas funciones `op*` de `@all-draw/server-core/ops` que usa
   Node; `CommandError` se traduce a 400/422 igual.
 
+## Migración desde el servidor Node (SQLite → D1 + DO)
+
+`scripts/migrate-from-sqlite.mjs` (el generador SQL puro es `scripts/migrate-sql.mjs`, probado en
+`apps/server/test/migrate-sql.test.ts`). La SQLite se abre en solo lectura; el servidor Node puede
+seguir en marcha. Dos pasos, con el worker ya desplegado y migrado (`pnpm --filter @all-draw/worker migrate`):
+
+```bash
+cd apps/worker
+node scripts/migrate-from-sqlite.mjs --db ~/.alldraw-data/alldraw.sqlite --dry-run          # cuenta y avisa, no escribe nada
+
+# 1. cuentas y permisos → D1
+node scripts/migrate-from-sqlite.mjs --db ~/.alldraw-data/alldraw.sqlite --out migrate.sql
+npx wrangler d1 execute alldraw --remote --file migrate.sql
+
+# 2. documentos Yjs → Durable Object de cada espacio, por la API del worker
+node scripts/migrate-from-sqlite.mjs --db ~/.alldraw-data/alldraw.sqlite --url https://alldraw.example.com --key adk_…
+```
+
+| Qué | Cómo |
+|---|---|
+| `users`, `workspaces`, `workspace_members`, `share_links`, `api_keys` | `INSERT OR IGNORE` con los mismos ids (se puede reaplicar sin duplicar). |
+| `sessions` | No se migran: caducan y el worker tiene su propio `SESSION_SECRET`. |
+| `docs` / `doc_updates` | No van al SQL: el DO guarda el doc en su storage. El script funde el update, lo convierte a Workspace JSON (`@all-draw/sync`) y hace `PUT /api/workspaces/:id/snapshot`. `--only id,id` limita los espacios. |
+| Contraseñas `pbkdf2$` | Tal cual (WebCrypto en el worker). |
+| Contraseñas `scrypt$` | No se pueden verificar en Workers. Se guardan como `reset$scrypt$…` (login imposible, hash original conservado) y el script lista los emails: **haz login una vez en Node antes de migrar** (re-hashea a PBKDF2) o restablece la contraseña. |
+
+La `--key` del paso 2 debe ser de un **admin** en el worker (escribe en todos los espacios) o del dueño
+de cada uno. Las API keys migradas sólo funcionan si el worker tiene **el mismo `SESSION_SECRET`** que
+el servidor Node (los hashes son HMAC con él); si no, crea una key nueva en el worker con una sesión
+(`POST /api/keys`) y úsala. El script usa `apps/server/scripts/lib/doc-json.mjs` (loader `tsx` del
+servidor Node) para la conversión Yjs → JSON, así que hay que ejecutarlo desde el monorepo.
+
+Comprobación tras migrar: `GET /api/workspaces` con la key y `GET /api/workspaces/:id/snapshot`
+deben devolver lo mismo que en Node; `apps/server/scripts/backup.mjs` deja un JSON por espacio con el
+que comparar (o restaurar con `restore.mjs --into` contra el worker).
+
 ## Límites conocidos
 
 - **Contraseñas `scrypt$`** creadas por el servidor Node antes de PBKDF2 no se pueden verificar en el
   worker (no hay scrypt en WebCrypto). Arranca una vez el servidor Node contra la BD y haz login
   (migra al vuelo), o restablece la contraseña.
-- **Migrar datos** SQLite/Postgres → D1 + DO: no hay herramienta. `docs.state` de SQLite es el mismo
-  update binario que el DO guarda troceado; un script con `PUT /api/workspaces/:id/snapshot` contra el
-  worker es lo más sencillo.
+- **Migrar desde Postgres** → D1 + DO: `scripts/migrate-from-sqlite.mjs` sólo lee SQLite. Con Postgres,
+  crea las cuentas a mano y sube cada espacio con `GET /api/workspaces/:id/snapshot` en Node +
+  `apps/server/scripts/restore.mjs` contra el worker.
 - **Rate limit de login** (`RateLimiter`) es por isolate: en Cloudflare es sólo orientativo. Para uno
   real, usa el binding *Rate Limiting* del Worker.
 - `run_worker_first` en Assets requiere wrangler ≥ 4.20; con versiones anteriores hay que servir los

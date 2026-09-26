@@ -8,7 +8,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import * as Y from 'yjs';
 import { newId } from '@all-draw/core';
-import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, User, WorkspaceRow, WorkspaceStore } from '@all-draw/server-core';
+import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, Snapshot, SnapshotMeta, User, WorkspaceRow, WorkspaceStore } from '@all-draw/server-core';
 
 const now = () => new Date().toISOString();
 
@@ -77,6 +77,23 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX doc_updates_ws ON doc_updates(workspace_id);
   `,
+  // v2 — caducidad de sesiones: índice para la limpieza periódica (`purgeExpiredSessions`). Igual que apps/worker/migrations/0002_sessions_expiry.sql.
+  `
+  CREATE INDEX sessions_expires ON sessions(expires_at);
+  `,
+  // v3 — historial de versiones. Igual que apps/worker/migrations/0003_snapshots.sql.
+  `
+  CREATE TABLE snapshots (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    author_id TEXT,
+    label TEXT,
+    data BLOB NOT NULL,
+    size INTEGER NOT NULL
+  );
+  CREATE INDEX snapshots_ws ON snapshots(workspace_id, created_at);
+  `,
 ];
 
 type Row = Record<string, unknown>;
@@ -119,6 +136,9 @@ export class SqliteWorkspaceStore implements WorkspaceStore {
   private link(r: Row | null): ShareLink | null {
     return r ? { token: r.token as string, workspaceId: r.workspace_id as string, role: r.role as MemberRole, createdBy: r.created_by as string, createdAt: r.created_at as string, expiresAt: (r.expires_at as string | null) ?? null } : null;
   }
+  private snapshotMeta(r: Row): SnapshotMeta {
+    return { id: r.id as string, workspaceId: r.workspace_id as string, createdAt: r.created_at as string, authorId: (r.author_id as string | null) ?? null, label: (r.label as string | null) ?? null, size: Number(r.size) };
+  }
 
   async createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string }): Promise<User> {
     const user: User = { id: u.id ?? newId('usr'), email: u.email.trim().toLowerCase(), name: u.name, passwordHash: u.passwordHash, isAdmin: !!u.isAdmin, createdAt: now() };
@@ -130,6 +150,7 @@ export class SqliteWorkspaceStore implements WorkspaceStore {
   async getUser(id: string) { return this.user(this.one('SELECT * FROM users WHERE id = ?', id)); }
   async getUserByEmail(email: string) { return this.user(this.one('SELECT * FROM users WHERE email = ?', email.trim().toLowerCase())); }
   async countUsers() { return (this.one<{ n: number }>('SELECT COUNT(*) AS n FROM users'))!.n; }
+  async listUsers() { return this.all<Row>('SELECT * FROM users ORDER BY created_at').map(r => this.user(r)!); }
   async setPasswordHash(userId: string, passwordHash: string) { this.run('UPDATE users SET password_hash = ? WHERE id = ?', passwordHash, userId); }
 
   async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
@@ -143,7 +164,13 @@ export class SqliteWorkspaceStore implements WorkspaceStore {
     if ((r.expires_at as string) < now()) { this.run('DELETE FROM sessions WHERE token_hash = ?', tokenHash); return null; }
     return { tokenHash, userId: r.user_id as string, createdAt: r.created_at as string, expiresAt: r.expires_at as string };
   }
+  async touchSession(tokenHash: string, expiresAt: string) { this.run('UPDATE sessions SET expires_at = ? WHERE token_hash = ?', expiresAt, tokenHash); }
   async deleteSession(tokenHash: string) { this.run('DELETE FROM sessions WHERE token_hash = ?', tokenHash); }
+  async deleteUserSessions(userId: string, exceptTokenHash?: string) {
+    if (exceptTokenHash) this.run('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?', userId, exceptTokenHash);
+    else this.run('DELETE FROM sessions WHERE user_id = ?', userId);
+  }
+  async purgeExpiredSessions() { return Number(this.run('DELETE FROM sessions WHERE expires_at < ?', now()).changes); }
 
   async createApiKey(k: { userId: string; name: string; prefix: string; keyHash: string }): Promise<ApiKey> {
     const key: ApiKey = { id: newId('key'), ...k, createdAt: now(), lastUsedAt: null };
@@ -231,6 +258,25 @@ export class SqliteWorkspaceStore implements WorkspaceStore {
     return l;
   }
   async deleteShareLink(workspaceId: string, token: string) { return this.run('DELETE FROM share_links WHERE token = ? AND workspace_id = ?', token, workspaceId).changes > 0; }
+
+  async createSnapshot(s: { workspaceId: string; authorId: string | null; label: string | null; data: Uint8Array; id?: string }): Promise<SnapshotMeta> {
+    const meta: SnapshotMeta = { id: s.id ?? newId('snp'), workspaceId: s.workspaceId, createdAt: now(), authorId: s.authorId, label: s.label, size: s.data.byteLength };
+    this.run('INSERT INTO snapshots (id, workspace_id, created_at, author_id, label, data, size) VALUES (?, ?, ?, ?, ?, ?, ?)', meta.id, meta.workspaceId, meta.createdAt, meta.authorId, meta.label, s.data, meta.size);
+    return meta;
+  }
+  async listSnapshots(workspaceId: string) {
+    return this.all<Row>('SELECT id, workspace_id, created_at, author_id, label, size FROM snapshots WHERE workspace_id = ? ORDER BY created_at DESC, id DESC', workspaceId).map(r => this.snapshotMeta(r));
+  }
+  async getSnapshot(workspaceId: string, id: string): Promise<Snapshot | null> {
+    const r = this.one<Row>('SELECT * FROM snapshots WHERE id = ? AND workspace_id = ?', id, workspaceId);
+    return r ? { ...this.snapshotMeta(r), data: new Uint8Array(r.data as Uint8Array) } : null;
+  }
+  async deleteSnapshot(workspaceId: string, id: string) { return this.run('DELETE FROM snapshots WHERE id = ? AND workspace_id = ?', id, workspaceId).changes > 0; }
+  async pruneSnapshots(workspaceId: string, keep: number) {
+    const total = this.one<{ n: number }>('SELECT COUNT(*) AS n FROM snapshots WHERE workspace_id = ?', workspaceId)!.n;
+    if (total <= keep) return 0;
+    return Number(this.run('DELETE FROM snapshots WHERE id IN (SELECT id FROM snapshots WHERE workspace_id = ? AND label IS NULL ORDER BY created_at ASC, id ASC LIMIT ?)', workspaceId, total - keep).changes);
+  }
 
   async close() { this.db.close(); }
 }

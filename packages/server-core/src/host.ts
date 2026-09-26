@@ -6,6 +6,7 @@
 import type { Command, Diagnostic, Workspace, WorkspaceMeta } from '@all-draw/core';
 import type { DocManager } from './docs';
 import { opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, type SvgOpts } from './ops';
+import type { SnapshotMeta } from './store/types';
 
 export interface DocHost {
   /** Contenido inicial de un espacio recién creado (vacío con nombre o un Workspace completo). */
@@ -20,6 +21,15 @@ export interface DocHost {
   renderSvg(id: string, viewId: string, opts: SvgOpts): Promise<string | null>;
   /** El espacio se borra: cierra conexiones (4410) y olvida el doc. */
   drop(id: string): Promise<void>;
+
+  // Historial de versiones (instantáneas del doc; viven junto al doc: BD en Node, storage del DO en Cloudflare)
+  listSnapshots(id: string): Promise<SnapshotMeta[]>;
+  createSnapshot(id: string, authorId: string | null, label: string | null): Promise<SnapshotMeta>;
+  /** Workspace JSON de la instantánea; `null` si no existe. */
+  getSnapshot(id: string, sid: string): Promise<Workspace | null>;
+  /** Aplica la instantánea al doc vivo (guardando antes una automática); devuelve el Workspace restaurado o `null`. */
+  restoreSnapshot(id: string, sid: string, authorId: string | null): Promise<Workspace | null>;
+  deleteSnapshot(id: string, sid: string): Promise<boolean>;
 }
 
 export class LocalDocHost implements DocHost {
@@ -38,4 +48,15 @@ export class LocalDocHost implements DocHost {
     d.conns.clear();
     await this.docs.unload(id);
   }
+
+  async listSnapshots(id: string) { return (await this.docs.get(id)).listSnapshots(); }
+  async createSnapshot(id: string, authorId: string | null, label: string | null) { return (await this.docs.get(id)).createSnapshot(authorId, label); }
+  async getSnapshot(id: string, sid: string) { return (await this.docs.get(id)).snapshotWorkspace(sid); }
+  async restoreSnapshot(id: string, sid: string, authorId: string | null) {
+    const d = await this.docs.get(id);
+    const ws = await d.restoreSnapshot(sid, authorId);
+    if (ws) { d.touch(); void d.flush(); }
+    return ws;
+  }
+  async deleteSnapshot(id: string, sid: string) { return (await this.docs.get(id)).deleteSnapshot(sid); }
 }

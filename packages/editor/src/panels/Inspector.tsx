@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { relationsOfElement, viewsOfElement, type Element, type FieldDef, type KeyValue, type Relation, type ViewNode } from '@all-draw/core';
 import { useEditor } from '../context';
 import { addLayer, addStage, removeLayer, removeStage, updateLayer, updateStage, normalizeGrid, LAYER_COLORS } from '@all-draw/notation-grid';
-import { useRecord, usePorts, useAnyChange } from '../hooks';
+import { useRecord, usePorts, useAnyChange, useCollection } from '../hooks';
+import { assignmentsTo, suggestedRoles, newAssignment } from './workspace-helpers';
 
 /** Inspector: lo seleccionado (nodo→elemento, arista→relación) o la vista. */
 export function Inspector() {
@@ -50,6 +51,7 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
           <label className="ad-field"><span>Etiquetas</span><input className="ad-input" value={el.tags.join(', ')} disabled={readOnly} onChange={e => patchEl({ tags: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></label>
           {rels.length > 0 && <div className="ad-section">Relaciones ({rels.length})</div>}
           {rels.map(r => <RelationRow key={r.id} r={r} el={el} />)}
+          <PeopleSection elementId={el.id} />
         </>}
         {tab === 'ports' && <PortsTab el={el} vn={vn} />}
         {tab === 'where' && <>
@@ -206,6 +208,36 @@ function RelationRow({ r, el }: { r: Relation; el: Element }) {
   </button>;
 }
 
+/** Personas asignadas a un elemento (persona · papel) y alta rápida de una asignación. */
+function PeopleSection({ elementId }: { elementId: string }) {
+  const { run, readOnly } = useEditor();
+  const people = useCollection('people');
+  const [pid, setPid] = useState('');
+  const [role, setRole] = useState('Owner');
+  const list = assignmentsTo(people, 'element', elementId);
+  const personId = people.some(p => p.id === pid) ? pid : (people[0]?.id ?? '');
+  const add = () => {
+    const p = people.find(x => x.id === personId); if (!p) return;
+    run({ type: 'patch', collection: 'people', id: p.id, patch: { assignments: [...p.assignments, newAssignment('element', elementId, role)] } });
+  };
+  const remove = (personId: string, assignmentId: string) => {
+    const p = people.find(x => x.id === personId); if (!p) return;
+    run({ type: 'patch', collection: 'people', id: p.id, patch: { assignments: p.assignments.filter(a => a.id !== assignmentId) } });
+  };
+  return <>
+    <div className="ad-section">Personas ({list.length})</div>
+    {list.length === 0 && <div className="ad-hint">Nadie asignado todavía.</div>}
+    {list.map(({ person, assignment }) => <div key={assignment.id} className="ad-row ad-ws-personrow"><span className="ad-ws-avatar">{person.name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('') || '?'}</span><span className="ad-ws-item__label">{person.name} <small>· {assignment.role}</small></span>{!readOnly && <button className="ad-btn ad-btn--ghost" title="Quitar" onClick={() => remove(person.id, assignment.id)}>×</button>}</div>)}
+    {!readOnly && people.length > 0 && <div className="ad-row">
+      <select className="ad-input" value={personId} onChange={e => setPid(e.target.value)}>{people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+      <input className="ad-input" list="ad-insp-roles" value={role} placeholder="papel" onChange={e => setRole(e.target.value)} />
+      <datalist id="ad-insp-roles">{suggestedRoles(people).map(r => <option key={r} value={r} />)}</datalist>
+      <button className="ad-btn" disabled={!personId} onClick={add} title="Asignar">＋</button>
+    </div>}
+    {!readOnly && people.length === 0 && <div className="ad-hint">No hay personas: créalas en Espacio → Personas.</div>}
+  </>;
+}
+
 // ---------------------------------------------------------------- editores de campos
 export function FieldEditor({ def, value, onChange, disabled }: { def: FieldDef; value: unknown; onChange: (v: unknown) => void; disabled?: boolean }) {
   const common = { className: 'ad-input', disabled };
@@ -232,7 +264,7 @@ function ListEditor({ value, onChange, disabled }: { value: string[]; onChange: 
   </div>;
 }
 
-function KeyValueEditor({ value, onChange, disabled, labels }: { value: KeyValue[]; onChange: (v: KeyValue[]) => void; disabled?: boolean; labels?: string }) {
+export function KeyValueEditor({ value, onChange, disabled, labels }: { value: KeyValue[]; onChange: (v: KeyValue[]) => void; disabled?: boolean; labels?: string }) {
   const [lk, lv] = (labels ?? 'Clave|Valor').split('|');
   return <div className="ad-list">
     {value.map((kv, i) => <div key={i} className="ad-row"><input className="ad-input" placeholder={lk} disabled={disabled} value={kv.key} onChange={e => onChange(value.map((x, j) => j === i ? { ...x, key: e.target.value } : x))} /><input className="ad-input" placeholder={lv} disabled={disabled} value={kv.value} onChange={e => onChange(value.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} />{!disabled && <button className="ad-btn" onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>}</div>)}

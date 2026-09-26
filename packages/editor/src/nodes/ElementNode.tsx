@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import type { ElementType, Port, RuleStyle, ViewNode } from '@all-draw/core';
 import { useEditor } from '../context';
-import { useRecord, usePorts } from '../hooks';
+import { useRecord, usePorts, useCollection } from '../hooks';
 import { resolveStyle } from '@all-draw/core';
 import { shapeStyle, ShapeSvg } from './shapes';
 
@@ -16,7 +16,10 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   const element = useRecord('elements', vn.elementId);
   const type = element ? registry.elementType(element.typeId) : undefined;
   const ports = usePorts(element);
-  const rule = useMemo(() => (element ? resolveStyle(store, registry, element, viewId ?? undefined).style : {}), [store, registry, element, viewId]);
+  // Las reglas dependen también de `rules` y `people` (fuentes persona/papel): sus listas cambian de identidad al cambiar.
+  const rules = useCollection('rules');
+  const people = useCollection('people');
+  const rule = useMemo(() => (element ? resolveStyle(store, registry, element, viewId ?? undefined).style : {}), [store, registry, element, viewId, rules, people]);
 
   if (!element) return <div className="ad-node ad-node--missing">?</div>;
   const visible = visiblePorts(ports, vn);

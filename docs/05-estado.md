@@ -19,7 +19,7 @@ Primera implementación funcional de all-draw. Cubre las fases F0, F1 y F2 del p
 | `apps/web` | Vite + React 19, PWA, espacios locales en IndexedDB, demo "Alta de cliente" en 5 dimensiones, importar `.drawer`/JSON, exportar, compartir en línea (sala = id del espacio). | e2e sync |
 | `apps/server` | Node: sirve `apps/web/dist` y sincroniza Yjs por WebSocket en `/ws/<sala>` con persistencia en disco (`~/.alldraw-data`). Sin dependencias de despliegue: el mismo protocolo vale para Durable Objects. | e2e sync |
 
-Total: 71 tests unitarios en verde, `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
+Total: 110 tests unitarios en verde, `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
 
 ## Cómo ejecutarlo
 
@@ -47,4 +47,11 @@ pnpm gen:archimate              # regenera el pack desde _research/archi
 - F4: autenticación y API keys, vistas públicas de solo lectura por enlace, fichero `.alldraw` con File System Access, HTML autocontenido, adaptador Durable Object.
 - F5: import/export BPMN XML, ArchiMate Open Exchange, Structurizr, XState, draw.io, Mermaid; SVG/PNG; elkjs; lint geométrico de archify.
 - F6: SKILL.md/MCP, rendimiento con miles de elementos, accesibilidad, tema oscuro.
-- Editor: copiar/pegar, alinear/distribuir, bendpoints manuales, figuras alternativas ArchiMate con iconos propios, edición de librerías y reglas desde la interfaz (hoy solo por importación o JSON), personas.
+- Editor: figuras alternativas ArchiMate con iconos propios; reglas con target relación (se guardan pero no se pintan); tipos de relación y de puerto de librería desde la interfaz.
+
+## Añadido el mismo día (segunda tanda)
+
+- Repositorio público https://github.com/darwinva97/all-draw.
+- Panel **Espacio** (botón en la barra): pestañas Librerías (librerías, tipos con campos y pines, componentes reutilizables), Reglas (condiciones, estilo con vista previa, impacto, colisiones) y Personas (asignaciones a elementos, vistas, capas, etapas, tipos, relaciones). Sección Personas en el inspector de elemento.
+- Copiar/pegar (Ctrl+C/V: nuevas apariciones de los mismos elementos; Ctrl+Shift+V y Ctrl+D: clonar), barra de alinear/distribuir/igualar tamaño con ≥2 nodos, bendpoints editables (doble clic en arista inserta, arrastrar mueve, doble clic en manejador elimina).
+- e2e `e2e/ui.mjs` cubre estas funciones; `pnpm e2e` incluye humo y sync.

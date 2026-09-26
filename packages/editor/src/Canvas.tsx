@@ -13,7 +13,10 @@ import { useCollection, useRecord } from './hooks';
 import { ElementNode } from './nodes/ElementNode';
 import { VisualNode } from './nodes/VisualNode';
 import { RelationEdge } from './edges/RelationEdge';
+import { nearestSegment } from './edges/bendpath';
 import { NodeMenu } from './panels/NodeMenu';
+import { AlignBar } from './panels/AlignBar';
+import { copySelection, pastePlan, setClipboard, readClipboard, type Clip, type PasteMode } from './clipboard';
 import { cellRects, normalizeGrid, cellKey } from '@all-draw/notation-grid';
 
 export const CELL_PREFIX = 'cell:';
@@ -43,6 +46,8 @@ function CanvasInner() {
   const [picker, setPicker] = useState<Picker | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const dragStart = useRef<Map<string, { x: number; y: number }>>(new Map());
+  /** Pegados consecutivos del mismo clip: cada uno se desplaza un poco más. */
+  const pasteCount = useRef(0);
 
   // ---------------------------------------------------------------- modelo → React Flow
   const rfNodes = useMemo<Node[]>(() => {
@@ -242,11 +247,51 @@ function CanvasInner() {
     return store.list('libraries').find(l => l.elementTypes.some(t => t.id === typeId))?.id;
   }
 
+  // ---------------------------------------------------------------- copiar / pegar / duplicar
+  const copy = useCallback((): Clip | null => {
+    if (!selection.nodes.length) return null;
+    const clip = copySelection(store, selection.nodes, selection.edges);
+    setClipboard(clip);
+    pasteCount.current = 0;
+    return clip;
+  }, [store, selection]);
+
+  const paste = useCallback((clip: Clip | null, mode: PasteMode, offset: { x: number; y: number }) => {
+    if (readOnly || !viewId || !clip || !clip.nodes.length) return;
+    // Clip de otro espacio de trabajo (otra pestaña): sus elementos no existen aquí, así que se clonan.
+    const foreign = mode === 'appearance' && (clip.elements.some(e => !store.get('elements', e.id)) || clip.relations.some(r => !store.get('relations', r.id)));
+    if (foreign) mode = 'clone';
+    const plan = pastePlan(clip, { viewId, offset, mode, isGrid: view?.kind === 'grid' });
+    if (!plan.commands.length) return;
+    run({ type: 'batch', label: mode === 'clone' ? 'duplicar' : 'pegar', commands: plan.commands });
+    select({ nodes: plan.newNodeIds, edges: [] });
+  }, [readOnly, viewId, view, run, select, store]);
+
+  const pasteFromClipboard = useCallback(async (mode: PasteMode) => {
+    const clip = await readClipboard();
+    if (!clip) return;
+    pasteCount.current += 1;
+    const step = 24 * pasteCount.current;
+    // En otra vista se pega donde estaba; en la misma, desplazado para que no tape el original.
+    const offset = clip.viewId && clip.viewId !== viewId ? { x: 0, y: 0 } : { x: step, y: step };
+    paste(clip, mode, offset);
+  }, [paste, viewId]);
+
+  const duplicate = useCallback(() => {
+    if (!selection.nodes.length) return;
+    paste(copySelection(store, selection.nodes, selection.edges), 'clone', { x: 24, y: 24 });
+  }, [store, selection, paste]);
+
   // ---------------------------------------------------------------- teclado y menú
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (readOnly) return;
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
+    if (mod && key === 'c') { if (copy()) e.preventDefault(); return; }
+    if (mod && key === 'v') { e.preventDefault(); void pasteFromClipboard(e.shiftKey ? 'clone' : 'appearance'); return; }
+    if (mod && key === 'd') { e.preventDefault(); duplicate(); return; }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       const cmds: Command[] = [
         ...selection.edges.map(id => ({ type: 'deleteRelation', id: store.get('edges', id)?.relationId ?? '' }) as Command).filter(c => c.type === 'deleteRelation' && c.id),
@@ -258,7 +303,21 @@ function CanvasInner() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) ed.history.redo(); else ed.history.undo(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); ed.history.redo(); }
     if (e.key === 'Escape') { setPicker(null); setMenu(null); }
-  }, [selection, store, run, select, readOnly, ed.history]);
+  }, [selection, store, run, select, readOnly, ed.history, copy, pasteFromClipboard, duplicate]);
+
+  /** Doble clic sobre una arista: inserta un bendpoint en el tramo más cercano. */
+  const onEdgeDoubleClick = useCallback((e: MouseEvent, edge: Edge) => {
+    if (readOnly) return;
+    const ve = store.get('edges', edge.id); if (!ve) return;
+    const center = (id: string) => { const n = rf.getInternalNode(id); if (!n) return undefined; const a = n.internals.positionAbsolute; return { x: a.x + (n.measured.width ?? 0) / 2, y: a.y + (n.measured.height ?? 0) / 2 }; };
+    const a = center(ve.fromNodeId), b = center(ve.toNodeId); if (!a || !b) return;
+    const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    const pt = { x: Math.round(p.x), y: Math.round(p.y) };
+    const i = nearestSegment([a, ...ve.bendpoints, b], pt);
+    const bendpoints = [...ve.bendpoints.slice(0, i), pt, ...ve.bendpoints.slice(i)];
+    run({ type: 'patch', collection: 'edges', id: ve.id, patch: { bendpoints } });
+    select({ nodes: [], edges: [ve.id] });
+  }, [readOnly, store, rf, run, select]);
 
   const onNodeDoubleClick = useCallback((_: MouseEvent, node: Node) => {
     const vn = store.get('nodes', node.id);
@@ -282,7 +341,7 @@ function CanvasInner() {
         onNodeDragStart={onNodeDragStart} onNodeDragStop={onNodeDragStop}
         isValidConnection={isValidConnection} onConnectEnd={onConnectEnd}
         onDrop={onDrop} onDragOver={onDragOver}
-        onNodeDoubleClick={onNodeDoubleClick} onNodeContextMenu={onNodeContextMenu}
+        onNodeDoubleClick={onNodeDoubleClick} onNodeContextMenu={onNodeContextMenu} onEdgeDoubleClick={onEdgeDoubleClick}
         onPaneClick={() => { setPicker(null); setMenu(null); }}
         fitView minZoom={0.05} maxZoom={4} deleteKeyCode={null} multiSelectionKeyCode="Shift" selectionKeyCode="Shift"
         nodesDraggable={!readOnly} nodesConnectable={!readOnly} elementsSelectable
@@ -293,6 +352,7 @@ function CanvasInner() {
         <Controls showInteractive={false} />
         <MiniMap pannable zoomable nodeColor={(n) => { const vn = (n.data as { node?: ViewNode }).node; const el = vn?.elementId ? store.get('elements', vn.elementId) : undefined; return (el && registry.elementType(el.typeId)?.color) || '#ddd'; }} />
       </ReactFlow>
+      <AlignBar />
       {picker && (
         <div className="ad-popover" style={{ left: picker.x, top: picker.y }}>
           <div className="ad-popover__title">Tipo de relación</div>

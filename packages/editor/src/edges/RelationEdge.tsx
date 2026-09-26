@@ -1,6 +1,7 @@
-import { memo } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, useInternalNode, type EdgeProps, type Edge } from '@xyflow/react';
+import { memo, useState, useCallback, type PointerEvent as ReactPointerEvent } from 'react';
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, useInternalNode, useReactFlow, type EdgeProps, type Edge } from '@xyflow/react';
 import { floatingEndpoints } from './floating';
+import { bendPath, type Pt } from './bendpath';
 import type { ArrowHead, ViewEdge } from '@all-draw/core';
 import { useEditor } from '../context';
 import { useRecord } from '../hooks';
@@ -9,7 +10,8 @@ export type RelationEdgeData = { edge: ViewEdge };
 export type RelationRFEdge = Edge<RelationEdgeData, 'relation'>;
 
 export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEdge>) {
-  const { registry } = useEditor();
+  const { registry, run, readOnly } = useEditor();
+  const rf = useReactFlow();
   const ve = p.data!.edge;
   const rel = useRecord('relations', ve.relationId);
   const type = rel ? registry.relationType(rel.typeId) : undefined;
@@ -21,8 +23,54 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
   const router = ve.style.router ?? 'smoothstep';
   const sn = useInternalNode(p.source), tn = useInternalNode(p.target);
   const floating = !ve.fromPortId && !ve.toPortId && sn && tn;
-  const args = floating ? floatingEndpoints(sn, tn) : { sourceX: p.sourceX, sourceY: p.sourceY, targetX: p.targetX, targetY: p.targetY, sourcePosition: p.sourcePosition, targetPosition: p.targetPosition };
-  const [path, lx, ly] = router === 'straight' ? getStraightPath(args) : router === 'bezier' ? getBezierPath(args) : getSmoothStepPath({ ...args, borderRadius: 6 });
+
+  // Bendpoints: durante el arrastre de un manejador se usa una copia local; al soltar se aplica el patch.
+  const [drag, setDrag] = useState<{ index: number; point: Pt } | null>(null);
+  const bends: Pt[] = drag ? ve.bendpoints.map((b, i) => (i === drag.index ? drag.point : b)) : ve.bendpoints;
+  const first = bends[0], last = bends[bends.length - 1];
+
+  const args = floating
+    ? floatingEndpoints(sn, tn, first, last)
+    : { sourceX: p.sourceX, sourceY: p.sourceY, targetX: p.targetX, targetY: p.targetY, sourcePosition: p.sourcePosition, targetPosition: p.targetPosition };
+  let path: string, lx: number, ly: number;
+  if (bends.length > 0) {
+    const pts: Pt[] = [{ x: args.sourceX, y: args.sourceY }, ...bends, { x: args.targetX, y: args.targetY }];
+    ({ path, labelX: lx, labelY: ly } = bendPath(pts, router, args.sourcePosition, args.targetPosition));
+  } else {
+    [path, lx, ly] = router === 'straight' ? getStraightPath(args) : router === 'bezier' ? getBezierPath(args) : getSmoothStepPath({ ...args, borderRadius: 6 });
+  }
+
+  const onHandleDown = useCallback((e: ReactPointerEvent<HTMLDivElement>, index: number) => {
+    if (readOnly || e.button !== 0) return;
+    e.stopPropagation();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    let current: Pt = ve.bendpoints[index]!;
+    const move = (ev: PointerEvent) => {
+      const f = rf.screenToFlowPosition({ x: ev.clientX, y: ev.clientY });
+      current = { x: Math.round(f.x), y: Math.round(f.y) };
+      setDrag({ index, point: current });
+    };
+    const up = () => {
+      target.removeEventListener('pointermove', move);
+      target.removeEventListener('pointerup', up);
+      target.removeEventListener('pointercancel', up);
+      setDrag(null);
+      const orig = ve.bendpoints[index];
+      if (orig && (orig.x !== current.x || orig.y !== current.y)) {
+        run({ type: 'patch', collection: 'edges', id: ve.id, patch: { bendpoints: ve.bendpoints.map((b, i) => (i === index ? current : b)) } });
+      }
+    };
+    target.addEventListener('pointermove', move);
+    target.addEventListener('pointerup', up);
+    target.addEventListener('pointercancel', up);
+  }, [readOnly, rf, run, ve]);
+
+  const removeBend = useCallback((index: number) => {
+    if (readOnly) return;
+    run({ type: 'patch', collection: 'edges', id: ve.id, patch: { bendpoints: ve.bendpoints.filter((_, i) => i !== index) } });
+  }, [readOnly, run, ve]);
+
   const fieldLabel = rel && type ? type.fields.filter(f => ['text', 'select'].includes(f.kind)).map(f => rel.fields[f.key]).filter(v => typeof v === 'string' && v.trim()).join(' · ') : '';
   const label = ve.label ?? (rel?.name || fieldLabel);
   const dash = line === 'dashed' ? '8 5' : line === 'dotted' ? '2 4' : undefined;
@@ -37,6 +85,20 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
           <div className={`ad-edge-label ${p.selected ? 'is-selected' : ''}`} style={{ transform: `translate(-50%,-50%) translate(${lx}px,${ly}px)` }} title={mappings || undefined}>
             {label || (type?.name ?? '')}{mappings && <span className="ad-edge-label__pins">⇄</span>}
           </div>
+        </EdgeLabelRenderer>
+      )}
+      {p.selected && !readOnly && bends.length > 0 && (
+        <EdgeLabelRenderer>
+          {bends.map((b, i) => (
+            <div
+              key={i}
+              className={`ad-bend-handle nodrag nopan ${drag?.index === i ? 'is-dragging' : ''}`}
+              style={{ transform: `translate(-50%,-50%) translate(${b.x}px,${b.y}px)` }}
+              title="Arrastrar para mover · doble clic para quitar"
+              onPointerDown={e => onHandleDown(e, i)}
+              onDoubleClick={e => { e.stopPropagation(); removeBend(i); }}
+            />
+          ))}
         </EdgeLabelRenderer>
       )}
     </>

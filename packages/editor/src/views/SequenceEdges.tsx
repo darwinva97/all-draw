@@ -8,6 +8,7 @@ import { BaseEdge, EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgePr
 import type { ViewEdge } from '@all-draw/core';
 import { useEditor } from '../context';
 import { messageYCommand, SEQ_HEADER_H, type MessageKind } from './sequence';
+import { useT } from '@all-draw/i18n';
 
 export type SequenceMessageData = {
   edge: ViewEdge;
@@ -25,6 +26,7 @@ const HEAD = 11;
 
 export const SequenceMessageEdge = memo(function SequenceMessageEdge(p: EdgeProps<SequenceMessageRFEdge>) {
   const { run, readOnly, effectiveTheme } = useEditor();
+  const t = useT();
   const rf = useReactFlow();
   const d = p.data!;
   const sn = useInternalNode(p.source), tn = useInternalNode(p.target);
@@ -93,10 +95,10 @@ export const SequenceMessageEdge = memo(function SequenceMessageEdge(p: EdgeProp
         <div
           className={`ad-seq-msg-label nodrag nopan ${p.selected ? 'is-selected' : ''} ${dragY !== null ? 'is-dragging' : ''} ${readOnly ? '' : 'is-draggable'}`}
           style={{ transform: `translate(${d.self ? '0' : '-50%'},-100%) translate(${lx}px,${ly + (d.self ? 9 : 0)}px)` }}
-          title={readOnly ? undefined : 'Arrastrar para cambiar la altura'}
+          title={readOnly ? undefined : t('Arrastrar para cambiar la altura')}
           onPointerDown={onLabelDown}
         >
-          {label || <em>mensaje</em>}
+          {label || <em>{t('mensaje')}</em>}
         </div>
       </EdgeLabelRenderer>
     </>

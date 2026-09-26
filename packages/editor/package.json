@@ -15,6 +15,7 @@
   "license": "MIT",
   "dependencies": {
     "@all-draw/core": "workspace:*",
+    "@all-draw/i18n": "workspace:*",
     "@all-draw/notation-archimate": "workspace:*",
     "@all-draw/notation-grid": "workspace:*",
     "@xyflow/react": "^12.12.0",

@@ -9,6 +9,7 @@ import {
   makeElement, makeNode, makeRelation, makeEdge, allPorts, compatibleRelationTypes, indexOf, type ViewNode, type Command, type Element,
 } from '@all-draw/core';
 import { useEditor } from './context';
+import { useT } from '@all-draw/i18n';
 import { useCollection, useRecord } from './hooks';
 import { ElementNode } from './nodes/ElementNode';
 import { VisualNode } from './nodes/VisualNode';
@@ -52,6 +53,7 @@ interface LiveBox { x?: number; y?: number; w?: number; h?: number }
 
 function CanvasInner({ onRequestLayout }: CanvasProps) {
   const ed = useEditor();
+  const t = useT();
   const { store, registry, viewId, run, selection, select, readOnly, presence, effectiveTheme, snap, setRenaming } = ed;
   const view = useRecord('views', viewId);
   const nodesVersion = useCollection('nodes');
@@ -325,7 +327,7 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
     if (readOnly || !viewId) return;
     const size = visual.visualType === 'core:group' ? { w: 320, h: 220 } : visual.visualType === 'core:image' ? { w: 200, h: 150 } : visual.visualType === 'core:label' ? { w: 140, h: 28 } : { w: 180, h: 90 };
     const at = placeAt(pos, size); if (!at) return;
-    const text = visual.text ?? (visual.visualType === 'core:note' ? 'Nota' : visual.visualType === 'core:group' ? 'Grupo' : visual.visualType === 'core:label' ? 'Etiqueta' : undefined);
+    const text = visual.text ?? (visual.visualType === 'core:note' ? t('Nota') : visual.visualType === 'core:group' ? t('Grupo') : visual.visualType === 'core:label' ? t('Etiqueta') : undefined);
     const node = makeNode(viewId, undefined, { ...at, w: size.w, h: size.h }, { visualType: visual.visualType, text, parentNodeId: at.parentNodeId, cell: at.cell, meta: visual.src ? { src: visual.src } : undefined });
     if (!node.meta) delete node.meta;
     run({ type: 'set', collection: 'nodes', id: node.id, value: node });
@@ -345,8 +347,8 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
     let isNew = true;
     if (elementId) { element = store.get('elements', elementId); isNew = false; }
     else if (templateId) {
-      const t = store.get('elements', templateId); if (!t) return;
-      element = makeElement(t.typeId, t.name, { doc: t.doc, fields: structuredClone(t.fields), libraryId: t.libraryId, templateId: t.id, tags: [...t.tags] });
+      const tpl = store.get('elements', templateId); if (!tpl) return;
+      element = makeElement(tpl.typeId, tpl.name, { doc: tpl.doc, fields: structuredClone(tpl.fields), libraryId: tpl.libraryId, templateId: tpl.id, tags: [...tpl.tags] });
     } else if (typeId) {
       const type = registry.elementType(typeId); if (!type) return;
       element = makeElement(typeId, type.name, { libraryId: type.notationId ? undefined : findLibraryOfType(typeId) });
@@ -498,16 +500,16 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
     setPaneMenu({ x: e.clientX, y: e.clientY, flow: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }) });
   }, [rf]);
 
-  if (!viewId || !view) return <div className="ad-canvas ad-canvas--empty">Elige o crea una vista</div>;
+  if (!viewId || !view) return <div className="ad-canvas ad-canvas--empty">{t('Elige o crea una vista')}</div>;
 
   const paneItems: PaneMenuItem[] = paneMenu ? [
     ...(!readOnly ? [
-      { label: 'Pegar aquí', hint: 'Ctrl+V', onClick: () => void pasteFromClipboard('appearance', paneMenu.flow) },
-      { label: 'Añadir nota', onClick: () => addVisual({ visualType: 'core:note' }, paneMenu.flow) },
+      { label: t('Pegar aquí'), hint: 'Ctrl+V', onClick: () => void pasteFromClipboard('appearance', paneMenu.flow) },
+      { label: t('Añadir nota'), onClick: () => addVisual({ visualType: 'core:note' }, paneMenu.flow) },
     ] : []),
-    { label: 'Seleccionar todo', hint: 'Ctrl+A', onClick: selectAll },
-    { label: 'Ajustar a la vista', hint: 'Ctrl+Shift+F', onClick: () => fitNodes() },
-    ...(onRequestLayout && !readOnly ? [{ label: 'Layout automático', onClick: onRequestLayout }] : []),
+    { label: t('Seleccionar todo'), hint: 'Ctrl+A', onClick: selectAll },
+    { label: t('Ajustar a la vista'), hint: 'Ctrl+Shift+F', onClick: () => fitNodes() },
+    ...(onRequestLayout && !readOnly ? [{ label: t('Layout automático'), onClick: onRequestLayout }] : []),
   ] : [];
 
   return (
@@ -538,7 +540,7 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
       <AlignBar />
       {picker && (
         <div className="ad-popover" style={{ left: picker.x, top: picker.y }}>
-          <div className="ad-popover__title">Tipo de relación</div>
+          <div className="ad-popover__title">{t('Tipo de relación')}</div>
           {picker.options.map(o => <button key={o} className="ad-popover__item" onClick={() => picker.onPick(o)}>{registry.relationType(o)?.name ?? o} <small>{registry.notationOf(o)}</small></button>)}
         </div>
       )}

@@ -3,6 +3,7 @@
  * lo selecciona y encuadra si está en la vista actual; si no, ofrece sus vistas para saltar.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { useAnyChange } from '../hooks';
 import { searchWorkspace, type SearchAction, type SearchHit } from '../search';
@@ -15,6 +16,7 @@ export interface CommandPaletteProps {
 }
 
 export function CommandPalette({ open, onClose, actions, onAction }: CommandPaletteProps) {
+  const t = useT();
   const { store, registry, viewId, openView, select, canvas } = useEditor();
   useAnyChange();
   const [q, setQ] = useState('');
@@ -51,7 +53,7 @@ export function CommandPalette({ open, onClose, actions, onAction }: CommandPale
   const items: { key: string; label: string; hint: string; icon: string; onPick: () => void }[] = pending
     ? [
       ...pending.viewIds.map(vid => ({ key: vid, label: store.get('views', vid)?.name ?? vid, hint: registry.pack(store.get('views', vid)?.notationId ?? '')?.name ?? '', icon: '◻', onPick: () => jumpToElement(pending, vid) })),
-      { key: '__back', label: '← Volver a los resultados', hint: '', icon: '', onPick: () => setPending(null) },
+      { key: '__back', label: t('← Volver a los resultados'), hint: '', icon: '', onPick: () => setPending(null) },
     ]
     : hits.map(h => ({ key: `${h.kind}:${h.id}`, label: h.label, hint: h.hint, icon: h.kind === 'action' ? '▸' : h.kind === 'view' ? '◻' : '●', onPick: () => choose(h) }));
 
@@ -64,10 +66,10 @@ export function CommandPalette({ open, onClose, actions, onAction }: CommandPale
 
   return (
     <div className="ad-cmdk-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="ad-cmdk" role="dialog" aria-modal="true" aria-label="Buscar" onKeyDown={onKey}>
-        <input ref={input} className="ad-cmdk__input" aria-label="Buscar elementos, vistas o acciones" placeholder={pending ? `«${pending.label}» aparece en… (elige una vista)` : 'Buscar elementos, vistas o acciones…'} value={q} onChange={e => setQ(e.target.value)} disabled={!!pending} />
+      <div className="ad-cmdk" role="dialog" aria-modal="true" aria-label={t('Buscar')} onKeyDown={onKey}>
+        <input ref={input} className="ad-cmdk__input" aria-label={t('Buscar elementos, vistas o acciones')} placeholder={pending ? t('«{name}» aparece en… (elige una vista)', { name: pending.label }) : t('Buscar elementos, vistas o acciones…')} value={q} onChange={e => setQ(e.target.value)} disabled={!!pending} />
         <div ref={list} className="ad-cmdk__list">
-          {items.length === 0 && <div className="ad-empty">Sin resultados para «{q}».</div>}
+          {items.length === 0 && <div className="ad-empty">{t('Sin resultados para «{q}».', { q })}</div>}
           {items.map((it, i) => (
             <button key={it.key} className={`ad-cmdk__item ${i === idx ? 'is-active' : ''}`} onMouseEnter={() => setIdx(i)} onClick={it.onPick}>
               <span className="ad-cmdk__icon">{it.icon}</span>
@@ -76,7 +78,7 @@ export function CommandPalette({ open, onClose, actions, onAction }: CommandPale
             </button>
           ))}
         </div>
-        <div className="ad-cmdk__foot">↑↓ moverse · Enter elegir · Esc cerrar</div>
+        <div className="ad-cmdk__foot">{t('↑↓ moverse · Enter elegir · Esc cerrar')}</div>
       </div>
     </div>
   );

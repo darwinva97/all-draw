@@ -82,7 +82,12 @@ pnpm gen:archimate              # regenera el pack desde _research/archi
 - **Manual de usuario** en `docs/manual/` (9 capítulos con capturas) y pasada de accesibilidad (diálogos con foco atrapado, etiquetas, contraste, `e2e/a11y.mjs`).
 
 ### Pendiente
-- Internacionalización (la interfaz es solo en español).
 - Desplegar el worker en Cloudflare y migrar datos (hoy la producción es el VPS con SQLite).
 - Herramienta de migración SQLite/Postgres → D1.
-- Etiquetar el input de título del inspector (aviso del script de accesibilidad).
+
+## Quinta tanda: internacionalización
+
+- Paquete `packages/i18n`: la clave es el texto en español; diccionario inglés en `src/en.ts` (~600 entradas, incluidos nombres de packs, tipos, categorías y viewpoints, que se aplican al crear el registro con `localizePack`). Selector de idioma en el inicio y en la barra del editor, persistido en `localStorage('alldraw:lang')`; por defecto el idioma del navegador. Test `keys.test.ts` que falla si aparece una clave `t('…')` sin traducción.
+- Detalles: título del inspector etiquetado; mensajes a uno mismo en secuencia (handle "self" en la cabecera de la línea de vida).
+- Los e2e fuerzan `locale: 'es-ES'`.
+- Los nombres ArchiMate se mantienen en inglés en ambos idiomas (así los nombra la especificación). Los valores que se guardan en el modelo (papeles sugeridos, nombres iniciales de capas y etapas) se crean en el idioma activo.

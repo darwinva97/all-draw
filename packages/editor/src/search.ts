@@ -4,6 +4,7 @@
  * su etiqueta. La interfaz decide qué hacer con cada resultado.
  */
 import { fieldText, normText, type Element, type NotationRegistry, type Store, type View } from '@all-draw/core';
+import { t } from '@all-draw/i18n';
 
 export type SearchHit =
   | { kind: 'element'; id: string; label: string; hint: string; score: number; element: Element; /** Vistas en las que aparece. */ viewIds: string[] }
@@ -54,7 +55,7 @@ export function searchWorkspace(store: Store, reg: NotationRegistry | undefined,
   if (!q) {
     // Sin consulta: acciones y vistas, para navegar rápido
     for (const a of actions) hits.push({ kind: 'action', id: a.id, label: a.label, hint: a.hint ?? '', score: 1, keywords: a.keywords });
-    for (const v of store.list('views')) hits.push({ kind: 'view', id: v.id, label: v.name || '(sin nombre)', hint: reg?.pack(v.notationId)?.name ?? v.notationId, score: v.id === opts.viewId ? 0 : 1, view: v });
+    for (const v of store.list('views')) hits.push({ kind: 'view', id: v.id, label: v.name || t('(sin nombre)'), hint: reg?.pack(v.notationId)?.name ?? v.notationId, score: v.id === opts.viewId ? 0 : 1, view: v });
     return hits.slice(0, limit);
   }
 
@@ -64,7 +65,7 @@ export function searchWorkspace(store: Store, reg: NotationRegistry | undefined,
   }
   for (const v of store.list('views')) {
     const s = Math.max(scoreText(q, v.name), scoreText(q, v.doc) * 0.6);
-    if (s) hits.push({ kind: 'view', id: v.id, label: v.name || '(sin nombre)', hint: `Vista · ${reg?.pack(v.notationId)?.name ?? v.notationId}`, score: s + 2, view: v });
+    if (s) hits.push({ kind: 'view', id: v.id, label: v.name || t('(sin nombre)'), hint: `${t('Vista')} · ${reg?.pack(v.notationId)?.name ?? v.notationId}`, score: s + 2, view: v });
   }
   const byElement = new Map<string, string[]>();
   for (const n of store.list('nodes')) if (n.elementId) { const l = byElement.get(n.elementId) ?? []; if (!l.includes(n.viewId)) l.push(n.viewId); byElement.set(n.elementId, l); }
@@ -75,8 +76,8 @@ export function searchWorkspace(store: Store, reg: NotationRegistry | undefined,
     if (!s) continue;
     const viewIds = byElement.get(e.id) ?? [];
     const typeName = reg?.elementType(e.typeId)?.name ?? e.typeId;
-    const where = viewIds.length === 0 ? 'sin vista' : viewIds.includes(opts.viewId ?? '') ? 'en esta vista' : `${viewIds.length} vista${viewIds.length === 1 ? '' : 's'}`;
-    hits.push({ kind: 'element', id: e.id, label: e.name || '(sin nombre)', hint: `${typeName} · ${where}`, score: s + (viewIds.includes(opts.viewId ?? '') ? 3 : 0), element: e, viewIds });
+    const where = viewIds.length === 0 ? t('sin vista') : viewIds.includes(opts.viewId ?? '') ? t('en esta vista') : viewIds.length === 1 ? t('1 vista') : t('{n} vistas', { n: viewIds.length });
+    hits.push({ kind: 'element', id: e.id, label: e.name || t('(sin nombre)'), hint: `${typeName} · ${where}`, score: s + (viewIds.includes(opts.viewId ?? '') ? 3 : 0), element: e, viewIds });
   }
   return hits.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label, 'es')).slice(0, limit);
 }

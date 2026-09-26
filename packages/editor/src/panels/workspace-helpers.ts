@@ -7,10 +7,11 @@ import type {
   Library, ElementType, FieldDef, FieldKind, Shape, Store, NotationRegistry, StyleRule, RuleSource, RuleOp, RuleStyle,
   Person, Assignment, Element, Condition,
 } from '@all-draw/core';
+import { t } from '@all-draw/i18n';
 
 export type AssignKind = Assignment['kind'];
 
-// ---------------------------------------------------------------- etiquetas (español)
+// ---------------------------------------------------------------- etiquetas (español; se traducen con `t()` al pintarlas)
 export const FIELD_KINDS: { id: FieldKind; label: string }[] = [
   { id: 'text', label: 'Texto' }, { id: 'textarea', label: 'Texto largo' }, { id: 'number', label: 'Número' },
   { id: 'select', label: 'Selección' }, { id: 'checkbox', label: 'Casilla' }, { id: 'url', label: 'URL' },
@@ -106,31 +107,31 @@ export function newFieldFromLabel(label: string, existing: FieldDef[] = [], kind
 }
 
 export function newElementType(lib: Pick<Library, 'id' | 'elementTypes'>, name: string): ElementType {
-  return { id: nextTypeId(lib, name), name: name.trim() || 'Tipo', category: 'Tipos de la librería', color: '#e2e8f0', shape: 'rounded', fields: [] };
+  return { id: nextTypeId(lib, name), name: name.trim() || t('Tipo'), category: t('Tipos de la librería'), color: '#e2e8f0', shape: 'rounded', fields: [] };
 }
 
 export function newLibrary(name: string): Library {
-  return { id: uniqueSlug(slugId('', name), [], 'lib') + '-' + newId().slice(0, 6), name: name.trim() || 'Librería', description: '', elementTypes: [], relationTypes: [], portTypes: [], notations: [] };
+  return { id: uniqueSlug(slugId('', name), [], 'lib') + '-' + newId().slice(0, 6), name: name.trim() || t('Librería'), description: '', elementTypes: [], relationTypes: [], portTypes: [], notations: [] };
 }
 
-export function newRule(name = 'Regla nueva'): StyleRule {
+export function newRule(name = t('Regla nueva')): StyleRule {
   return { id: newId('rule'), name, enabled: true, priority: 0, match: 'all', target: 'element', conditions: [], style: {}, viewId: null };
 }
 
 export function duplicateRule(r: StyleRule): StyleRule {
-  return { ...structuredClone(r), id: newId('rule'), name: `${r.name} (copia)` };
+  return { ...structuredClone(r), id: newId('rule'), name: t('{name} (copia)', { name: r.name }) };
 }
 
 export function newCondition(): Condition {
   return { source: 'name', op: 'contains', value: '' };
 }
 
-export function newPerson(name = 'Persona nueva'): Person {
+export function newPerson(name = t('Persona nueva')): Person {
   return { id: newId('p'), name, assignments: [] };
 }
 
 export function newAssignment(kind: AssignKind, targetId: string, role: string): Assignment {
-  return { id: newId('as'), kind, targetId, role: role.trim() || 'Participante' };
+  return { id: newId('as'), kind, targetId, role: role.trim() || t('Participante') };
 }
 
 /** Componente (plantilla) de una librería a partir de un tipo. */
@@ -181,9 +182,9 @@ export function assignmentTargets(store: Store, reg: NotationRegistry | undefine
   const byName = (a: TargetOption, b: TargetOption) => a.label.localeCompare(b.label, 'es');
   switch (kind) {
     case 'element':
-      return store.list('elements').filter(e => !e.template).map(e => ({ id: e.id, label: e.name || '(sin nombre)', hint: reg?.elementType(e.typeId)?.name ?? e.typeId })).sort(byName);
+      return store.list('elements').filter(e => !e.template).map(e => ({ id: e.id, label: e.name || t('(sin nombre)'), hint: reg?.elementType(e.typeId)?.name ?? e.typeId })).sort(byName);
     case 'view':
-      return store.list('views').map(v => ({ id: v.id, label: v.name || '(sin nombre)', hint: reg?.pack(v.notationId)?.name })).sort(byName);
+      return store.list('views').map(v => ({ id: v.id, label: v.name || t('(sin nombre)'), hint: reg?.pack(v.notationId)?.name })).sort(byName);
     case 'layer':
       return store.list('views').flatMap(v => (v.grid?.layers ?? []).map(l => ({ id: l.id, label: `${v.name} · ${l.name}` }))).sort(byName);
     case 'stage':

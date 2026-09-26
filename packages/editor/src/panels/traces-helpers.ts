@@ -6,6 +6,7 @@ import {
   BRIDGE_RELATIONS, suggestTraces, traceMatrix, traceGaps, relationFromSuggestion,
   type Command, type Element, type NotationRegistry, type Relation, type Store, type TraceGap, type TraceSuggestion,
 } from '@all-draw/core';
+import { t } from '@all-draw/i18n';
 
 const isBridge = (typeId: string): boolean => (BRIDGE_RELATIONS as readonly string[]).includes(typeId);
 
@@ -135,7 +136,7 @@ export function bestSuggestionsBatch(store: Store, reg: NotationRegistry, minSco
     seen.add(k);
     commands.push({ type: 'set', collection: 'relations', id: rel.id, value: rel });
   }
-  return commands.length ? { type: 'batch', label: `enlazar ${commands.length} trazas sugeridas`, commands } : null;
+  return commands.length ? { type: 'batch', label: t('enlazar {n} trazas sugeridas', { n: commands.length }), commands } : null;
 }
 
 /** Etiqueta corta de score: "100 %", "80 %"… */

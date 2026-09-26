@@ -72,6 +72,27 @@ describe('sequenceLayout', () => {
     expect(l.width).toBe(480 + 140 + 40);
     expect(sequenceLayout(new MemoryStore(emptyWorkspace()), 'nada')).toEqual({ lifelines: [], messages: [], height: 240, width: 40 });
   });
+  it('un mensaje a sí mismo (from === to) sale como self, con origen y destino en la misma x y ocupa el escalón', () => {
+    const store: Store = new MemoryStore(emptyWorkspace());
+    const view = makeView('Solo', { id: 'vw_self', notationId: 'sequence', kind: 'sequence' });
+    store.set('views', view.id, view);
+    const a = makeElement(SEQ_LIFELINE, 'A', { id: 'el_solo' }); store.set('elements', a.id, a);
+    const n = makeNode(view.id, a.id, { x: 100, y: 0, w: 140, h: 60 }, { id: 'vn_solo' }); store.set('nodes', n.id, n);
+    const r = makeRelation(SEQ_MESSAGE, { elementId: a.id }, { elementId: a.id }, { id: 'rel_self', fields: { order: 1, text: 'me llamo' } }); store.set('relations', r.id, r);
+    const e = makeEdge(view.id, r.id, n.id, n.id, { id: 've_self' }); store.set('edges', e.id, e);
+    const l = sequenceLayout(store, view.id);
+    expect(l.messages).toHaveLength(1);
+    const m = l.messages[0]!;
+    expect(m.self).toBe(true);
+    expect(m.fromLifelineId).toBe(n.id);
+    expect(m.toLifelineId).toBe(n.id);
+    expect(m.fromX).toBe(170);
+    expect(m.toX).toBe(170);
+    expect(m.y).toBe(100);
+    // El escalón (24 px) cuenta para el alto: 100 + 24 + 40 de margen < mínimo 240
+    expect(l.height).toBe(240);
+    expect(sequenceLayout(store, view.id, { minHeight: 0 }).height).toBe(164);
+  });
   it('respeta opciones de separación', () => {
     const { store, view } = fixture();
     const l = sequenceLayout(store, view.id, { headerH: 80, gapY: 30 });

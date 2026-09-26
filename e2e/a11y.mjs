@@ -16,13 +16,13 @@ import { chromium } from 'playwright-core';
 
 const base = process.env.BASE ?? 'http://127.0.0.1:4173';
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ locale: 'es-ES', viewport: { width: 1440, height: 900 } });
 const problems = [];
 const pending = [];
 const errors = [];
 // Fallos conocidos en ficheros que están cambiando otros agentes (Inspector.tsx): se listan como avisos,
 // no como fallos. Quitar de aquí cuando el inspector etiquete sus campos.
-const PENDING = [/campo sin etiqueta: <input class="ad-input ad-input--title"/, /campo sin etiqueta: <select class="ad-input">/];
+const PENDING = [/campo sin etiqueta: <select class="ad-input">/];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 
 /** Se ejecuta en la página: devuelve los fallos encontrados en el DOM visible. */

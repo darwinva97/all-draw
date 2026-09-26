@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
+import { setLang } from '@all-draw/i18n';
 import { MemoryStore, NotationRegistry, CORE_PACK, makeElement, makeView, makeRelation, type Library, type Person } from '@all-draw/core';
 import {
   nextTypeId, newFieldFromLabel, uniqueSlug, newElementType, newLibrary, newRule, duplicateRule, moveItem, withType, withoutType,
   typeUsage, libraryUsage, templateInstances, assignmentTargets, targetLabel, assignmentsTo, suggestedRoles, fieldKeys, clean, newTemplate,
   RULE_SOURCES, RULE_OPS, FIELD_KINDS, STYLE_PARTS, ROLES,
 } from '../src/panels/workspace-helpers';
+
+// Las etiquetas se comprueban en español; en Node `navigator.language` puede ser inglés.
+setLang('es');
 
 const lib = (extra: Partial<Library> = {}): Library => ({ id: 'acme', name: 'Acme', description: '', elementTypes: [], relationTypes: [], portTypes: [], notations: [], ...extra });
 

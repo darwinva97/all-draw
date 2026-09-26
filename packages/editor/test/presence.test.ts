@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { tIn } from '@all-draw/i18n';
 import { peersOf, remoteSelection, selectionSignature, throttle, initials, colorFor, type AwarenessLike } from '../src/presence';
 
 /** Awareness en memoria con la forma mínima que necesita el editor. */
@@ -20,7 +21,8 @@ describe('presencia', () => {
     const peers = peersOf(aw);
     expect(peers.map(p => p.clientId)).toEqual([2, 3]);
     expect(peers[0]).toMatchObject({ name: 'Ana', color: '#f00', viewId: 'v1', selection: ['n1'] });
-    expect(peers[1]!.name).toMatch(/^Invitado/);
+    // El nombre por defecto se traduce al idioma activo (el entorno de test puede detectar inglés)
+    expect([tIn('es', 'Invitado {n}', { n: 3 }), tIn('en', 'Invitado {n}', { n: 3 })]).toContain(peers[1]!.name);
     expect(peers[1]!.color).toBe(colorFor(3));
   });
   it('remoteSelection solo cuenta a los que están en la misma vista; selectionSignature ignora el cursor', () => {

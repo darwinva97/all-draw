@@ -3,6 +3,7 @@
  * componentes), reglas de estilo, personas y trazabilidad entre notaciones. Es un overlay a pantalla completa con pestañas.
  */
 import { useEffect, useState } from 'react';
+import { useT } from '@all-draw/i18n';
 import { LibrariesTab } from './WorkspaceLibraries';
 import { RulesTab } from './WorkspaceRules';
 import { PeopleTab } from './WorkspacePeople';
@@ -15,6 +16,7 @@ const TABS: { id: WorkspaceTab; label: string }[] = [
 ];
 
 export function WorkspacePanel({ open, onClose, initialTab = 'libraries' }: { open: boolean; onClose: () => void; initialTab?: WorkspaceTab }) {
+  const t = useT();
   const [tab, setTab] = useState<WorkspaceTab>(initialTab);
   useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
   useEffect(() => {
@@ -26,13 +28,13 @@ export function WorkspacePanel({ open, onClose, initialTab = 'libraries' }: { op
   if (!open) return null;
   return (
     <div className="ad-ws-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="ad-ws-dialog" role="dialog" aria-modal="true" aria-label="Espacio de trabajo">
+      <div className="ad-ws-dialog" role="dialog" aria-modal="true" aria-label={t('Espacio de trabajo')}>
         <header className="ad-ws-head">
-          <strong className="ad-ws-title">Espacio</strong>
+          <strong className="ad-ws-title">{t('Espacio')}</strong>
           <div className="ad-tabs ad-ws-tabs">
-            {TABS.map(t => <button key={t.id} className={tab === t.id ? 'is-active' : ''} onClick={() => setTab(t.id)}>{t.label}</button>)}
+            {TABS.map(tb => <button key={tb.id} className={tab === tb.id ? 'is-active' : ''} onClick={() => setTab(tb.id)}>{t(tb.label)}</button>)}
           </div>
-          <button className="ad-btn ad-btn--ghost ad-ws-close" onClick={onClose} title="Cerrar (Esc)" aria-label="Cerrar">×</button>
+          <button className="ad-btn ad-btn--ghost ad-ws-close" onClick={onClose} title={t('Cerrar (Esc)')} aria-label={t('Cerrar')}>×</button>
         </header>
         <div className="ad-ws-body">
           {tab === 'libraries' && <LibrariesTab />}

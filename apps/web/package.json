@@ -12,6 +12,7 @@
   "dependencies": {
     "@all-draw/core": "workspace:*",
     "@all-draw/editor": "workspace:*",
+    "@all-draw/i18n": "workspace:*",
     "@all-draw/io": "workspace:*",
     "@all-draw/layout": "workspace:*",
     "@all-draw/notation-archimate": "workspace:*",

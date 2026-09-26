@@ -8,7 +8,7 @@ import type { Node, Edge, FinalConnectionState } from '@xyflow/react';
 import { makeRelation, makeEdge, type Command, type ViewEdge, type ViewNode, type View } from '@all-draw/core';
 import { useEditor } from '../context';
 import { useCollection } from '../hooks';
-import { LIFELINE_DRAG_HANDLE } from './SequenceNodes';
+import { LIFELINE_DRAG_HANDLE, SELF_HANDLE } from './SequenceNodes';
 import {
   sequenceLayout, isLifelineNode, isActivationNode, isFragmentNode, lifelineOf, lifelineIndexAt, lifelineAtX, reorderLifeline,
   nextOrder, nextLifelineX, activationX, messageText,
@@ -96,9 +96,11 @@ export function useSequenceCanvas(view: View | undefined, versions: { nodes: unk
     if (!layout || !viewId || readOnly || !state.fromNode || !state.toNode) return false;
     const a = store.get('nodes', state.fromNode.id), b = store.get('nodes', state.toNode.id);
     if (!a?.elementId || !b?.elementId || !lifelineOf(store, a.id) || !lifelineOf(store, b.id)) return false;
+    // Mensaje a sí mismo (soltado en el manejador `self` de la cabecera): la altura se asigna sola, tras el último mensaje.
+    const self = state.toHandle?.id === SELF_HANDLE && lifelineOf(store, a.id)!.id === lifelineOf(store, b.id)!.id;
     const y = Math.max(SEQ_HEADER_H + 8, Math.round(state.to?.y ?? layout.height));
     const rel = makeRelation(SEQ_MESSAGE, { elementId: a.elementId }, { elementId: b.elementId }, { fields: { kind: 'sync', order: nextOrder(store, viewId), text: '' } });
-    run({ type: 'connect', relation: rel, edge: makeEdge(viewId, undefined, a.id, b.id, { bendpoints: [{ x: 0, y }] }) });
+    run({ type: 'connect', relation: rel, edge: makeEdge(viewId, undefined, a.id, b.id, self ? {} : { bendpoints: [{ x: 0, y }] }) });
     return true;
   }, [layout, viewId, readOnly, store, run]);
 

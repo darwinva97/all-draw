@@ -3,6 +3,7 @@ import { NodeResizer, type NodeProps, type Node } from '@xyflow/react';
 import type { ViewNode } from '@all-draw/core';
 import { useEditor } from '../context';
 import { InlineEdit } from './InlineEdit';
+import { useT } from '@all-draw/i18n';
 
 export type VisualNodeData = { node: ViewNode; remoteColor?: string };
 export type VisualRFNode = Node<VisualNodeData, 'visual'>;
@@ -10,6 +11,7 @@ export type VisualRFNode = Node<VisualNodeData, 'visual'>;
 /** Nodo sin elemento: nota, grupo, etiqueta, imagen, celda de rejilla. */
 export const VisualNode = memo(function VisualNode({ data, selected }: NodeProps<VisualRFNode>) {
   const { run, readOnly, renaming, setRenaming } = useEditor();
+  const t = useT();
   const vn = data.node;
   const kind = vn.visualType ?? 'core:note';
   const isGroup = kind === 'core:group' || kind === 'core:cell' || kind === 'core:header';
@@ -24,7 +26,7 @@ export const VisualNode = memo(function VisualNode({ data, selected }: NodeProps
   return (
     <div className={`ad-visual ad-visual--${kind.replace(':', '-')} ${selected ? 'is-selected' : ''}`} style={style}>
       {!readOnly && !fixed && <NodeResizer minWidth={40} minHeight={24} isVisible={selected && !editing} keepAspectRatio={isImage} lineClassName="ad-resizer__line" handleClassName="ad-resizer__handle" />}
-      {isImage && (src ? <img className="ad-visual__img" src={src} alt={vn.text ?? ''} draggable={false} /> : <div className="ad-visual__noimg">Sin imagen</div>)}
+      {isImage && (src ? <img className="ad-visual__img" src={src} alt={vn.text ?? ''} draggable={false} /> : <div className="ad-visual__noimg">{t('Sin imagen')}</div>)}
       {editing
         ? <InlineEdit value={vn.text ?? ''} onCommit={commit} onCancel={() => setRenaming(null)} multiline={kind === 'core:note'} />
         : (!isImage || vn.text) && <div className={isGroup ? 'ad-visual__title' : isImage ? 'ad-visual__caption' : 'ad-visual__text'} onDoubleClick={onTextDoubleClick}>{vn.text ?? ''}</div>}

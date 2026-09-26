@@ -2,7 +2,7 @@
 import { chromium } from 'playwright-core';
 const base = process.env.BASE ?? 'http://127.0.0.1:4002';
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
-const mk = async () => (await browser.newContext()).newPage();
+const mk = async () => (await browser.newContext({ locale: 'es-ES' })).newPage();
 const a = await mk();
 await a.goto(base + '/#/', { waitUntil: 'networkidle' });
 const email = `ro-${Date.now()}@test.local`;

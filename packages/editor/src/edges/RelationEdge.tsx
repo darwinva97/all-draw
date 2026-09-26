@@ -5,12 +5,14 @@ import { bendPath, type Pt } from './bendpath';
 import { resolveRelationStyle, type ArrowHead, type RuleStyle, type ViewEdge } from '@all-draw/core';
 import { useEditor } from '../context';
 import { useRecord, useCollection } from '../hooks';
+import { useT } from '@all-draw/i18n';
 
 export type RelationEdgeData = { edge: ViewEdge };
 export type RelationRFEdge = Edge<RelationEdgeData, 'relation'>;
 
 export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEdge>) {
   const { registry, run, readOnly, store, viewId, effectiveTheme } = useEditor();
+  const t = useT();
   const rf = useReactFlow();
   const ve = p.data!.edge;
   const rel = useRecord('relations', ve.relationId);
@@ -106,7 +108,7 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
               key={i}
               className={`ad-bend-handle nodrag nopan ${drag?.index === i ? 'is-dragging' : ''}`}
               style={{ transform: `translate(-50%,-50%) translate(${b.x}px,${b.y}px)` }}
-              title="Arrastrar para mover · doble clic para quitar"
+              title={t('Arrastrar para mover · doble clic para quitar')}
               onPointerDown={e => onHandleDown(e, i)}
               onDoubleClick={e => { e.stopPropagation(); removeBend(i); }}
             />

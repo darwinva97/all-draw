@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { setLang } from '@all-draw/i18n';
 import { MemoryStore, NotationRegistry, CORE_PACK, exampleWorkspace, parseWorkspace, makeElement, makeView, makeNode, type NotationPack } from '@all-draw/core';
 import { searchWorkspace, scoreText, elementTexts } from '../src/search';
+
+// Las etiquetas se comprueban en español; en Node `navigator.language` puede ser inglés.
+setLang('es');
 
 const FREEFORM: NotationPack = {
   id: 'freeform', name: 'Libre', categories: [], portTypes: [], viewpoints: [], relationTypes: [],

@@ -342,6 +342,8 @@ button.ad-tr-count { color: var(--ad-text); }
 .ad-canvas .react-flow__node.selected .ad-seq-lifeline__line { border-color: var(--ad-accent); }
 .ad-seq-handle.react-flow__handle { position: absolute; top: 60px; bottom: 0; left: 50%; width: 14px; height: auto; min-width: 0; min-height: 0; transform: translateX(-50%); border-radius: 7px; background: transparent; border: none; opacity: 1; cursor: crosshair; }
 .ad-seq-handle.react-flow__handle:hover, .ad-canvas .react-flow.connecting .ad-seq-handle.react-flow__handle { background: color-mix(in srgb, var(--ad-accent) 18%, transparent); }
+.ad-seq-handle--self.react-flow__handle { top: 4px; bottom: auto; left: auto; right: 4px; width: 12px; height: 12px; transform: none; border-radius: 50%; border: 1.5px dashed #6c8ebf; opacity: .55; }
+.ad-seq-handle--self.react-flow__handle:hover, .ad-canvas .react-flow.connecting .ad-seq-handle--self.react-flow__handle { opacity: 1; background: color-mix(in srgb, var(--ad-accent) 30%, transparent); }
 .ad-seq-activation { position: relative; box-sizing: border-box; width: 100%; height: 100%; border: 1px solid #6c8ebf; background: #fff; border-radius: 2px; }
 .ad-seq-activation .ad-seq-handle.react-flow__handle { top: 0; left: 0; width: 100%; transform: none; border-radius: 2px; }
 .ad-seq-activation.is-selected, .ad-canvas .react-flow__node.selected .ad-seq-activation { outline: 2px solid var(--ad-accent); outline-offset: 2px; }

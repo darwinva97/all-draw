@@ -9,6 +9,10 @@ import { useEditor } from '../context';
 import { useRecord } from '../hooks';
 import { InlineEdit } from '../nodes/InlineEdit';
 import { SEQ_HEADER_H } from './sequence';
+import { useT } from '@all-draw/i18n';
+
+/** Id del manejador de la cabecera que recibe mensajes a la propia línea de vida. */
+export const SELF_HANDLE = 'self';
 
 export type LifelineData = { node: ViewNode; /** Alto total del diagrama (la línea baja hasta ahí). */ height: number; remoteColor?: string };
 export type LifelineRFNode = Node<LifelineData, 'lifeline'>;
@@ -22,6 +26,7 @@ export const LIFELINE_DRAG_HANDLE = '.ad-seq-lifeline__head';
 
 export const LifelineNode = memo(function LifelineNode({ data, selected }: NodeProps<LifelineRFNode>) {
   const { run, readOnly, renaming, setRenaming } = useEditor();
+  const t = useT();
   const vn = data.node;
   const element = useRecord('elements', vn.elementId);
   const kind = String(element?.fields['kind'] ?? 'participant');
@@ -42,6 +47,8 @@ export const LifelineNode = memo(function LifelineNode({ data, selected }: NodeP
         {editing
           ? <InlineEdit value={element?.name ?? ''} onCommit={rename} onCancel={() => setRenaming(null)} />
           : <span className="ad-seq-lifeline__name" onDoubleClick={onDouble}>{label}</span>}
+        {/* React Flow no permite conectar un manejador consigo mismo: este segundo manejador recibe los mensajes a la propia línea de vida. */}
+        {!readOnly && <Handle type="target" position={Position.Top} id={SELF_HANDLE} className="ad-seq-handle ad-seq-handle--self" title={t('Soltar aquí para un mensaje a sí mismo')} />}
       </div>
       <div className="ad-seq-lifeline__line" />
       {/* Un solo manejador que cubre toda la línea: sirve para empezar y terminar mensajes (modo `loose`). */}

@@ -8,6 +8,7 @@ import { textInset, figureOf, showsIcon } from '@all-draw/notation-archimate';
 import { shapeStyle, ShapeSvg } from './shapes';
 import { ArchimateFigure } from './ArchimateFigure';
 import { InlineEdit } from './InlineEdit';
+import { useT } from '@all-draw/i18n';
 
 export type ElementNodeData = { node: ViewNode; dimmed?: boolean; /** Color de otro participante que lo tiene seleccionado. */ remoteColor?: string };
 export type ElementRFNode = Node<ElementNodeData, 'element'>;
@@ -15,6 +16,7 @@ export type ElementRFNode = Node<ElementNodeData, 'element'>;
 /** Nodo genérico: pinta cualquier elemento según su tipo (forma, color, icono), las reglas de estilo y sus puertos. */
 export const ElementNode = memo(function ElementNode({ data, selected }: NodeProps<ElementRFNode>) {
   const { registry, store, viewId, readOnly, run, renaming, setRenaming, effectiveTheme } = useEditor();
+  const t = useT();
   const vn = data.node;
   const element = useRecord('elements', vn.elementId);
   const type = element ? registry.elementType(element.typeId) : undefined;
@@ -80,7 +82,7 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
           ))}
         </div>
       )}
-      {vn.detailViewId && <span className="ad-node__drill" title="Tiene vista de detalle">⤵</span>}
+      {vn.detailViewId && <span className="ad-node__drill" title={t('Tiene vista de detalle')}>⤵</span>}
     </div>
   );
 });

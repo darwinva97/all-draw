@@ -3,6 +3,7 @@
  * forma de un `Awareness` de Yjs. La app le pasa el real; los tests pueden pasar uno en memoria.
  */
 import { useSyncExternalStore, useCallback, useRef } from 'react';
+import { t } from '@all-draw/i18n';
 
 export interface AwarenessLike {
   getStates(): Map<number, unknown>;
@@ -31,7 +32,7 @@ export function peersOf(aw: AwarenessLike): Peer[] {
   for (const [clientId, raw] of aw.getStates()) {
     if (clientId === aw.clientID || !raw || typeof raw !== 'object') continue;
     const s = raw as PresenceState;
-    out.push({ clientId, ...s, name: s.name || `Invitado ${clientId % 1000}`, color: s.color || colorFor(clientId) });
+    out.push({ clientId, ...s, name: s.name || t('Invitado {n}', { n: clientId % 1000 }), color: s.color || colorFor(clientId) });
   }
   return out.sort((a, b) => a.clientId - b.clientId);
 }

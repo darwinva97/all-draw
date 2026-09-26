@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
+import { useT } from '@all-draw/i18n';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -34,6 +35,7 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState(''); const [name, setName] = useState(''); const [password, setPassword] = useState('');
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const box = useDialog(onClose);
+  const t = useT();
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setErr('');
     try { if (mode === 'login') await api.login(email, password); else await api.register(email, name, password); onClose(); }
@@ -42,15 +44,15 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal" onClick={onClose}>
       <form ref={box} className="modal__box" role="dialog" aria-modal="true" aria-labelledby="auth-title" tabIndex={-1} onClick={e => e.stopPropagation()} onSubmit={submit}>
-        <h2 id="auth-title">{mode === 'login' ? 'Entrar' : 'Crear cuenta'}</h2>
-        <label className="field"><span>Correo</span><input type="email" name="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} autoFocus /></label>
-        {mode === 'register' && <label className="field"><span>Nombre</span><input name="name" autoComplete="name" required value={name} onChange={e => setName(e.target.value)} /></label>}
-        <label className="field"><span>Contraseña</span><input type="password" name="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={8} value={password} onChange={e => setPassword(e.target.value)} /></label>
+        <h2 id="auth-title">{mode === 'login' ? t('Entrar') : t('Crear cuenta')}</h2>
+        <label className="field"><span>{t('Correo')}</span><input type="email" name="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} autoFocus /></label>
+        {mode === 'register' && <label className="field"><span>{t('Nombre')}</span><input name="name" autoComplete="name" required value={name} onChange={e => setName(e.target.value)} /></label>}
+        <label className="field"><span>{t('Contraseña')}</span><input type="password" name="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={8} value={password} onChange={e => setPassword(e.target.value)} /></label>
         <div className="err" role="alert" aria-live="assertive">{err}</div>
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn btn--primary" disabled={busy} type="submit">{mode === 'login' ? 'Entrar' : 'Registrarme'}</button>
-          <button className="btn btn--ghost" type="button" onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'No tengo cuenta' : 'Ya tengo cuenta'}</button>
-          <span style={{ flex: 1 }} /><button className="btn btn--ghost" type="button" onClick={onClose}>Cerrar</button>
+          <button className="btn btn--primary" disabled={busy} type="submit">{mode === 'login' ? t('Entrar') : t('Registrarme')}</button>
+          <button className="btn btn--ghost" type="button" onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}>{mode === 'login' ? t('No tengo cuenta') : t('Ya tengo cuenta')}</button>
+          <span style={{ flex: 1 }} /><button className="btn btn--ghost" type="button" onClick={onClose}>{t('Cerrar')}</button>
         </div>
       </form>
     </div>

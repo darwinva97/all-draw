@@ -3,7 +3,7 @@ import { chromium } from 'playwright-core';
 const base = process.env.BASE ?? 'http://127.0.0.1:4002';
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
 const errors = [];
-const mk = async () => { const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 } }); const p = await ctx.newPage(); p.on('pageerror', e => errors.push(e.message)); return p; };
+const mk = async () => { const ctx = await browser.newContext({ locale: 'es-ES', viewport: { width: 1280, height: 820 } }); const p = await ctx.newPage(); p.on('pageerror', e => errors.push(e.message)); return p; };
 const a = await mk(), b = await mk();
 await a.goto(base + '/#/', { waitUntil: 'networkidle' });
 const email = `e2e-${Date.now()}@test.local`;

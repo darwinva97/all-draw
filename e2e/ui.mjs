@@ -2,7 +2,7 @@
 import { chromium } from 'playwright-core';
 const base = process.env.BASE ?? 'http://127.0.0.1:4173', out = process.env.OUT ?? '/tmp/shots';
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ locale: 'es-ES', viewport: { width: 1440, height: 900 } });
 const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 await page.goto(base + '/#/', { waitUntil: 'networkidle' });
 await page.getByRole('button', { name: /Abrir la demo/ }).click();

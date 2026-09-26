@@ -4,7 +4,7 @@ import { chromium } from 'playwright-core';
 const base = process.env.BASE ?? 'http://127.0.0.1:4193';
 const out = new URL('../docs/manual/img/', import.meta.url).pathname;
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
-const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const ctx = await browser.newContext({ locale: 'es-ES', viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
 const page = await ctx.newPage();
 const shot = (n) => page.screenshot({ path: `${out}/${n}.png` });
 const wait = (ms) => page.waitForTimeout(ms);

@@ -10,6 +10,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@all-draw/core": "workspace:*",
+    "@all-draw/editor": "workspace:*",
+    "@all-draw/io": "workspace:*",
+    "@all-draw/notation-archimate": "workspace:*",
+    "@all-draw/notation-bpmn": "workspace:*",
+    "@all-draw/notation-c4": "workspace:*",
+    "@all-draw/notation-freeform": "workspace:*",
+    "@all-draw/notation-grid": "workspace:*",
+    "@all-draw/notation-statechart": "workspace:*",
+    "@all-draw/sync": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

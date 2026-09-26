@@ -143,7 +143,9 @@ export function execute(store: Store, cmd: Command, origin = 'local'): Command {
 export class History {
   private undoStack: Command[] = [];
   private redoStack: Command[] = [];
-  constructor(private store: Store, public limit = 500) {}
+  private store: Store;
+  limit: number;
+  constructor(store: Store, limit = 500) { this.store = store; this.limit = limit; }
   run(cmd: Command): void {
     const inv = execute(this.store, cmd);
     this.undoStack.push(inv);

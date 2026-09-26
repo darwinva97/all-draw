@@ -17,3 +17,8 @@ export function roomFromHash(): string | null {
 export function connectRoom(doc: Y.Doc, room: string): RemoteConnection {
   return connectRemote(doc, { url: syncUrl(), room });
 }
+
+export function readOnlyFromHash(): boolean {
+  const q = location.hash.split('?')[1];
+  return !!q && new URLSearchParams(q).get('ro') === '1';
+}

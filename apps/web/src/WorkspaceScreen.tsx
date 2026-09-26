@@ -4,7 +4,7 @@ import { openLocalWorkspace, type LocalWorkspace } from '@all-draw/sync';
 import { exportWorkspace, importDrawer, importWorkspace } from '@all-draw/io';
 import { loadInto } from '@all-draw/core';
 import { createRegistry, bindLibraries } from './registry';
-import { connectRoom, roomFromHash } from './share';
+import { connectRoom, roomFromHash, readOnlyFromHash } from './share';
 import type { RemoteConnection } from '@all-draw/sync';
 
 export function WorkspaceScreen({ id, viewId }: { id: string; viewId: string | null }) {
@@ -22,7 +22,7 @@ export function WorkspaceScreen({ id, viewId }: { id: string; viewId: string | n
   if (!lw) return <div className="home">Abriendo…</div>;
   const initial = viewId ?? lw.store.meta().currentViewId ?? lw.store.list('views')[0]?.id ?? null;
   return (
-    <EditorProvider store={lw.store} history={lw.history} registry={registry} initialViewId={initial}>
+    <EditorProvider store={lw.store} history={lw.history} registry={registry} initialViewId={initial} readOnly={readOnlyFromHash()}>
       <Editor toolbarLeft={<LeftTools />} toolbarRight={<RightTools lw={lw} id={id} />} />
     </EditorProvider>
   );
@@ -64,7 +64,8 @@ function RightTools({ lw, id }: { lw: LocalWorkspace; id: string }) {
     location.hash = `${location.hash.split('?')[0]}?room=${encodeURIComponent(room)}`;
     location.reload();
   };
-  const copyLink = () => { navigator.clipboard?.writeText(location.href); };
+  const copyLink = (ro = false) => { const base = location.href.split('?')[0]; navigator.clipboard?.writeText(`${base}?room=${encodeURIComponent(wsId)}${ro ? '&ro=1' : ''}`); };
+  if (readOnlyFromHash()) return <span className="app-status">solo lectura · <a href={location.href.replace(/&ro=1/, '')}>editar</a></span>;
   const download = () => {
     const blob = new Blob([exportWorkspace(store.snapshot())], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${(meta.name || 'espacio').replace(/[^\w\-]+/g, '_')}.alldraw.json`; a.click(); URL.revokeObjectURL(a.href);
@@ -78,7 +79,8 @@ function RightTools({ lw, id }: { lw: LocalWorkspace; id: string }) {
   };
   return <>
     <span className="app-status" title={conn ? 'Sincronizado con el servidor: cualquiera con el enlace edita a la vez' : 'Solo en este navegador'}>{conn ? (status === 'connected' ? '● en línea' : status === 'connecting' ? '◌ conectando…' : '○ sin conexión (se sincroniza al volver)') : 'guardado en este navegador'}</span>
-    {conn && <button className="btn" onClick={copyLink} title="Copiar enlace para colaborar">Copiar enlace</button>}
+    {conn && <button className="btn" onClick={() => copyLink(false)} title="Copiar enlace para colaborar">Copiar enlace</button>}
+    {conn && <button className="btn" onClick={() => copyLink(true)} title="Enlace de solo lectura (la interfaz no deja editar; no es un permiso del servidor)">Enlace de lectura</button>}
     <button className={`btn ${conn ? '' : 'btn--primary'}`} onClick={share}>{conn ? 'Dejar de compartir' : 'Compartir en línea'}</button>
     <button className="btn" onClick={() => file.current?.click()} title="Sustituir por un fichero">Importar</button>
     <button className="btn" onClick={download} title="Descargar JSON">Exportar</button>

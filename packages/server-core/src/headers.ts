@@ -13,11 +13,20 @@ export interface SecurityHeaderOpts {
   host?: string | null;
 }
 
-export function contentSecurityPolicy(host?: string | null): string {
+/** Nonce por respuesta: Cloudflare (y otros proxies) lo copian a los scripts que inyectan (detección de bots), que si no violarían la CSP. */
+export function cspNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+export function contentSecurityPolicy(host?: string | null, nonce?: string): string {
   const ws = host ? ` ws://${host} wss://${host}` : ' ws: wss:';
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    `script-src 'self'${nonce ? ` 'nonce-${nonce}'` : ''}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
@@ -33,7 +42,7 @@ export function contentSecurityPolicy(host?: string | null): string {
 
 export function securityHeaders({ https, host }: SecurityHeaderOpts): Record<string, string> {
   const h: Record<string, string> = {
-    'content-security-policy': contentSecurityPolicy(host),
+    'content-security-policy': contentSecurityPolicy(host, cspNonce()),
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'strict-origin-when-cross-origin',
     'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',

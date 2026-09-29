@@ -4,7 +4,7 @@
  * `useSyncExternalStore` a través de los hooks de `hooks.ts`.
  */
 import { createContext, useContext, useMemo, useState, useCallback, useEffect, useRef, type ReactNode, type RefObject } from 'react';
-import type { Store, Command, NotationRegistry, Validator } from '@all-draw/core';
+import type { Store, Command, NotationRegistry, Validator, CommentAnchor } from '@all-draw/core';
 import type { AwarenessLike, PresenceMe } from './presence';
 import type { WorkspaceTab } from './panels/WorkspacePanel';
 
@@ -25,6 +25,16 @@ export interface CanvasApi {
   /** Da el foco al lienzo (para que reciba los atajos). */
   focus(): void;
 }
+
+/** Panel de comentarios: abierto, hilo destacado, ancla de un comentario nuevo en redacción y petición de "ir al ancla". */
+export interface CommentsState {
+  open: boolean;
+  threadId: string | null;
+  draft: CommentAnchor | null;
+  /** Crece cada vez que se pide centrar el lienzo en el hilo `threadId`. */
+  reveal: number;
+}
+export interface OpenCommentsOptions { threadId?: string | null; draft?: CommentAnchor | null; reveal?: boolean }
 
 export interface EditorCtx {
   store: Store;
@@ -59,6 +69,10 @@ export interface EditorCtx {
   workspaceTab: WorkspaceTab | null;
   openWorkspacePanel(tab?: WorkspaceTab): void;
   closeWorkspacePanel(): void;
+  /** Panel de comentarios. */
+  comments: CommentsState;
+  openComments(opts?: OpenCommentsOptions): void;
+  closeComments(): void;
 }
 
 const Ctx = createContext<EditorCtx | null>(null);
@@ -101,6 +115,7 @@ export function EditorProvider(props: EditorProviderProps) {
   const canvas = useRef<CanvasApi | null>(null);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab | null>(null);
   const viewId = trail[trail.length - 1] ?? null;
+  const [comments, setComments] = useState<CommentsState>({ open: false, threadId: null, draft: null, reveal: 0 });
 
   useEffect(() => { if (props.theme) setThemeState(props.theme); }, [props.theme]);
   useEffect(() => {
@@ -131,12 +146,20 @@ export function EditorProvider(props: EditorProviderProps) {
   const openWorkspacePanel = useCallback((tab: WorkspaceTab = 'libraries') => setWorkspaceTab(tab), []);
   const closeWorkspacePanel = useCallback(() => setWorkspaceTab(null), []);
   const effectiveTheme = theme === 'system' ? sys : theme;
+  const openComments = useCallback((o: OpenCommentsOptions = {}) => setComments(c => ({
+    open: true,
+    threadId: o.threadId !== undefined ? o.threadId : o.draft ? null : c.threadId,
+    draft: o.draft !== undefined ? o.draft : o.threadId ? null : c.draft,
+    reveal: o.reveal ? c.reveal + 1 : c.reveal,
+  })), []);
+  const closeComments = useCallback(() => setComments(c => ({ ...c, open: false, draft: null })), []);
 
   const value = useMemo<EditorCtx>(() => ({
     store: props.store, history: props.history, registry: props.registry, viewId, openView, back, trail,
     selection, select: setSelection, run, readOnly: !!props.readOnly, validators: props.validators ?? [],
     presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, setRenaming, canvas, workspaceTab, openWorkspacePanel, closeWorkspacePanel,
-  }), [props.store, props.history, props.registry, viewId, openView, back, trail, selection, run, props.readOnly, props.validators, presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel]);
+    comments, openComments, closeComments,
+  }), [props.store, props.history, props.registry, viewId, openView, back, trail, selection, run, props.readOnly, props.validators, presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel, comments, openComments, closeComments]);
 
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>;
 }

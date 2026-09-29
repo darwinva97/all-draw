@@ -144,7 +144,9 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
   /** Estado del registro para `GET /api/auth/config` y para `register`. */
   const registrationState = async (): Promise<'open' | 'invite' | 'closed'> => {
     const n = (await store.countUsers()) - ((await store.getUserByEmail(LEGACY_EMAIL)) ? 1 : 0);
-    if (n > 0 && !config.allowRegistration) return 'closed';
+    // Cerrado es cerrado también con cero usuarios: un despliegue nuevo con el registro cerrado no deja que
+    // cualquiera se haga administrador. Para crear el primero: abrir el registro, o `INVITE_CODE`, o importar.
+    if (!config.allowRegistration && (n > 0 || !config.inviteCode)) return 'closed';
     return config.inviteCode ? 'invite' : 'open';
   };
   const authorOf = async (m: SnapshotMeta) => {
@@ -187,7 +189,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
     if (!registerLimiter.check(`ip:${clientIp(c)}`)) throw fail(429, 'Demasiados registros desde esta dirección; espera un rato');
     // El usuario técnico de la migración heredada no cuenta: el primer humano es admin.
     const n = (await store.countUsers()) - ((await store.getUserByEmail(LEGACY_EMAIL)) ? 1 : 0);
-    if (n > 0 && !config.allowRegistration) throw fail(403, 'El registro está cerrado');
+    if (!config.allowRegistration && (n > 0 || !config.inviteCode)) throw fail(403, 'El registro está cerrado');
     if (config.inviteCode && !safeEqualString(body.inviteCode ?? '', config.inviteCode)) throw fail(403, 'Código de invitación incorrecto');
     if (await store.getUserByEmail(body.email)) throw fail(409, 'Ese email ya está registrado');
     const user = await store.createUser({ email: body.email, name: body.name, passwordHash: await hashPassword(body.password), isAdmin: n === 0 });

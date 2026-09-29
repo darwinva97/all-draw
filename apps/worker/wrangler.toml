@@ -1,5 +1,6 @@
-# all-draw en Cloudflare: Worker (API Hono + WebSocket) + D1 (cuentas, permisos) + Durable Objects (un doc Yjs por espacio)
-# + Assets (la app web compilada). Ver README.md para los pasos de despliegue.
+# all-draw en Cloudflare: Worker (API Hono + WebSocket) + Durable Objects con SQLite (RegistryDO: cuentas y
+# permisos; WorkspaceDO: un doc Yjs por espacio) + Assets (la app web compilada). D1 es opcional.
+# Ver README.md para los pasos de despliegue.
 name = "alldraw"
 main = "src/index.ts"
 compatibility_date = "2026-08-22"
@@ -11,26 +12,43 @@ compatibility_flags = ["nodejs_compat"]
 directory = "../web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api", "/api/*", "/healthz", "/ws/*"]
+run_worker_first = ["/", "/index.html", "/api", "/api/*", "/healthz", "/ws/*"]
 
-[[d1_databases]]
-binding = "DB"
-database_name = "alldraw"
-database_id = "REEMPLAZA-CON-EL-ID-DE-wrangler-d1-create"
-migrations_dir = "migrations"
+# D1 (opcional). Sin este bloque, el registro vive en el SQLite del Durable Object `RegistryDO` y no hace
+# falta crear ninguna base D1. Para usar D1 en su lugar:
+#   1. npx wrangler d1 create alldraw        (copia el id a database_id)
+#   2. descomenta el bloque
+#   3. pnpm --filter @all-draw/worker migrate   (= wrangler d1 migrations apply alldraw --remote)
+# Con `DB` presente el worker usa D1 y el RegistryDO queda sin uso (sus datos NO se copian solos).
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "alldraw"
+# database_id = "REEMPLAZA-CON-EL-ID-DE-wrangler-d1-create"
+# migrations_dir = "migrations"
 
 [[durable_objects.bindings]]
 name = "WORKSPACES"
 class_name = "WorkspaceDO"
 
+[[durable_objects.bindings]]
+name = "REGISTRY"
+class_name = "RegistryDO"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["WorkspaceDO"]
 
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["RegistryDO"]
+
 [vars]
-ALLOW_REGISTRATION = "true"
-# PUBLIC_URL = "https://alldraw.example.com"
+ALLOW_REGISTRATION = "false"
+PUBLIC_URL = "https://alldraw.darwin-sva-97.workers.dev"
+# Instancia del registro (RegistryDO). La "registry" original quedó con una cuenta de prueba el 29-09-2026.
+REGISTRY_NAME = "registry-2"
 # SESSION_SECRET: ponlo como secreto → `wrangler secret put SESSION_SECRET`
+# IMPORT_SECRET (opcional, sólo para migrar): `wrangler secret put IMPORT_SECRET`; bórralo después.
 
 [observability]
 enabled = true

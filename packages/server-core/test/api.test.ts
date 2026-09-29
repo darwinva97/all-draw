@@ -20,7 +20,7 @@ describe('API compartida (sin servidor Node)', () => {
     expect((await api.client(ok.body.token).post('/api/auth/logout')).status).toBe(204);
     expect((await api.client(ok.body.token).get('/api/auth/me')).status).toBe(401);
     const closed = makeApi({ allowRegistration: false });
-    expect((await closed.client().post('/api/auth/register', { email: 'x@example.com', name: 'x', password: 'contraseña-larga' })).status).toBe(201); // el primero siempre puede
+    expect((await closed.client().post('/api/auth/register', { email: 'x@example.com', name: 'x', password: 'contraseña-larga' })).status).toBe(403); // cerrado también sin usuarios
     expect((await closed.client().post('/api/auth/register', { email: 'y@example.com', name: 'y', password: 'contraseña-larga' })).status).toBe(403);
     await closed.close();
   });

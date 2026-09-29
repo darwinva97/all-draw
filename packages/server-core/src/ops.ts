@@ -5,7 +5,7 @@
  */
 import {
   CommandSchema, MemoryStore, Workspace as WorkspaceSchema, execute, loadInto, validate,
-  Library, Element, Relation, View, ViewNode, ViewEdge, Dimension, Person, StyleRule,
+  Library, Element, Relation, View, ViewNode, ViewEdge, Dimension, Person, StyleRule, Comment, SCHEMA_VERSION,
   type Collection, type Command, type Diagnostic, type Workspace, type WorkspaceMeta, type NotationRegistry,
 } from '@all-draw/core';
 import { renderSvg as renderSvgIo } from '@all-draw/io';
@@ -20,7 +20,7 @@ export class CommandError extends Error {
 type RecordSchema = { safeParse(v: unknown): { success: true; data: unknown } | { success: false; error: { issues: unknown[] } } };
 /** Esquema de registro por colección: `set` normaliza el valor (rellena `style: {}`, `bendpoints: []`, …). */
 const RECORD_SCHEMAS: Record<Collection, RecordSchema> =
-  { libraries: Library, elements: Element, relations: Relation, views: View, nodes: ViewNode, edges: ViewEdge, dimensions: Dimension, people: Person, rules: StyleRule };
+  { libraries: Library, elements: Element, relations: Relation, views: View, nodes: ViewNode, edges: ViewEdge, dimensions: Dimension, people: Person, rules: StyleRule, comments: Comment };
 
 export function normalizeCommand(cmd: Command): Command {
   switch (cmd.type) {
@@ -52,7 +52,7 @@ export const opSnapshot = (s: YjsStore): Workspace => s.snapshot();
 
 export function opInit(s: YjsStore, name: string, initial: Workspace | null): void {
   if (initial) loadInto(s, { ...initial, meta: { ...initial.meta, name } });
-  else s.setMeta({ name, createdAt: new Date().toISOString(), schemaVersion: 1 });
+  else s.setMeta({ name, createdAt: new Date().toISOString(), schemaVersion: SCHEMA_VERSION });
 }
 
 export function opReplace(s: YjsStore, ws: Workspace): void { loadInto(s, ws); }

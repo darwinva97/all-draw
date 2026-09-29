@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { newId } from './ids';
 import { COLLECTIONS, Element as ElementSchema, Relation as RelationSchema, ViewEdge as ViewEdgeSchema, ViewNode as ViewNodeSchema } from './model';
-import type { Collection, Element, Relation, View, ViewEdge, ViewNode, RecordOf } from './model';
+import type { Collection, Comment, CommentAnchor, Element, Relation, View, ViewEdge, ViewNode, RecordOf } from './model';
 import type { Store } from './store';
 
 export type Command =
@@ -78,6 +78,8 @@ export function expand(store: Store, cmd: Command): Command[] {
       while (grew) { grew = false; for (const n of nodes) if (n.parentNodeId && doomed.has(n.parentNodeId) && !doomed.has(n.id)) { doomed.add(n.id); grew = true; } }
       for (const e of store.list('edges')) if (doomed.has(e.fromNodeId) || doomed.has(e.toNodeId)) out.push({ type: 'delete', collection: 'edges', id: e.id });
       for (const id of doomed) out.push({ type: 'delete', collection: 'nodes', id });
+      const doomedEdges = new Set(out.map(c => (c.type === 'delete' && c.collection === 'edges' ? c.id : '')));
+      out.push(...reanchorComments(store, a => (a.kind === 'node' && doomed.has(a.id ?? '')) || (a.kind === 'edge' && doomedEdges.has(a.id ?? '')), a => viewAnchor(store, a.viewId ?? (a.kind === 'node' ? store.get('nodes', a.id!)?.viewId : store.get('edges', a.id!)?.viewId))));
       return out;
     }
     case 'deleteRelation': {
@@ -85,6 +87,8 @@ export function expand(store: Store, cmd: Command): Command[] {
       for (const e of store.list('edges')) if (e.relationId === cmd.id) out.push({ type: 'delete', collection: 'edges', id: e.id });
       for (const r of store.list('relations')) if (r.from.relationId === cmd.id || r.to.relationId === cmd.id) out.push(...expand(store, { type: 'deleteRelation', id: r.id }));
       out.push({ type: 'delete', collection: 'relations', id: cmd.id });
+      out.push(...reanchorComments(store, a => (a.kind === 'relation' && a.id === cmd.id) || (a.kind === 'edge' && out.some(c => c.type === 'delete' && c.collection === 'edges' && c.id === a.id)),
+        a => viewAnchor(store, a.viewId ?? (a.kind === 'edge' ? store.get('edges', a.id!)?.viewId : edgesOfRelationIn(store, cmd.id)))));
       return out;
     }
     case 'deleteElement': {
@@ -93,7 +97,8 @@ export function expand(store: Store, cmd: Command): Command[] {
       for (const r of store.list('relations')) if (r.from.elementId === cmd.id || r.to.elementId === cmd.id) out.push(...expand(store, { type: 'deleteRelation', id: r.id }));
       for (const v of store.list('views')) if (v.rootElementId === cmd.id) out.push({ type: 'patch', collection: 'views', id: v.id, patch: { rootElementId: undefined } });
       out.push({ type: 'delete', collection: 'elements', id: cmd.id });
-      return dedupe(out);
+      out.push(...reanchorComments(store, a => a.kind === 'element' && a.id === cmd.id, a => viewAnchor(store, a.viewId ?? store.list('nodes').find(n => n.elementId === cmd.id)?.viewId)));
+      return dedupeComments(dedupe(out));
     }
     case 'deleteView': {
       const out: Command[] = [];
@@ -101,6 +106,10 @@ export function expand(store: Store, cmd: Command): Command[] {
       for (const n of store.list('nodes')) if (n.viewId === cmd.id) out.push({ type: 'delete', collection: 'nodes', id: n.id });
       for (const n of store.list('nodes')) if (n.detailViewId === cmd.id && n.viewId !== cmd.id) out.push({ type: 'patch', collection: 'nodes', id: n.id, patch: { detailViewId: undefined } });
       out.push({ type: 'delete', collection: 'views', id: cmd.id });
+      // Hilos de la vista (o de sus nodos/aristas): se conservan sin vista.
+      const inView = (a: CommentAnchor) => a.viewId === cmd.id || (a.kind === 'view' && a.id === cmd.id)
+        || (a.kind === 'node' && store.get('nodes', a.id ?? '')?.viewId === cmd.id) || (a.kind === 'edge' && store.get('edges', a.id ?? '')?.viewId === cmd.id);
+      out.push(...reanchorComments(store, inView, () => ({ kind: 'view' })));
       return out;
     }
     case 'moveNodes':
@@ -115,6 +124,30 @@ export function expand(store: Store, cmd: Command): Command[] {
     default:
       return [cmd];
   }
+}
+
+// ---------------------------------------------------------------- comentarios: reanclaje al borrar
+/** Ancla de vista (o de vista desaparecida, sin id, si la vista no existe). */
+function viewAnchor(store: Store, viewId: string | undefined): CommentAnchor {
+  return viewId && store.get('views', viewId) ? { kind: 'view', id: viewId, viewId } : { kind: 'view' };
+}
+function edgesOfRelationIn(store: Store, relationId: string): string | undefined {
+  return store.list('edges').find(e => e.relationId === relationId)?.viewId;
+}
+/**
+ * Comentarios cuyo ancla cumple `match` pasan a `to(ancla)`: los hilos no se pierden al borrar lo
+ * que comentaban. Se reemplaza el registro entero (`set`) porque `patch` fusionaría el ancla vieja.
+ */
+function reanchorComments(store: Store, match: (a: CommentAnchor) => boolean, to: (a: CommentAnchor) => CommentAnchor): Command[] {
+  const out: Command[] = [];
+  for (const c of store.list('comments')) if (match(c.anchor)) out.push({ type: 'set', collection: 'comments', id: c.id, value: { ...c, anchor: to(c.anchor) } });
+  return out;
+}
+/** Un solo reanclaje por comentario (el último gana: el del borrado más general). */
+function dedupeComments(cmds: Command[]): Command[] {
+  const last = new Map<string, number>();
+  cmds.forEach((c, i) => { if (c.type === 'set' && c.collection === 'comments') last.set(c.id, i); });
+  return cmds.filter((c, i) => !(c.type === 'set' && c.collection === 'comments') || last.get(c.id) === i);
 }
 
 function dedupe(cmds: Command[]): Command[] {
@@ -206,3 +239,8 @@ export function makeEdge(viewId: string, relationId: string | undefined, fromNod
   return { id: newId('ve'), viewId, relationId, fromNodeId, toNodeId, bendpoints: [], style: {}, ...extra };
 }
 export type { RecordOf };
+/** Comentario nuevo. Sin `threadId` abre un hilo (el hilo toma el id del primer comentario). */
+export function makeComment(anchor: CommentAnchor, author: Comment['author'], text: string, extra: Partial<Comment> = {}): Comment {
+  const id = extra.id ?? newId('cm');
+  return { id, threadId: id, anchor, author, text, mentions: [], createdAt: new Date().toISOString(), ...extra };
+}

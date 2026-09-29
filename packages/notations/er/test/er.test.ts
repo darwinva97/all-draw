@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { NotationRegistry, CORE_PACK, ElementType, RelationType, derivePorts, compatibleRelationTypes } from '@all-draw/core';
-import { ER_PACK, ONE_TO_ONE, ONE_TO_MANY, MANY_TO_MANY, INHERITS, HAS } from '../src';
+import { NotationRegistry, CORE_PACK, ElementType, RelationType, ArrowHead, derivePorts, compatibleRelationTypes } from '@all-draw/core';
+import { ER_PACK, ONE_TO_ONE, ONE_TO_MANY, MANY_TO_MANY, INHERITS, HAS, CARDINALITIES } from '../src';
 
 const reg = () => new NotationRegistry().register(ER_PACK);
 
@@ -28,13 +28,25 @@ describe('pack er', () => {
     expect(compatibleRelationTypes(ER_PACK.portRules!, 'er:attribute', 'er:attribute')).toEqual([ONE_TO_ONE, ONE_TO_MANY, MANY_TO_MANY]);
   });
 
-  it('cabezas: circle/arrow para cardinalidad, triangle para herencia (sin pata de gallo)', () => {
+  it('cabezas de pata de gallo por tipo, triangle para herencia', () => {
     const r = reg();
-    expect(r.relationType(ONE_TO_ONE)).toMatchObject({ sourceHead: 'circle', targetHead: 'circle' });
-    expect(r.relationType(ONE_TO_MANY)).toMatchObject({ sourceHead: 'circle', targetHead: 'arrow' });
-    expect(r.relationType(MANY_TO_MANY)).toMatchObject({ sourceHead: 'arrow', targetHead: 'arrow' });
+    expect(r.relationType(ONE_TO_ONE)).toMatchObject({ sourceHead: 'only-one', targetHead: 'only-one' });
+    expect(r.relationType(ONE_TO_MANY)).toMatchObject({ sourceHead: 'only-one', targetHead: 'one-or-many' });
+    expect(r.relationType(MANY_TO_MANY)).toMatchObject({ sourceHead: 'one-or-many', targetHead: 'one-or-many' });
     expect(r.relationType(INHERITS)).toMatchObject({ targetHead: 'triangle' });
     expect(r.relationType(ONE_TO_MANY)?.fields.map(f => f.key)).toEqual(['sourceCard', 'targetCard', 'identifying', 'onDelete']);
+    expect(ER_PACK.doc).not.toMatch(/falta/);
+  });
+
+  it('sourceCard/targetCard: select con las seis cardinalidades, cada una una cabeza IE válida', () => {
+    const f = reg().relationType(ONE_TO_MANY)!.fields;
+    for (const key of ['sourceCard', 'targetCard']) {
+      const def = f.find(d => d.key === key)!;
+      expect(def.kind).toBe('select');
+      expect(def.options!.split(',')).toEqual(['1', '1..1', '0..1', '*', '1..*', '0..*']);
+    }
+    expect(Object.values(CARDINALITIES)).toEqual(['one', 'only-one', 'zero-or-one', 'many', 'one-or-many', 'zero-or-many']);
+    for (const h of Object.values(CARDINALITIES)) expect(ArrowHead.safeParse(h).success).toBe(true);
   });
 
   it('matriz: entidad con entidad; atributos y vistas por Has', () => {

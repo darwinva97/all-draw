@@ -1,20 +1,23 @@
 /**
- * **Mermaid**: `exportMermaid(ws, viewId)` escribe `flowchart` (vistas freeform/archimate/c4/grid…) o `stateDiagram-v2`
- * (vistas `statechart`); `importMermaid(text)` lee `flowchart`/`graph` y `stateDiagram(-v2)` básicos.
+ * **Mermaid**: `exportMermaid(ws, viewId)` escribe `flowchart` (vistas freeform/archimate/c4/grid…), `stateDiagram-v2`
+ * (vistas `statechart`) o `erDiagram` (vistas `er`); `importMermaid(text)` lee `flowchart`/`graph` y `stateDiagram(-v2)` básicos.
  *
  * Export flowchart: cada nodo con su forma (`[ ]`, `( )`, `(( ))`, `{ }`, `{{ }}`, `[/ /]`, `[( )]`, `((( )))`), los contenedores
  * (nodos con hijos o grupos) como `subgraph`, y en rejilla un `subgraph` por capa. Aristas `-->`, `-.->`, `---`, `<-->` con etiqueta.
  * Export stateDiagram-v2: `[*] -->` desde los iniciales, `--> [*]` a los finales, `state X { … }` para compuestos, `--` entre regiones
  * paralelas, `<<choice>>`/`<<fork>>`/`<<join>>`, etiquetas `evento [guarda] / acciones`.
+ * Export erDiagram: entidades (y vistas de BD) con sus atributos (`tipo nombre PK`), relaciones con la cardinalidad de pata
+ * de gallo de cada extremo (`||--o{`…, la misma que dibuja el editor: tipo + `sourceCard`/`targetCard`), `..` si la línea es discontinua.
  * Import: nodos, aristas con etiqueta y `subgraph` → elementos `freeform:*` (o `statechart:*`) en una vista con layout por niveles.
  */
-import { parseWorkspace, type Workspace, type Element, type ElementType, type ViewNode, type ViewEdge, type Shape } from '@all-draw/core';
+import { parseWorkspace, type Workspace, type Element, type ElementType, type ViewNode, type ViewEdge, type Shape, type ArrowHead, type Relation } from '@all-draw/core';
 import { FREEFORM_PACK } from '@all-draw/notation-freeform';
 import { ARCHIMATE_PACK } from '@all-draw/notation-archimate';
 import { C4_PACK } from '@all-draw/notation-c4';
 import { STATECHART_PACK } from '@all-draw/notation-statechart';
 import { emptyWs, makeEl, makeRel, type TextExport } from './archimate';
 import { transitionLabel } from './xstate';
+import { cardToHead } from './svg';
 
 export interface MermaidImport { workspace: Workspace; warnings: string[] }
 export const MERMAID_VIEW_ID = 'view_mermaid';
@@ -113,6 +116,9 @@ export function exportMermaid(ws: Workspace, viewId: string): TextExport {
     return { text: out.join('\n') + '\n', warnings };
   }
 
+  const isEr = view.notationId === 'er' || nodes.some(n => elOf(n)?.typeId.startsWith('er:'));
+  if (isEr) return exportErDiagram(ws, nodes, edges, warnings);
+
   out.push('flowchart TD');
   const writeNode = (n: ViewNode, indent: string) => {
     const id = mid(n.id), label = labelOf(n);
@@ -151,6 +157,109 @@ export function exportMermaid(ws: Workspace, viewId: string): TextExport {
     const tail = th === 'none' && sh === 'none' ? (line === 'solid' ? '---' : '-.-') : line === 'solid' ? '-->' : '-.->';
     const arrow = `${sh !== 'none' && th !== 'none' ? '<' : ''}${tail}${label ? `|${q(label)}|` : ''}`;
     out.push(`    ${mid(e.fromNodeId)} ${arrow} ${mid(e.toNodeId)}`);
+  }
+  return { text: out.join('\n') + '\n', warnings };
+}
+
+// ---------------------------------------------------------------- Entidad-relación
+/**
+ * Cabezas de los tipos del pack `er` (io no depende del pack; réplica de `packages/notations/er`).
+ * Sus campos `sourceCard`/`targetCard` son select y sustituyen la cabeza del extremo.
+ */
+export const ER_RELATION_HEADS: Record<string, { sourceHead: ArrowHead; targetHead: ArrowHead }> = {
+  'er:OneToOne': { sourceHead: 'only-one', targetHead: 'only-one' },
+  'er:OneToMany': { sourceHead: 'only-one', targetHead: 'one-or-many' },
+  'er:ManyToMany': { sourceHead: 'one-or-many', targetHead: 'one-or-many' },
+  'er:Inherits': { sourceHead: 'none', targetHead: 'triangle' },
+  'er:Has': { sourceHead: 'none', targetHead: 'none' },
+};
+
+/** Cabezas efectivas de una arista sin registro: estilo de la arista > cardinalidad ER > tipo (librería o pack conocido). */
+export function edgeHeads(ws: Workspace, e: ViewEdge, rel: Relation | undefined, type?: { sourceHead?: ArrowHead; targetHead?: ArrowHead }): { sourceHead: ArrowHead; targetHead: ArrowHead } {
+  const er = rel ? ER_RELATION_HEADS[rel.typeId] : undefined;
+  const card = (k: 'sourceCard' | 'targetCard') => (er && rel ? cardToHead(rel.fields[k]) : undefined);
+  const t = type ?? (rel ? libRelType(ws, rel.typeId) ?? relTypeStyle(rel.typeId) : undefined) ?? er;
+  return {
+    sourceHead: e.style.sourceHead ?? card('sourceCard') ?? t?.sourceHead ?? 'none',
+    targetHead: e.style.targetHead ?? card('targetCard') ?? t?.targetHead ?? 'arrow',
+  };
+}
+function libRelType(ws: Workspace, typeId: string) {
+  for (const lib of Object.values(ws.libraries)) { const t = lib.relationTypes.find(r => r.id === typeId); if (t) return t; }
+  return undefined;
+}
+
+/** Marcador Mermaid de un extremo: `left` es el del origen (`||`, `|o`, `}|`, `}o`), el destino va espejado. */
+const ER_LEFT: Partial<Record<ArrowHead, string>> = { one: '||', 'only-one': '||', 'zero-or-one': '|o', many: '}o', 'one-or-many': '}|', 'zero-or-many': '}o' };
+const mirror = (m: string) => m.split('').reverse().map(c => (c === '}' ? '{' : c)).join('');
+export function erMarker(head: ArrowHead, side: 'left' | 'right'): string {
+  const m = ER_LEFT[head] ?? '||';
+  return side === 'left' ? m : mirror(m);
+}
+
+function exportErDiagram(ws: Workspace, nodes: ViewNode[], edges: ViewEdge[], warnings: string[]): TextExport {
+  const out = ['erDiagram'];
+  const taken = new Set<string>();
+  const names = new Map<string, string>();       // elementId → nombre de entidad Mermaid
+  const word = (s: string, fallback: string) => s.normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '') || fallback;
+  const nameOf = (el: Element): string => {
+    const cached = names.get(el.id); if (cached) return cached;
+    let base = word(el.name, word(el.id, 'Entidad'));
+    if (!/^[\p{L}_]/u.test(base)) base = `E_${base}`;
+    let n = base, i = 2;
+    while (taken.has(n)) n = `${base}_${i++}`;
+    taken.add(n); names.set(el.id, n);
+    return n;
+  };
+  const seen = new Set<string>();
+  const entities: Element[] = [];
+  for (const n of nodes) {
+    const el = n.elementId ? ws.elements[n.elementId] : undefined;
+    if (!el || seen.has(el.id)) continue;
+    seen.add(el.id);
+    if (el.typeId === 'er:Attribute') continue;
+    if (!el.typeId.startsWith('er:')) warnings.push(`"${el.name || el.id}" no es de la notación ER; se exporta como entidad`);
+    entities.push(el);
+  }
+  // Atributos sueltos (estilo Chen) unidos con er:Has a su entidad
+  const chen = new Map<string, { type: string; name: string; key?: string }[]>();
+  const isShown = (id: string | undefined) => !!id && seen.has(id);
+  for (const e of edges) {
+    const rel = e.relationId ? ws.relations[e.relationId] : undefined;
+    if (!rel || rel.typeId !== 'er:Has') continue;
+    const a = rel.from.elementId ? ws.elements[rel.from.elementId] : undefined, b = rel.to.elementId ? ws.elements[rel.to.elementId] : undefined;
+    const [ent, attr] = a?.typeId === 'er:Attribute' ? [b, a] : [a, b];
+    if (!ent || attr?.typeId !== 'er:Attribute') continue;
+    const key = typeof attr.fields['key'] === 'string' ? ({ pk: 'PK', fk: 'FK', unique: 'UK' } as Record<string, string>)[attr.fields['key'] as string] : undefined;
+    const list = chen.get(ent.id) ?? [];
+    list.push({ type: String(attr.fields['type'] ?? '') || 'string', name: attr.name || attr.id, key });
+    chen.set(ent.id, list);
+  }
+  for (const el of entities) {
+    const pk = new Set(Array.isArray(el.fields['pk']) ? (el.fields['pk'] as unknown[]).map(String) : []);
+    const attrs: { type: string; name: string; key?: string }[] = [];
+    const kv = el.fields['attributes'];
+    if (Array.isArray(kv)) for (const a of kv as { key?: unknown; value?: unknown }[]) {
+      const name = String(a?.key ?? '').trim(); if (!name) continue;
+      attrs.push({ type: String(a?.value ?? '').trim() || 'string', name, key: pk.has(name) ? 'PK' : undefined });
+    }
+    attrs.push(...(chen.get(el.id) ?? []));
+    const id = nameOf(el);
+    if (!attrs.length) { out.push(`    ${id}`); continue; }
+    out.push(`    ${id} {`);
+    for (const a of attrs) out.push(`        ${a.type.replace(/[^\p{L}\p{N}_()[\]-]+/gu, '_').replace(/^(?=[^\p{L}])/u, 't')} ${word(a.name, 'attr')}${a.key ? ` ${a.key}` : ''}`);
+    out.push('    }');
+  }
+  for (const e of edges) {
+    const rel = e.relationId ? ws.relations[e.relationId] : undefined;
+    if (rel?.typeId === 'er:Has' && [rel.from.elementId, rel.to.elementId].some(id => id && ws.elements[id]?.typeId === 'er:Attribute')) continue;
+    const a = nodes.find(n => n.id === e.fromNodeId)?.elementId, b = nodes.find(n => n.id === e.toNodeId)?.elementId;
+    if (!isShown(a) || !isShown(b) || ws.elements[a!]!.typeId === 'er:Attribute' || ws.elements[b!]!.typeId === 'er:Attribute') continue;
+    const { sourceHead, targetHead } = edgeHeads(ws, e, rel);
+    if (!ER_LEFT[sourceHead] && !ER_LEFT[targetHead]) warnings.push(`La arista ${e.id}${rel ? ` (${rel.typeId})` : ''} no tiene cardinalidad; se exporta como ||--||`);
+    const line = e.style.line ?? (rel ? libRelType(ws, rel.typeId)?.line : undefined) ?? 'solid';
+    const label = e.label ?? rel?.name ?? '';
+    out.push(`    ${nameOf(ws.elements[a!]!)} ${erMarker(sourceHead, 'left')}${line === 'solid' ? '--' : '..'}${erMarker(targetHead, 'right')} ${nameOf(ws.elements[b!]!)} : ${q(label)}`);
   }
   return { text: out.join('\n') + '\n', warnings };
 }

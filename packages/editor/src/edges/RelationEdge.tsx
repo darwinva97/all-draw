@@ -2,6 +2,7 @@ import { memo, useState, useCallback, useMemo, type PointerEvent as ReactPointer
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, useInternalNode, useReactFlow, type EdgeProps, type Edge } from '@xyflow/react';
 import { floatingEndpoints } from './floating';
 import { bendPath, type Pt } from './bendpath';
+import { cardEnds, endDirection, endLabel, END_KEYS, type EndLabel, type Side } from './cardinality';
 import { resolveRelationStyle, type ArrowHead, type RuleStyle, type ViewEdge } from '@all-draw/core';
 import { useEditor } from '../context';
 import { useRecord, useCollection } from '../hooks';
@@ -23,8 +24,10 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
   const line = rule.borderStyle ?? ve.style.line ?? type?.line ?? 'solid';
   const color = rule.border ?? rule.bg ?? ve.style.color ?? type?.color ?? (effectiveTheme === 'dark' ? '#9aa3b2' : '#444');
   const width = rule.borderWidth ?? ve.style.width ?? 1.5;
-  const sh = ve.style.sourceHead ?? type?.sourceHead ?? 'none';
-  const th = ve.style.targetHead ?? type?.targetHead ?? 'arrow';
+  // Cardinalidades: un campo select `sourceCard`/`targetCard` (ER) sustituye la cabeza del tipo; uno de texto (UML) se rotula.
+  const ends = useMemo(() => cardEnds(rel?.fields, type?.fields), [rel?.fields, type?.fields]);
+  const sh = ve.style.sourceHead ?? ends.sourceHead ?? type?.sourceHead ?? 'none';
+  const th = ve.style.targetHead ?? ends.targetHead ?? type?.targetHead ?? 'arrow';
   const router = ve.style.router ?? 'smoothstep';
   const sn = useInternalNode(p.source), tn = useInternalNode(p.target);
   const floating = !ve.fromPortId && !ve.toPortId && sn && tn;
@@ -76,10 +79,10 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
     run({ type: 'patch', collection: 'edges', id: ve.id, patch: { bendpoints: ve.bendpoints.filter((_, i) => i !== index) } });
   }, [readOnly, run, ve]);
 
-  const fieldLabel = rel && type ? type.fields.filter(f => ['text', 'select'].includes(f.kind)).map(f => rel.fields[f.key]).filter(v => typeof v === 'string' && v.trim()).join(' · ') : '';
+  const fieldLabel = rel && type ? type.fields.filter(f => ['text', 'select'].includes(f.kind) && !END_KEYS.has(f.key)).map(f => rel.fields[f.key]).filter(v => typeof v === 'string' && v.trim()).join(' · ') : '';
   const label = ve.label ?? (rel?.name || fieldLabel);
   const dash = line === 'dashed' ? '8 5' : line === 'dotted' ? '2 4' : undefined;
-  const ms = markerId(sh, color), mt = markerId(th, color);
+  const ms = markerId(sh, color, true), mt = markerId(th, color, false);
   const mappings = rel?.mappings.length ? rel.mappings.map(m => `${m.fromPath} → ${m.toPath}`).join('\n') : '';
   const labelStyle: React.CSSProperties = { transform: `translate(-50%,-50%) translate(${lx}px,${ly}px)` };
   if (rule.bg) labelStyle.background = rule.bg;
@@ -88,10 +91,20 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
   if (rule.bold) labelStyle.fontWeight = 700;
   if (rule.strike) labelStyle.textDecoration = 'line-through';
   const glow = rule.glow ? `drop-shadow(0 0 4px ${rule.glow})` : undefined;
+  const endTexts: (EndLabel & { key: string; text: string; cls: string })[] = [];
+  if (ends.sourceCard || ends.targetCard || ends.sourceRole || ends.targetRole) {
+    const S = { x: args.sourceX, y: args.sourceY }, T = { x: args.targetX, y: args.targetY };
+    const us = endDirection(S, args.sourcePosition as Side, first ?? T, router, bends.length > 0);
+    const ut = endDirection(T, args.targetPosition as Side, last ?? S, router, bends.length > 0);
+    const push = (key: string, text: string | undefined, p: Pt, u: Pt, side: 1 | -1) => { if (text) endTexts.push({ key, text, ...endLabel(p, u, side), cls: side === 1 ? 'ad-card-label' : 'ad-card-label ad-card-label--role' }); };
+    push('sc', ends.sourceCard, S, us, 1); push('sr', ends.sourceRole, S, us, -1);
+    push('tc', ends.targetCard, T, ut, 1); push('tr', ends.targetRole, T, ut, -1);
+  }
   return (
     <>
       <defs>{sh !== 'none' && <Marker id={ms} head={sh} color={color} start />}{th !== 'none' && <Marker id={mt} head={th} color={color} />}</defs>
       <BaseEdge id={p.id} path={path} style={{ stroke: color, strokeWidth: width, strokeDasharray: dash, opacity: rule.opacity, filter: glow }} markerStart={sh !== 'none' ? `url(#${ms})` : undefined} markerEnd={th !== 'none' ? `url(#${mt})` : undefined} interactionWidth={14} />
+      {endTexts.map(l => <text key={l.key} className={l.cls} x={l.x} y={l.y} textAnchor={l.anchor} dominantBaseline="central" style={{ opacity: rule.opacity }}>{l.text}</text>)}
       {(label || mappings || p.selected || rule.badge || rule.icon) && (
         <EdgeLabelRenderer>
           <div className={`ad-edge-label ${p.selected ? 'is-selected' : ''}`} style={labelStyle} title={mappings || undefined}>
@@ -119,7 +132,8 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
   );
 });
 
-function markerId(head: ArrowHead, color: string) { return `ad-m-${head}-${color.replace(/[^a-z0-9]/gi, '')}`; }
+/** Id del marcador. El de origen lleva `-s`: su `orient` (`auto-start-reverse`) difiere del de destino y los ids son globales en el documento. */
+function markerId(head: ArrowHead, color: string, start: boolean) { return `ad-m-${head}-${color.replace(/[^a-z0-9]/gi, '')}${start ? '-s' : ''}`; }
 
 function Marker({ id, head, color, start }: { id: string; head: ArrowHead; color: string; start?: boolean }) {
   const o = start ? 'auto-start-reverse' : 'auto';
@@ -133,6 +147,32 @@ function Marker({ id, head, color, start }: { id: string; head: ArrowHead; color
     case 'circle': return <marker {...common} refX={10}><circle cx="7" cy="7" r="4" fill="#fff" stroke={color} strokeWidth={1.5} /></marker>;
     case 'dot': return <marker {...common} refX={10}><circle cx="7" cy="7" r="4" fill={color} /></marker>;
     case 'half': return <marker {...common}><path d="M1,1 L12,7 L1,7" fill={color} stroke={color} /></marker>;
-    default: return null;
+    default: {
+      const ie = IE_MARKERS[head];
+      if (!ie) return null;
+      return (
+        <marker id={id} orient={o} markerUnits="userSpaceOnUse" markerWidth={IE_W} markerHeight={IE_H} refX={IE_REF} refY={IE_H / 2}>
+          <path d={ie.path} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+          {ie.circle !== undefined && <circle className="ad-card-hollow" cx={ie.circle} cy={IE_H / 2} r={4} fill="#fff" stroke={color} strokeWidth={1.5} />}
+        </marker>
+      );
+    }
   }
 }
+
+/**
+ * Pata de gallo (Information Engineering). Coordenadas del marcador: el borde del nodo está en
+ * x = IE_REF y la arista llega desde x = 0. Pata: 12 px de largo y ±6 px de abertura; barras a 8 y
+ * 14 px del borde; círculo (hueco, tapa la línea) más alejado. Mismos trazos en `io/src/svg.ts`.
+ */
+const IE_W = 24, IE_H = 16, IE_REF = 22;
+const FOOT = 'M10,8 L22,2 M10,8 L22,14 M10,8 L22,8';
+const bar = (x: number) => `M${x},2 L${x},14`;
+const IE_MARKERS: Partial<Record<ArrowHead, { path: string; circle?: number }>> = {
+  'one': { path: bar(14) },
+  'only-one': { path: `${bar(16)} ${bar(11)}` },
+  'zero-or-one': { path: bar(16), circle: 8 },
+  'many': { path: FOOT },
+  'one-or-many': { path: `${FOOT} ${bar(6)}` },
+  'zero-or-many': { path: FOOT, circle: 5.5 },
+};

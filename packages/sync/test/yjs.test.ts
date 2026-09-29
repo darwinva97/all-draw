@@ -2,7 +2,7 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect } from 'vitest';
 import * as Y from 'yjs';
-import { execute, exampleWorkspace, loadInto, makeElement, type StoreChange, type Workspace } from '@all-draw/core';
+import { execute, exampleWorkspace, loadInto, makeElement, makeComment, threadsOf, threadsOfView, openThreadCount, type StoreChange, type Workspace } from '@all-draw/core';
 import { YjsStore, YjsHistory, toJsonFile, fromJsonFile, serializeDoc, loadUpdate, openLocalWorkspace, listLocalWorkspaces, deleteLocalWorkspace } from '../src';
 
 /** JSON con claves ordenadas, para comparar snapshots sin depender del orden de inserción. */
@@ -122,6 +122,35 @@ describe('sincronización entre docs', () => {
     expect(s2.get('elements', 'el_alta')!.name).toBe('Alta v2');
     expect(s1.get('elements', nuevo.id)).toEqual(nuevo);
     expect(origins2).toContain('remote');
+  });
+
+  it('los comentarios convergen: hilo en un doc, respuesta y resolución en el otro, reanclaje al borrar', () => {
+    const d1 = new Y.Doc(), d2 = new Y.Doc();
+    const s1 = new YjsStore(d1), s2 = new YjsStore(d2);
+    const sync = () => { Y.applyUpdate(d2, Y.encodeStateAsUpdate(d1, Y.encodeStateVector(d2))); Y.applyUpdate(d1, Y.encodeStateAsUpdate(d2, Y.encodeStateVector(d1))); };
+    loadInto(s1, exampleWorkspace());
+    sync();
+    const root = makeComment({ kind: 'node', id: 'vn_1' }, { name: 'Ana' }, 'Revisar el alta');
+    execute(s1, { type: 'set', collection: 'comments', id: root.id, value: root });
+    sync();
+    expect(threadsOfView(s2, 'vw_1').map(t => t.root.text)).toEqual(['Revisar el alta']);
+    // Concurrente: s2 responde y resuelve; s1 añade un hilo en un punto
+    const reply = makeComment(root.anchor, { name: 'Luis' }, 'Hecho', { threadId: root.id });
+    execute(s2, { type: 'batch', commands: [
+      { type: 'set', collection: 'comments', id: reply.id, value: reply },
+      { type: 'patch', collection: 'comments', id: root.id, patch: { resolved: true, resolvedBy: 'Luis' } },
+    ] });
+    const pt = makeComment({ kind: 'point', viewId: 'vw_1', x: 5, y: 5 }, { name: 'Ana' }, 'Aquí falta algo');
+    execute(s1, { type: 'set', collection: 'comments', id: pt.id, value: pt });
+    sync();
+    expect(stable(s1.snapshot())).toBe(stable(s2.snapshot()));
+    expect(threadsOf(s1, { kind: 'node', id: 'vn_1' })[0]!.comments.map(c => c.text)).toEqual(['Revisar el alta', 'Hecho']);
+    expect(openThreadCount(s1, 'vw_1')).toBe(1);
+    // Borrar el nodo en s2 reancla el hilo en la vista, también en s1
+    execute(s2, { type: 'deleteNode', id: 'vn_1' });
+    sync();
+    expect(s1.get('comments', root.id)!.anchor).toEqual({ kind: 'view', id: 'vw_1', viewId: 'vw_1' });
+    expect(s1.snapshot().comments[reply.id]!.anchor.kind).toBe('view');
   });
 
   it('serializeDoc/loadUpdate reproduce el estado', () => {

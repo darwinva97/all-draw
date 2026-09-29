@@ -23,6 +23,12 @@ describe('pack uml-class', () => {
     expect(r.elementType('uml:Package')?.container).toBe(true);
     expect(r.relationType(AGGREGATION)?.sourceHead).toBe('diamond');
     expect(r.relationType(COMPOSITION)?.sourceHead).toBe('filled-diamond');
+    // Extremos: multiplicidad (texto libre, se rotula junto al extremo) y rol.
+    for (const id of [ASSOCIATION, AGGREGATION, COMPOSITION]) {
+      const f = r.relationType(id)!.fields;
+      expect(f.map(d => d.key)).toEqual(['sourceCard', 'sourceRole', 'targetCard', 'targetRole', 'navigable']);
+      expect(f.filter(d => d.key.endsWith('Card')).every(d => d.kind === 'text')).toBe(true);
+    }
     expect(r.relationType(GENERALIZATION)).toMatchObject({ line: 'solid', targetHead: 'triangle' });
     expect(r.relationType(REALIZATION)).toMatchObject({ line: 'dashed', targetHead: 'triangle' });
     expect(r.relationType(DEPENDENCY)).toMatchObject({ line: 'dashed', targetHead: 'open' });

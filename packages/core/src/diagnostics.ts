@@ -6,7 +6,7 @@ import type { Command } from './commands';
 import { allPorts, compatibleRelationTypes } from './ports';
 import type { NotationRegistry } from './notation';
 import type { Store } from './store';
-import { indexOf } from './query';
+import { indexOf, commentThreads } from './query';
 
 export type Severity = 'error' | 'warning' | 'info';
 export interface Diagnostic {
@@ -134,6 +134,19 @@ export const hygiene: Validator = {
       }
     }
     return out;
+  },
+};
+
+/** Hilos de comentarios sin resolver (opcional: no está en `DEFAULT_VALIDATORS`). */
+export const unresolvedComments: Validator = {
+  id: 'core.comments',
+  run({ store }) {
+    return commentThreads(store).filter(t => !t.resolved).map(t => ({
+      code: 'comment-unresolved', severity: 'info' as const, subject: { collection: 'comments', id: t.id },
+      message: `Comentario sin resolver de ${t.root.author.name}: "${t.root.text.length > 60 ? t.root.text.slice(0, 57) + '…' : t.root.text}"`,
+      evidence: { anchor: t.anchor, replies: t.comments.length - 1 },
+      supportedFixes: [fix('Marcar como resuelto', { type: 'patch', collection: 'comments', id: t.root.id, patch: { resolved: true } })],
+    }));
   },
 };
 

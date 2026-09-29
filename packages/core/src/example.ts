@@ -1,9 +1,9 @@
 /** Ejemplo mínimo: un elemento en dos vistas de dos notaciones distintas. */
-import { emptyWorkspace, type Workspace } from './model';
+import { SCHEMA_VERSION, emptyWorkspace, type Workspace } from './model';
 
 export function exampleWorkspace(): Workspace {
   const ws = emptyWorkspace('Ejemplo');
-  ws.meta.schemaVersion = 1;
+  ws.meta.schemaVersion = SCHEMA_VERSION;
   ws.elements['el_alta'] = { id: 'el_alta', typeId: 'freeform:box', name: 'Proceso de alta', doc: '', fields: {}, ports: [], profiles: [], props: {}, features: {}, tags: [] };
   ws.elements['el_crm'] = { id: 'el_crm', typeId: 'freeform:box', name: 'CRM', doc: '', fields: { api: '{"cliente":{"id":1,"email":"a@b.c"}}' }, ports: [], profiles: [], props: {}, features: {}, tags: [] };
   ws.views['vw_1'] = { id: 'vw_1', kind: 'freeform', notationId: 'freeform', name: 'Mapa', doc: '', style: {}, props: {} };

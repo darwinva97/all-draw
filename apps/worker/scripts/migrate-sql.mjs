@@ -1,5 +1,6 @@
 /**
- * Generador puro del SQL de migración SQLite → D1 (mismo esquema, ver `migrations/0001_init.sql`).
+ * Generador puro del SQL de migración SQLite → D1 (mismo esquema, ver `migrations/0001_init.sql`) y de las
+ * filas para `POST /api/admin/import` del worker (`collectMigrationRows`, registro en el `RegistryDO`).
  * Sin dependencias: recibe una `DatabaseSync` (o cualquier objeto con `prepare(sql).all()`) y devuelve
  * el texto SQL más estadísticas. Lo usa `migrate-from-sqlite.mjs` y lo prueba `apps/server/test/migrate-sql.test.ts`.
  *
@@ -28,39 +29,60 @@ export const isScrypt = (hash) => typeof hash === 'string' && hash.startsWith('s
 
 const insert = (table, cols, row) => `INSERT OR IGNORE INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(c => sqlLiteral(row[c])).join(', ')});`;
 
+/** Columnas que se migran de cada tabla (mismas que `src/store/import.ts` del worker). */
+export const MIGRATION_COLUMNS = {
+  users: ['id', 'email', 'name', 'password_hash', 'is_admin', 'created_at'],
+  workspaces: ['id', 'owner_id', 'name', 'created_at', 'updated_at'],
+  members: ['workspace_id', 'user_id', 'role', 'created_at'],
+  links: ['token', 'workspace_id', 'role', 'created_by', 'created_at', 'expires_at'],
+  apiKeys: ['id', 'user_id', 'name', 'prefix', 'key_hash', 'created_at', 'last_used_at'],
+};
+const TABLE = { users: 'users', workspaces: 'workspaces', members: 'workspace_members', links: 'share_links', apiKeys: 'api_keys' };
+const pick = (row, cols) => Object.fromEntries(cols.map(c => [c, typeof row[c] === 'bigint' ? Number(row[c]) : row[c] ?? null]));
+
+/**
+ * Filas a migrar, ya transformadas (`scrypt$` → `reset$scrypt$`), con los nombres de columna de SQLite.
+ * Es el cuerpo de `POST /api/admin/import` del worker (`--target do`) y la base del SQL de `generateMigrationSql`.
+ * @param db objeto con `prepare(sql).all()` (node:sqlite `DatabaseSync`)
+ */
+export function collectMigrationRows(db) {
+  const all = (sql) => db.prepare(sql).all();
+  const src = {
+    users: all('SELECT * FROM users ORDER BY created_at, id'),
+    workspaces: all('SELECT * FROM workspaces ORDER BY created_at, id'),
+    members: all('SELECT * FROM workspace_members ORDER BY workspace_id, user_id'),
+    links: all('SELECT * FROM share_links ORDER BY created_at, token'),
+    apiKeys: all('SELECT * FROM api_keys ORDER BY created_at, id'),
+  };
+  const needsReset = [];
+  const rows = {};
+  for (const [group, cols] of Object.entries(MIGRATION_COLUMNS)) {
+    rows[group] = src[group].map(r => {
+      const row = pick(r, cols);
+      if (group === 'users' && isScrypt(row.password_hash)) { row.password_hash = RESET_PREFIX + row.password_hash; needsReset.push({ id: row.id, email: row.email }); }
+      return row;
+    });
+  }
+  return {
+    rows,
+    stats: { users: src.users.length, workspaces: src.workspaces.length, members: src.members.length, links: src.links.length, apiKeys: src.apiKeys.length, needsReset: needsReset.length },
+    needsReset,
+    workspaces: src.workspaces.map(w => ({ id: w.id, name: w.name, ownerId: w.owner_id })),
+  };
+}
+
 /**
  * @param db objeto con `prepare(sql).all()` (node:sqlite `DatabaseSync`)
  * @returns {{ sql: string, stats: Record<string, number>, needsReset: {id:string,email:string}[], workspaces: {id:string,name:string,ownerId:string}[] }}
  */
 export function generateMigrationSql(db) {
-  const all = (sql) => db.prepare(sql).all();
-  const users = all('SELECT * FROM users ORDER BY created_at, id');
-  const workspaces = all('SELECT * FROM workspaces ORDER BY created_at, id');
-  const members = all('SELECT * FROM workspace_members ORDER BY workspace_id, user_id');
-  const links = all('SELECT * FROM share_links ORDER BY created_at, token');
-  const keys = all('SELECT * FROM api_keys ORDER BY created_at, id');
-
-  const needsReset = [];
+  const { rows, stats, needsReset, workspaces } = collectMigrationRows(db);
   const lines = [
     `-- all-draw: migración SQLite → D1 generada el ${new Date().toISOString()}`,
-    `-- ${users.length} usuarios, ${workspaces.length} espacios, ${members.length} miembros, ${links.length} enlaces, ${keys.length} API keys.`,
+    `-- ${stats.users} usuarios, ${stats.workspaces} espacios, ${stats.members} miembros, ${stats.links} enlaces, ${stats.apiKeys} API keys.`,
     '-- INSERT OR IGNORE: se puede aplicar más de una vez sin duplicar. Los docs Yjs no van aquí (ver migrate-from-sqlite.mjs --url).',
     '',
   ];
-  for (const u of users) {
-    const row = { ...u };
-    if (isScrypt(u.password_hash)) { row.password_hash = RESET_PREFIX + u.password_hash; needsReset.push({ id: u.id, email: u.email }); }
-    lines.push(insert('users', ['id', 'email', 'name', 'password_hash', 'is_admin', 'created_at'], row));
-  }
-  for (const w of workspaces) lines.push(insert('workspaces', ['id', 'owner_id', 'name', 'created_at', 'updated_at'], w));
-  for (const m of members) lines.push(insert('workspace_members', ['workspace_id', 'user_id', 'role', 'created_at'], m));
-  for (const l of links) lines.push(insert('share_links', ['token', 'workspace_id', 'role', 'created_by', 'created_at', 'expires_at'], l));
-  for (const k of keys) lines.push(insert('api_keys', ['id', 'user_id', 'name', 'prefix', 'key_hash', 'created_at', 'last_used_at'], k));
-
-  return {
-    sql: lines.join('\n') + '\n',
-    stats: { users: users.length, workspaces: workspaces.length, members: members.length, links: links.length, apiKeys: keys.length, needsReset: needsReset.length },
-    needsReset,
-    workspaces: workspaces.map(w => ({ id: w.id, name: w.name, ownerId: w.owner_id })),
-  };
+  for (const [group, cols] of Object.entries(MIGRATION_COLUMNS)) for (const row of rows[group]) lines.push(insert(TABLE[group], cols, row));
+  return { sql: lines.join('\n') + '\n', stats, needsReset, workspaces };
 }

@@ -1,6 +1,6 @@
 /** Consultas e índices derivados (se recalculan sobre el snapshot; el editor los memoiza por cambio). */
 import type { Store } from './store';
-import type { Dimension, View, ViewEdge, ViewNode, Relation, Element } from './model';
+import type { Comment, CommentAnchor, Dimension, View, ViewEdge, ViewNode, Relation, Element } from './model';
 import type { NotationRegistry } from './notation';
 
 // ---------------------------------------------------------------- índices incrementales
@@ -129,4 +129,68 @@ export function paletteFor(store: Store, reg: NotationRegistry, view: View) {
   const libs = store.list('libraries').flatMap(l => l.elementTypes.map(t => ({ type: t, dimmed: false, libraryId: l.id })));
   const templates = store.list('elements').filter(e => e.template);
   return { notation, libs, templates };
+}
+
+// ---------------------------------------------------------------- comentarios
+/** Un hilo: el primer comentario (`root`, lleva `resolved`) y todos en orden cronológico. */
+export interface CommentThread {
+  id: string;
+  root: Comment;
+  comments: Comment[];
+  anchor: CommentAnchor;
+  resolved: boolean;
+  /** Fecha del último comentario o edición (ISO). */
+  updatedAt: string;
+}
+
+const THREADS = new WeakMap<readonly Comment[], CommentThread[]>();
+/** Todos los hilos, del más reciente al más antiguo (memoizado por versión de la colección). */
+export function commentThreads(store: Store): CommentThread[] {
+  const list = store.list('comments');
+  let out = THREADS.get(list);
+  if (out) return out;
+  const groups = new Map<string, Comment[]>();
+  for (const c of list) { const g = groups.get(c.threadId); if (g) g.push(c); else groups.set(c.threadId, [c]); }
+  out = [];
+  for (const [id, cs] of groups) {
+    cs.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+    const root = cs.find(c => c.id === id) ?? cs[0]!;
+    const updatedAt = cs.reduce((m, c) => { const d = c.editedAt && c.editedAt > c.createdAt ? c.editedAt : c.createdAt; return d > m ? d : m; }, '');
+    out.push({ id, root, comments: root === cs[0] ? cs : [root, ...cs.filter(c => c !== root)], anchor: root.anchor, resolved: !!root.resolved, updatedAt });
+  }
+  out.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+  THREADS.set(list, out);
+  return out;
+}
+
+/** Vistas en las que se ve un ancla (un elemento o relación puede aparecer en varias). */
+export function anchorViewIds(store: Store, a: CommentAnchor): string[] {
+  switch (a.kind) {
+    case 'view': return a.id ? [a.id] : a.viewId ? [a.viewId] : [];
+    case 'point': return a.viewId ? [a.viewId] : [];
+    case 'node': { const v = (a.id && store.get('nodes', a.id)?.viewId) || a.viewId; return v ? [v] : []; }
+    case 'edge': { const v = (a.id && store.get('edges', a.id)?.viewId) || a.viewId; return v ? [v] : []; }
+    case 'element': return a.id ? indexOf(store).viewIdsOfElement(a.id) : [];
+    case 'relation': return a.id ? [...new Set(indexOf(store).edgesOfRelation(a.id).map(e => e.viewId))] : [];
+  }
+}
+
+/**
+ * Hilos anclados a `anchor`: mismo `kind` y, si se dan, mismo `id` y misma vista. Así
+ * `{ kind: 'point', viewId }` devuelve todos los puntos comentados de una vista.
+ */
+export function threadsOf(store: Store, anchor: Partial<CommentAnchor> & { kind: CommentAnchor['kind'] }): CommentThread[] {
+  return commentThreads(store).filter(t => t.anchor.kind === anchor.kind
+    && (anchor.id === undefined || t.anchor.id === anchor.id)
+    && (anchor.viewId === undefined || anchorViewIds(store, t.anchor).includes(anchor.viewId)));
+}
+
+/** Hilos visibles en una vista: de la vista, de sus puntos, nodos y aristas, y de los elementos y relaciones que aparecen en ella. */
+export function threadsOfView(store: Store, viewId: string): CommentThread[] {
+  return commentThreads(store).filter(t => anchorViewIds(store, t.anchor).includes(viewId));
+}
+
+/** Hilos sin resolver (de una vista, o de todo el espacio). */
+export function openThreadCount(store: Store, viewId?: string | null): number {
+  return (viewId ? threadsOfView(store, viewId) : commentThreads(store)).filter(t => !t.resolved).length;
 }

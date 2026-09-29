@@ -6,7 +6,7 @@
  */
 import { z } from 'zod';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 // ---------------------------------------------------------------- Campos tipados
 export const FieldKind = z.enum([
@@ -66,7 +66,11 @@ export type ElementType = z.infer<typeof ElementType>;
 
 export const LineStyle = z.enum(['solid', 'dashed', 'dotted']);
 export type LineStyle = z.infer<typeof LineStyle>;
-export const ArrowHead = z.enum(['none', 'arrow', 'open', 'diamond', 'filled-diamond', 'triangle', 'circle', 'dot', 'half']);
+export const ArrowHead = z.enum([
+  'none', 'arrow', 'open', 'diamond', 'filled-diamond', 'triangle', 'circle', 'dot', 'half',
+  // Pata de gallo (Information Engineering): barra, doble barra, círculo + barra, pata, barra + pata, círculo + pata.
+  'one', 'only-one', 'zero-or-one', 'many', 'one-or-many', 'zero-or-many',
+]);
 export type ArrowHead = z.infer<typeof ArrowHead>;
 
 export const RelationType = z.object({
@@ -339,6 +343,40 @@ export const StyleRule = z.object({
 });
 export type StyleRule = z.infer<typeof StyleRule>;
 
+// ---------------------------------------------------------------- Comentarios
+/**
+ * Ancla de un hilo de comentarios: un elemento o relación del modelo, un nodo o arista de una vista,
+ * una vista entera o un punto (coordenadas del lienzo) de una vista. `kind: 'view'` sin `id` = hilo
+ * cuyo ancla desapareció (se conserva, sin vista).
+ */
+export const CommentAnchorKind = z.enum(['element', 'node', 'edge', 'relation', 'view', 'point']);
+export type CommentAnchorKind = z.infer<typeof CommentAnchorKind>;
+export const CommentAnchor = z.object({
+  kind: CommentAnchorKind,
+  id: z.string().optional(),
+  viewId: z.string().optional(),
+  x: z.number().optional(),
+  y: z.number().optional(),
+});
+export type CommentAnchor = z.infer<typeof CommentAnchor>;
+export const CommentAuthor = z.object({ name: z.string(), color: z.string().optional(), userId: z.string().optional() });
+export type CommentAuthor = z.infer<typeof CommentAuthor>;
+/** Un comentario. El hilo lo forman los que comparten `threadId` (= id del primero, que lleva `resolved`). */
+export const Comment = z.object({
+  id: z.string().min(1),
+  threadId: z.string().min(1),
+  anchor: CommentAnchor,
+  author: CommentAuthor,
+  text: z.string(),
+  /** Ids de `Person` mencionadas con `@`. */
+  mentions: z.array(z.string()).default([]),
+  createdAt: z.string(),
+  editedAt: z.string().optional(),
+  resolved: z.boolean().optional(),
+  resolvedBy: z.string().optional(),
+});
+export type Comment = z.infer<typeof Comment>;
+
 // ---------------------------------------------------------------- Workspace
 export const WorkspaceMeta = z.object({
   schemaVersion: z.number().default(SCHEMA_VERSION),
@@ -364,10 +402,11 @@ export const Workspace = z.object({
   dimensions: byId(Dimension),
   people: byId(Person),
   rules: byId(StyleRule),
+  comments: byId(Comment),
 });
 export type Workspace = z.infer<typeof Workspace>;
 
-export const COLLECTIONS = ['libraries', 'elements', 'relations', 'views', 'nodes', 'edges', 'dimensions', 'people', 'rules'] as const;
+export const COLLECTIONS = ['libraries', 'elements', 'relations', 'views', 'nodes', 'edges', 'dimensions', 'people', 'rules', 'comments'] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 export type RecordOf<C extends Collection> = Workspace[C][string];
 

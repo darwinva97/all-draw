@@ -3,11 +3,12 @@ import { dimensionsOfElement, viewsOfElement, makeView, makeNode, newId, type Co
 import { useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { topSuggestions, linkCommand } from './traces-helpers';
+import { CommentIcon } from './Comments';
 
 /** Menú contextual de un nodo: cambiar de dimensión, detalle, puertos, quitar, borrar. */
 export function NodeMenu({ x, y, nodeId, onClose }: { x: number; y: number; nodeId: string; onClose: () => void }) {
   const t = useT();
-  const { store, registry, run, openView, readOnly } = useEditor();
+  const { store, registry, run, openView, readOnly, openComments } = useEditor();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as globalThis.Node)) onClose(); };
@@ -61,6 +62,7 @@ export function NodeMenu({ x, y, nodeId, onClose }: { x: number; y: number; node
       ))}
       {!readOnly && <>
         <div className="ad-popover__section">{t('Nodo')}</div>
+        <button className="ad-popover__item" onClick={() => { openComments({ draft: { kind: 'node', id: vn.id, viewId: vn.viewId } }); onClose(); }}><CommentIcon size={12} /> {t('Comentar')}</button>
         <button className="ad-popover__item" onClick={togglePorts}>{vn.style.showPorts ? t('Ocultar pines') : t('Mostrar pines')}</button>
         <button className="ad-popover__item" onClick={() => { run({ type: 'deleteNode', id: vn.id }); onClose(); }}>{t('Quitar de esta vista')}</button>
         <button className="ad-popover__item ad-popover__item--danger" onClick={() => { if (confirm(t('¿Borrar "{name}" del modelo y de todas las vistas?', { name: el.name }))) run({ type: 'deleteElement', id: el.id }); onClose(); }}>{t('Borrar del modelo')}</button>

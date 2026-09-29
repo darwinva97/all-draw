@@ -16,7 +16,7 @@ import { ARCHIMATE_PACK } from '@all-draw/notation-archimate';
 import { C4_PACK } from '@all-draw/notation-c4';
 import { STATECHART_PACK } from '@all-draw/notation-statechart';
 import { buildXml, attrs, type XmlNode } from './xml';
-import { shapeOf } from './mermaid';
+import { shapeOf, edgeHeads, ER_RELATION_HEADS } from './mermaid';
 import type { TextExport } from './archimate';
 
 const SHAPE_STYLE: Record<string, string> = {
@@ -28,8 +28,12 @@ const SHAPE_STYLE: Record<string, string> = {
   pool: 'swimlane;html=1;', lane: 'swimlane;html=1;', group: 'rounded=0;whiteSpace=wrap;html=1;dashed=1;verticalAlign=top;', label: 'text;html=1;align=center;verticalAlign=middle;',
   container: 'rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;',
 };
-const HEAD: Record<ArrowHead, string> = { none: 'none', arrow: 'classic', open: 'open', diamond: 'diamond', 'filled-diamond': 'diamond', triangle: 'block', circle: 'oval', dot: 'oval', half: 'halfCircle' };
-const HEAD_FILL: Partial<Record<ArrowHead, number>> = { diamond: 0, triangle: 0, circle: 0, dot: 1, 'filled-diamond': 1, arrow: 1 };
+const HEAD: Record<ArrowHead, string> = {
+  none: 'none', arrow: 'classic', open: 'open', diamond: 'diamond', 'filled-diamond': 'diamond', triangle: 'block', circle: 'oval', dot: 'oval', half: 'halfCircle',
+  // Pata de gallo: flechas ER de draw.io
+  one: 'ERone', 'only-one': 'ERmandOne', 'zero-or-one': 'ERzeroToOne', many: 'ERmany', 'one-or-many': 'ERoneToMany', 'zero-or-many': 'ERzeroToMany',
+};
+const HEAD_FILL: Partial<Record<ArrowHead, number>> = { diamond: 0, triangle: 0, circle: 0, dot: 1, 'filled-diamond': 1, arrow: 1, 'zero-or-one': 0, 'zero-or-many': 0 };
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const nl = (s: string) => esc(s).replace(/\r?\n/g, '<br>');
@@ -44,7 +48,7 @@ function relStyle(ws: Workspace, typeId: string | undefined): { line?: LineStyle
   if (!typeId) return {};
   for (const lib of Object.values(ws.libraries)) { const t = lib.relationTypes.find(t => t.id === typeId); if (t) return t; }
   for (const pack of [FREEFORM_PACK, ARCHIMATE_PACK, C4_PACK, STATECHART_PACK]) { const t = pack.relationTypes.find(t => t.id === typeId); if (t) return t; }
-  return {};
+  return ER_RELATION_HEADS[typeId] ?? {};
 }
 
 export function exportDrawio(ws: Workspace, viewId: string): TextExport {
@@ -121,7 +125,7 @@ export function exportDrawio(ws: Workspace, viewId: string): TextExport {
     const rel = e.relationId ? ws.relations[e.relationId] : undefined;
     const rs = relStyle(ws, rel?.typeId);
     const line = e.style.line ?? rs.line ?? 'solid';
-    const sh = e.style.sourceHead ?? rs.sourceHead ?? 'none', th = e.style.targetHead ?? rs.targetHead ?? 'arrow';
+    const { sourceHead: sh, targetHead: th } = edgeHeads(ws, e, rel, rs);
     let style = 'edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;';
     if (e.style.router === 'straight') style = 'rounded=0;html=1;';
     if (e.style.router === 'bezier' || e.style.router === 'smoothstep') style = 'edgeStyle=orthogonalEdgeStyle;curved=1;html=1;';

@@ -24,7 +24,7 @@ describe('modelo', () => {
   });
   it('migra desde versión 0', () => {
     const ws = migrate({ elements: {}, meta: { name: 'x' } });
-    expect(ws.meta.schemaVersion).toBe(1);
+    expect(ws.meta.schemaVersion).toBe(2);
   });
 });
 

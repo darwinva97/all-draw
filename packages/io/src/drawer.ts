@@ -18,7 +18,7 @@
  * Las referencias rotas del origen producen **warnings**, nunca errores.
  */
 import {
-  parseWorkspace, allPorts, portId, NotationRegistry, CORE_PACK,
+  SCHEMA_VERSION, parseWorkspace, allPorts, portId, NotationRegistry, CORE_PACK,
   type Workspace, type Library, type Element, type ElementType, type FieldDef, type Relation, type View, type ViewNode,
   type ViewEdge, type Person, type StyleRule, type KeyValue, type ArrowHead,
 } from '@all-draw/core';
@@ -109,8 +109,8 @@ export function importDrawer(input: unknown): DrawerImport {
   const src = readInput(input);
 
   const ws: Workspace = {
-    meta: { schemaVersion: 1, name: 'Importado de Drawer', description: '' },
-    libraries: {}, elements: {}, relations: {}, views: {}, nodes: {}, edges: {}, dimensions: {}, people: {}, rules: {},
+    meta: { schemaVersion: SCHEMA_VERSION, name: 'Importado de Drawer', description: '' },
+    libraries: {}, elements: {}, relations: {}, views: {}, nodes: {}, edges: {}, dimensions: {}, people: {}, rules: {}, comments: {},
   };
   const reg = new NotationRegistry().register(CORE_PACK).register(FREEFORM_PACK).register(GRID_PACK);
 

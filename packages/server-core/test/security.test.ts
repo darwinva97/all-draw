@@ -118,11 +118,20 @@ describe('registro', () => {
     expect((await inv.client().post('/api/auth/register', { email: 'a@example.com', name: 'a', password: 'contraseña-larga', inviteCode: 'otro' })).status).toBe(403);
     expect((await inv.client().post('/api/auth/register', { email: 'a@example.com', name: 'a', password: 'contraseña-larga', inviteCode: 'secreto-123' })).status).toBe(201);
     await inv.close();
+    // Cerrado es cerrado también sin usuarios (nadie se hace admin de un despliegue nuevo)…
     const closed = makeApi({ allowRegistration: false });
-    expect((await closed.client().get('/api/auth/config')).body.registration).toBe('open'); // aún sin usuarios
-    await closed.register('first@example.com');
     expect((await closed.client().get('/api/auth/config')).body.registration).toBe('closed');
+    expect((await closed.client().post('/api/auth/register', { email: 'first@example.com', name: 'f', password: 'contraseña-larga' })).status).toBe(403);
     await closed.close();
+    // …salvo el primero con código de invitación; después, cerrado para todos.
+    const boot = makeApi({ allowRegistration: false, inviteCode: 'arranque' });
+    expect((await boot.client().get('/api/auth/config')).body.registration).toBe('invite');
+    const first = await boot.client().post('/api/auth/register', { email: 'first@example.com', name: 'f', password: 'contraseña-larga', inviteCode: 'arranque' });
+    expect(first.status).toBe(201);
+    expect(first.body.user.isAdmin).toBe(true);
+    expect((await boot.client().get('/api/auth/config')).body.registration).toBe('closed');
+    expect((await boot.client().post('/api/auth/register', { email: 's@example.com', name: 's', password: 'contraseña-larga', inviteCode: 'arranque' })).status).toBe(403);
+    await boot.close();
     expect(safeEqualString('abc', 'abc')).toBe(true);
     expect(safeEqualString('abc', 'abd')).toBe(false);
     expect(safeEqualString('abc', 'abcd')).toBe(false);

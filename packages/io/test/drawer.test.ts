@@ -233,6 +233,6 @@ describe('importDrawer', () => {
     expect(exportWorkspace(importWorkspace(text))).toBe(text);
     const lines = text.split('\n');
     expect(lines[0]).toBe('{');
-    expect(lines[1]).toBe('  "dimensions": {');
+    expect(lines[1]).toBe('  "comments": {},');
   });
 });

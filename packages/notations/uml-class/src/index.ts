@@ -59,11 +59,12 @@ export const UML_CLASS_ELEMENT_TYPES: ElementType[] = [
   }),
 ];
 
+/** Extremos de asociación: multiplicidad y rol se pintan junto a cada extremo (texto libre). */
 const endFields: FieldDef[] = [
-  { key: 'sourceRole', label: 'Rol origen', kind: 'text' },
-  { key: 'sourceMultiplicity', label: 'Multiplicidad origen', kind: 'text', doc: '"1", "0..1", "*", "1..*".' },
+  { key: 'sourceCard', label: 'Multiplicidad origen', kind: 'text', doc: '"1", "0..1", "*", "1..*", "0..*" (se rotula junto al extremo origen).' },
+  { key: 'sourceRole', label: 'Rol origen', kind: 'text', doc: 'Nombre del extremo origen (se rotula al otro lado de la línea).' },
+  { key: 'targetCard', label: 'Multiplicidad destino', kind: 'text', doc: '"1", "0..1", "*", "1..*", "0..*" (se rotula junto al extremo destino).' },
   { key: 'targetRole', label: 'Rol destino', kind: 'text' },
-  { key: 'targetMultiplicity', label: 'Multiplicidad destino', kind: 'text' },
   { key: 'navigable', label: 'Navegable', kind: 'select', options: 'target,source,both,none' },
 ];
 

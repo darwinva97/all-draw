@@ -3,6 +3,7 @@ import { relationsOfElement, viewsOfElement, type Element, type FieldDef, type K
 import { useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { ElementTraces } from './WorkspaceTraces';
+import { CommentsSection } from './Comments';
 import { addLayer, addStage, removeLayer, removeStage, updateLayer, updateStage, normalizeGrid, LAYER_COLORS } from '@all-draw/notation-grid';
 import { useRecord, usePorts, useAnyChange, useCollection } from '../hooks';
 import { assignmentsTo, suggestedRoles, newAssignment } from './workspace-helpers';
@@ -55,6 +56,7 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
           {rels.length > 0 && <div className="ad-section">{t('Relaciones')} ({rels.length})</div>}
           {rels.map(r => <RelationRow key={r.id} r={r} el={el} />)}
           <PeopleSection elementId={el.id} />
+          <CommentsSection anchors={[{ kind: 'element', id: el.id }, { kind: 'node', id: vn.id }]} newAnchor={{ kind: 'element', id: el.id }} />
         </>}
         {tab === 'ports' && <PortsTab el={el} vn={vn} />}
         {tab === 'where' && <>
@@ -125,6 +127,7 @@ function VisualInspector({ vn }: { vn: ViewNode }) {
     <div className="ad-insp__scroll">
       <label className="ad-field"><span>{t('Texto')}</span><textarea className="ad-input" rows={4} disabled={readOnly} value={vn.text ?? ''} onChange={e => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { text: e.target.value } })} /></label>
       <label className="ad-field"><span>{t('Fondo')}</span><input type="color" disabled={readOnly} value={vn.style.fill ?? '#fff8c5'} onChange={e => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { style: { fill: e.target.value } } })} /></label>
+      <CommentsSection anchors={[{ kind: 'node', id: vn.id }]} newAnchor={{ kind: 'node', id: vn.id, viewId: vn.viewId }} />
     </div>
   </>;
 }
@@ -163,6 +166,7 @@ function EdgeInspector({ edgeId }: { edgeId: string }) {
       <label className="ad-field"><span>{t('Trazado')}</span><select className="ad-input" disabled={readOnly} value={ve.style.router ?? 'smoothstep'} onChange={e => patchEdge({ style: { router: e.target.value } })}><option value="smoothstep">{t('Ortogonal')}</option><option value="bezier">{t('Curva')}</option><option value="straight">{t('Recta')}</option></select></label>
       <label className="ad-field"><span>{t('Línea')}</span><select className="ad-input" disabled={readOnly} value={ve.style.line ?? ''} onChange={e => patchEdge({ style: { line: e.target.value || undefined } })}><option value="">{t('(del tipo)')}</option><option value="solid">{t('Continua')}</option><option value="dashed">{t('Discontinua')}</option><option value="dotted">{t('Punteada')}</option></select></label>
       <label className="ad-field"><span>{t('Color')}</span><input type="color" disabled={readOnly} value={ve.style.color ?? type?.color ?? '#444444'} onChange={e => patchEdge({ style: { color: e.target.value } })} /><button className="ad-btn" title={t('Quitar')} onClick={() => patchEdge({ style: { color: undefined } })}>×</button></label>
+      <CommentsSection anchors={[{ kind: 'edge', id: ve.id }, ...(rel ? [{ kind: 'relation' as const, id: rel.id }] : [])]} newAnchor={{ kind: 'edge', id: ve.id, viewId: ve.viewId }} />
     </div>
   </>;
 }
@@ -188,6 +192,7 @@ function ViewInspector({ viewId }: { viewId: string | null }) {
         <option value="">{t('(ninguno)')}</option>{store.list('elements').filter(e => !e.template).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></label>
       {view.kind === 'grid' && <GridEditor viewId={view.id} grid={normalizeGrid(view.grid)} />}
       <label className="ad-field ad-field--inline"><input type="checkbox" disabled={readOnly} checked={!!view.public} onChange={e => patch({ public: e.target.checked })} /> <span>{t('Pública (solo lectura con enlace)')}</span></label>
+      <CommentsSection anchors={[{ kind: 'view', id: view.id }, { kind: 'point', viewId: view.id }]} newAnchor={{ kind: 'view', id: view.id, viewId: view.id }} />
       <div className="ad-hint">{t('Arrastra tipos desde la paleta. Conecta arrastrando desde el borde inferior de un nodo, o desde un pin. Botón derecho para cambiar de dimensión.')}</div>
     </div>
   </>;

@@ -1,5 +1,5 @@
-/** API + Durable Object en workerd: cuentas en D1, contenido y WebSocket en `WorkspaceDO`. */
-import { SELF } from 'cloudflare:test';
+/** API + Durable Objects en workerd: cuentas en el `RegistryDO` (proyecto `do`) o en D1 (proyecto `d1`), contenido y WebSocket en `WorkspaceDO`. */
+import { SELF, env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import * as encoding from 'lib0/encoding';
@@ -42,7 +42,7 @@ async function openWs(id: string, token?: string) {
 const step1 = (doc: Y.Doc) => { const enc = encoding.createEncoder(); encoding.writeVarUint(enc, 0); syncProtocol.writeSyncStep1(enc, doc); return encoding.toUint8Array(enc); };
 const updateMsg = (u: Uint8Array) => { const enc = encoding.createEncoder(); encoding.writeVarUint(enc, 0); syncProtocol.writeUpdate(enc, u); return encoding.toUint8Array(enc); };
 
-describe('worker: API sobre D1 + DO', () => {
+describe(`worker: API con registro en ${env.DB ? 'D1' : 'RegistryDO'} + WorkspaceDO`, () => {
   it('healthz, registro (primer usuario admin), me', async () => {
     expect(await (await SELF.fetch(`${BASE}/healthz`)).text()).toBe('ok');
     const a = await register('ana@example.com');

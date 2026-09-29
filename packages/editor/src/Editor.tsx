@@ -9,6 +9,7 @@ import { Toolbar, Crumbs, ToolbarTools } from './panels/Toolbar';
 import { WorkspacePanel } from './panels/WorkspacePanel';
 import { CommandPalette } from './panels/CommandPalette';
 import { ShortcutsPanel } from './panels/ShortcutsPanel';
+import { CommentsPanel } from './panels/Comments';
 import { useEditor, type Theme } from './context';
 import type { SearchAction } from './search';
 import { useT, useLang } from '@all-draw/i18n';
@@ -70,7 +71,7 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
   const ed = useEditor();
   const t = useT();
   const [lang] = useLang(); // las acciones memorizadas se rehacen al cambiar de idioma
-  const { readOnly, effectiveTheme, setTheme, registry, run, openView, canvas, selection, setRenaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel } = ed;
+  const { readOnly, effectiveTheme, setTheme, registry, run, openView, canvas, selection, setRenaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel, comments } = ed;
   const [searchOpen, setSearchOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   const mode = useLayoutMode();
@@ -78,6 +79,7 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
   const [sheet, setSheet] = useState<Sheet | null>(null);
   useEffect(() => { if (theme) setTheme(theme); }, [theme, setTheme]);
   useEffect(() => { if (mode !== 'mobile') setSheet(null); }, [mode]);
+  useEffect(() => { if (comments.open) setSheet(null); }, [comments.open, comments.threadId, comments.draft]);
 
   // theme-color del navegador sigue al tema del editor; al salir se restaura el valor estático del HTML.
   useEffect(() => {
@@ -170,7 +172,7 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
         panels={tablet ? panelToggles : undefined} compact={mobile} onMore={() => setSheet(s => (s === 'more' ? null : 'more'))} />
       <div className="ad-editor__body">
         {showLeft && <div className="ad-editor__left"><ViewsPanel />{!readOnly && <Palette />}</div>}
-        <main className="ad-editor__main"><Canvas onRequestLayout={onRequestLayout} /><Problems /></main>
+        <main className="ad-editor__main"><Canvas onRequestLayout={onRequestLayout} /><Problems />{comments.open && <CommentsPanel />}</main>
         {showRight && <Inspector />}
       </div>
       {mobile && (

@@ -1,22 +1,25 @@
-import { useCallback, useEffect, useMemo, useState, useRef, type DragEvent, type MouseEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, useRef, type DragEvent, type MouseEvent } from 'react';
 type DragEv = globalThis.MouseEvent | globalThis.TouchEvent;
 import {
-  ReactFlow, Background, Controls, MiniMap, useReactFlow, ReactFlowProvider, ViewportPortal, useViewport, ConnectionMode,
-  type Node, type Edge, type NodeChange, type Connection, type IsValidConnection, type OnConnectEnd, type FinalConnectionState,
+  ReactFlow, Background, Controls, MiniMap, useReactFlow, useStore, ReactFlowProvider, ViewportPortal, useViewport, ConnectionMode, getViewportForBounds,
+  type Node, type Edge, type Viewport, type NodeChange, type Connection, type IsValidConnection, type OnConnectEnd, type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  makeElement, makeNode, makeRelation, makeEdge, allPorts, compatibleRelationTypes, indexOf, type ViewNode, type Command, type Element,
+  makeElement, makeNode, makeRelation, makeEdge, allPorts, compatibleRelationTypes, indexOf, resolveStyle, type ViewNode, type Command, type Element,
+  type Port, type RuleStyle,
 } from '@all-draw/core';
 import { useEditor } from './context';
 import { useT } from '@all-draw/i18n';
 import { useCollection, useRecord } from './hooks';
-import { ElementNode } from './nodes/ElementNode';
-import { VisualNode } from './nodes/VisualNode';
+import { ElementNode, sameElementData, type ElementNodeData } from './nodes/ElementNode';
+import { VisualNode, type VisualNodeData } from './nodes/VisualNode';
+import { NodeEnvContext, LOW_DETAIL_ZOOM, type NodeEnv } from './nodes/env';
 import { RelationEdge } from './edges/RelationEdge';
 import { nearestSegment } from './edges/bendpath';
 import { NodeMenu } from './panels/NodeMenu';
 import { PaneMenu, type PaneMenuItem } from './panels/PaneMenu';
+import { CommentLayer } from './panels/Comments';
 import { AlignBar } from './panels/AlignBar';
 import { copySelection, pastePlan, setClipboard, readClipboard, type Clip, type PasteMode, type PasteOptions } from './clipboard';
 import { usePeers, remoteSelection, selectionSignature, throttle, type Peer } from './presence';
@@ -46,17 +49,23 @@ export interface CanvasProps {
   onRequestLayout?: () => void;
 }
 
+/** Lo que sobrevive al cambio de vista: el encuadre de cada vista visitada y el último tamaño del lienzo. */
+interface CanvasShared { viewports: Map<string, Viewport>; size: { w: number; h: number } | null }
+
 export function Canvas(props: CanvasProps) {
-  return <ReactFlowProvider><CanvasInner {...props} /></ReactFlowProvider>;
+  const { viewId } = useEditor();
+  const shared = useRef<CanvasShared>({ viewports: new Map(), size: null });
+  // Cada vista monta su propio lienzo con su propio almacén de React Flow (ver "cambio de vista" en CanvasInner).
+  return <ReactFlowProvider key={viewId ?? ''}><CanvasInner {...props} shared={shared.current} /></ReactFlowProvider>;
 }
 
 interface Picker { x: number; y: number; options: string[]; onPick: (typeId: string) => void }
 interface LiveBox { x?: number; y?: number; w?: number; h?: number }
 
-function CanvasInner({ onRequestLayout }: CanvasProps) {
+function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: CanvasShared }) {
   const ed = useEditor();
   const t = useT();
-  const { store, registry, viewId, run, selection, select, readOnly, presence, effectiveTheme, snap, setRenaming } = ed;
+  const { store, registry, viewId, run, selection, select, readOnly, presence, effectiveTheme, snap, renaming, setRenaming } = ed;
   const view = useRecord('views', viewId);
   const nodesVersion = useCollection('nodes');
   const edgesVersion = useCollection('edges');
@@ -82,8 +91,33 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
   const remoteSel = useMemo(() => remoteSelection(peers, viewId), [peerSig, viewId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------- modelo → React Flow
+  // Estilo de las reglas y puertos por elemento, resueltos aquí una vez por vista (no en cada nodo). Las reglas dependen
+  // también de `rules` y `people` (fuentes persona/papel): sus listas cambian de identidad al cambiar.
+  const rules = useCollection('rules');
+  const people = useCollection('people');
+  // Los tipos y campos de las librerías se sincronizan en el registro (misma identidad): hay que recalcular a mano.
+  const libraries = useCollection('libraries');
+  const styleOf = useMemo(() => {
+    const cache = new WeakMap<Element, RuleStyle>();
+    return (el: Element): RuleStyle => { let st = cache.get(el); if (!st) { st = resolveStyle(store, registry, el, viewId ?? undefined).style; cache.set(el, st); } return st; };
+  }, [store, registry, viewId, rules, people, libraries]);
+  const portsOf = useMemo(() => {
+    const cache = new WeakMap<Element, Port[]>();
+    return (el: Element): Port[] => { let ps = cache.get(el); if (!ps) { ps = allPorts(el, registry.fieldsOf(el.typeId)); cache.set(el, ps); } return ps; };
+  }, [registry, libraries]);
+  /**
+   * Nodos y aristas React Flow de la última construcción, por id. Si un nodo no ha cambiado se devuelve el mismo objeto
+   * (y el mismo `data`): React Flow reutiliza entonces su nodo interno y no vuelve a pintarlo. Así, seleccionar, mover o
+   * renombrar un nodo solo repinta ese nodo (y sus aristas), no los cientos de la vista.
+   */
+  const nodeCache = useRef(new Map<string, Node>());
+  const edgeCache = useRef(new Map<string, Edge>());
+
   const rfNodes = useMemo<Node[]>(() => {
     if (!viewId) return [];
+    const prev = nodeCache.current;
+    const next = new Map<string, Node>();
+    const keep = (n: Node): Node => { const old = prev.get(n.id); const out = old && sameRfNode(old, n) ? old : n; next.set(n.id, out); return out; };
     const mine = indexOf(store).nodesOfView(viewId);
     const byId = new Map(mine.map(n => [n.id, n]));
     // Padres antes que hijos (React Flow lo exige)
@@ -95,55 +129,119 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
     if (view?.kind === 'grid') {
       const grid = normalizeGrid(view.grid);
       const rects = cellRects(grid);
-      const mk = (id: string, text: string, r: { x: number; y: number; w: number; h: number }, visualType: string, fill?: string): Node => ({
-        id, type: 'visual', position: { x: r.x, y: r.y }, width: r.w, height: r.h, draggable: false, selectable: false, connectable: false, zIndex: -20,
-        data: { node: { id, viewId: view.id, visualType, text, x: r.x, y: r.y, w: r.w, h: r.h, style: { fill } } as ViewNode }, style: { width: r.w, height: r.h },
-      });
+      const mk = (id: string, text: string, r: { x: number; y: number; w: number; h: number }, visualType: string, fill?: string): Node => {
+        // El `data` sintético se reutiliza si no cambia nada (si no, cada cambio repintaría todas las celdas).
+        const old = prev.get(id)?.data as VisualNodeData | undefined;
+        const o = old?.node;
+        const data = o && o.text === text && o.x === r.x && o.y === r.y && o.w === r.w && o.h === r.h && o.visualType === visualType && o.style.fill === fill
+          ? old! : { node: { id, viewId: view.id, visualType, text, x: r.x, y: r.y, w: r.w, h: r.h, style: { fill } } as ViewNode };
+        return keep({
+          id, type: 'visual', position: { x: r.x, y: r.y }, width: r.w, height: r.h, draggable: false, selectable: false, connectable: false, zIndex: -20,
+          data, style: { width: r.w, height: r.h },
+        });
+      };
       for (const [id, r] of Object.entries(rects.layers)) { const l = grid.layers.find(x => x.id === id); synthetic.push(mk(`hdr:layer:${id}`, l?.name ?? '', r, 'core:header', l?.color)); }
       for (const [id, r] of Object.entries(rects.stages)) synthetic.push(mk(`hdr:stage:${id}`, grid.stages.find(x => x.id === id)?.name ?? '', r, 'core:header'));
       for (const [id, r] of Object.entries(rects.groups)) { const g = grid.stageGroups.find(x => x.id === id); synthetic.push(mk(`hdr:group:${id}`, g?.name ?? '', r, 'core:header', g?.color)); }
       for (const c of Object.values(rects.cells)) { const color = grid.layers.find(x => x.id === c.layerId)?.color; synthetic.push(mk(`${CELL_PREFIX}${cellKey(c.layerId, c.stageId)}`, '', c, 'core:cell', color ? `color-mix(in srgb, ${color} 25%, ${effectiveTheme === 'dark' ? '#161a22' : 'white'})` : undefined)); }
     }
     const cellIds = new Set(synthetic.map(n => n.id));
-    return [...synthetic, ...ordered.map(n => {
+    const selectedIds = new Set(selection.nodes);
+    const out = [...synthetic, ...ordered.map(n => {
       const el = n.elementId ? store.get('elements', n.elementId) : undefined;
       const type = el ? registry.elementType(el.typeId) : undefined;
-      const dimmed = !!(el && view && registry.notationOf(el.typeId) !== view.notationId && registry.notationOf(el.typeId) !== 'freeform' && !el.libraryId)
+      const notation = el ? registry.notationOf(el.typeId) : undefined;
+      const dimmed = !!(el && view && notation !== view.notationId && notation !== 'freeform' && !el.libraryId)
         || !!(el && view && !registry.inViewpoint(view.notationId, view.viewpointId, el.typeId));
       const isCell = n.visualType === 'core:cell';
       const lv = live[n.id];
       const w = lv?.w ?? n.w, h = lv?.h ?? n.h;
+      const vn = lv ? { ...n, x: lv.x ?? n.x, y: lv.y ?? n.y, w, h } : n;
+      const editing = renaming === n.id || undefined;
+      const remoteColor = remoteSel.get(n.id);
+      const old = prev.get(n.id)?.data;
+      let data: ElementNodeData | VisualNodeData;
+      if (n.elementId) {
+        const d: ElementNodeData = { node: vn, element: el, type, rule: el ? styleOf(el) : NO_RULE, ports: el ? portsOf(el) : NO_PORTS, archimate: notation === 'archimate', dimmed, remoteColor, editing };
+        data = old && 'rule' in old && sameElementData(old as ElementNodeData, d) ? old as ElementNodeData : d;
+      } else {
+        const o = old as VisualNodeData | undefined;
+        data = o && o.node === vn && o.remoteColor === remoteColor && o.editing === editing ? o : { node: vn, remoteColor, editing };
+      }
       const base = {
         id: n.id,
         type: n.elementId ? 'element' : 'visual',
-        position: { x: lv?.x ?? n.x, y: lv?.y ?? n.y },
+        position: { x: vn.x, y: vn.y },
         width: w, height: h,
-        data: { node: lv ? { ...n, x: lv.x ?? n.x, y: lv.y ?? n.y, w, h } : n, dimmed, remoteColor: remoteSel.get(n.id) },
+        data,
         parentId: n.parentNodeId && byId.has(n.parentNodeId) ? n.parentNodeId : (n.cell && cellIds.has(`${CELL_PREFIX}${cellKey(n.cell.layerId, n.cell.stageId)}`) ? `${CELL_PREFIX}${cellKey(n.cell.layerId, n.cell.stageId)}` : undefined),
         extent: n.parentNodeId && byId.has(n.parentNodeId) ? ('parent' as const) : undefined,
-        selected: selection.nodes.includes(n.id),
+        selected: selectedIds.has(n.id),
         draggable: !readOnly && !isCell,
         selectable: !isCell,
         connectable: !readOnly && !!n.elementId,
         zIndex: isCell ? -10 : (type?.container || n.visualType === 'core:group') ? -1 : n.z ?? 0,
         style: { width: w, height: h },
       } satisfies Node;
-      return seq.active ? seq.decorateNode(n, base) : base;
+      return keep(seq.active ? seq.decorateNode(n, base) : base);
     })];
-  }, [nodesVersion, viewId, view, store, registry, selection.nodes, readOnly, elementsVersion, live, remoteSel, effectiveTheme, seq]);
+    nodeCache.current = next;
+    return out;
+  }, [nodesVersion, viewId, view, store, registry, selection.nodes, readOnly, elementsVersion, live, remoteSel, effectiveTheme, seq, renaming, styleOf, portsOf, libraries]);
 
   const rfEdges = useMemo<Edge[]>(() => {
     if (!viewId) return [];
+    const prev = edgeCache.current;
+    const next = new Map<string, Edge>();
     const ids = new Set(rfNodes.map(n => n.id));
-    return indexOf(store).edgesOfView(viewId).filter(e => ids.has(e.fromNodeId) && ids.has(e.toNodeId)).map(e => {
+    const selectedIds = new Set(selection.edges);
+    const out = indexOf(store).edgesOfView(viewId).filter(e => ids.has(e.fromNodeId) && ids.has(e.toNodeId)).map(e => {
+      const selected = selectedIds.has(e.id);
+      const old = prev.get(e.id);
+      // Misma arista del modelo y misma selección: el mismo objeto (las de secuencia se decoran de nuevo cada vez).
+      if (!seq.active && old && (old.data as { edge?: unknown }).edge === e && old.selected === selected) { next.set(e.id, old); return old; }
       const base: Edge = {
         id: e.id, type: 'relation', source: e.fromNodeId, target: e.toNodeId,
         sourceHandle: e.fromPortId ?? '', targetHandle: e.toPortId ?? '',
-        data: { edge: e }, selected: selection.edges.includes(e.id),
+        data: { edge: e }, selected,
       };
-      return seq.active ? seq.decorateEdge(e, base) : base;
+      const out = seq.active ? seq.decorateEdge(e, base) : base;
+      next.set(e.id, out);
+      return out;
     });
+    edgeCache.current = next;
+    return out;
   }, [edgesVersion, store, viewId, rfNodes, selection.edges, seq]);
+
+  // ---------------------------------------------------------------- cambio de vista
+  /**
+   * Cada vista monta su propio `ReactFlowProvider` (`key={viewId}` en `Canvas`), con un almacén nuevo. Con un solo
+   * almacén para todas las vistas, React Flow quitaba los nodos de la vista anterior de su almacén antes de que React
+   * los desmontara, y el selector de cada nodo retirado fallaba (con excepción) en cada actualización del almacén
+   * hasta desmontarlo: ~30 ms por cambio con 60 nodos y ~160 ms con 300.
+   * El encuadre inicial se calcula desde el modelo antes del primer pintado (como `fitView`, o el que tenía la vista
+   * si ya se visitó), así el primer frame ya sale encuadrado, sin esperar a medir los nodos, y con
+   * `onlyRenderVisibleElements` no se monta nada fuera del encuadre. Antes, al cambiar de vista se heredaba el
+   * encuadre de la anterior (solo la primera vista se encuadraba).
+   */
+  const [size, setSize] = useState(shared.size);
+  useLayoutEffect(() => {
+    const el = wrapper.current;
+    if (!el) return;
+    if (!size) { const s = { w: el.clientWidth, h: el.clientHeight }; shared.size = s; setSize(s); }
+    const ro = new ResizeObserver(([e]) => { if (e) shared.size = { w: e.contentRect.width, h: e.contentRect.height }; });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [shared, size, !!viewId && !!view]); // eslint-disable-line react-hooks/exhaustive-deps
+  const initialViewport = useMemo(() => {
+    if (!viewId || !size) return undefined;
+    return shared.viewports.get(viewId) ?? (size.w && size.h ? fitViewport(rfNodes, size.w, size.h) : undefined);
+  }, [viewId, size]); // eslint-disable-line react-hooks/exhaustive-deps -- solo al abrir la vista
+  const onMoveEnd = useCallback((_: unknown, vp: Viewport) => { if (viewId) shared.viewports.set(viewId, vp); }, [viewId, shared]);
+
+  // Antes del montaje de <ReactFlow> el almacén aún tiene el zoom por defecto: se usa el del encuadre inicial.
+  const lowZoom = useStore(s => (s.domNode ? s.transform[2] : initialViewport?.zoom ?? 1) < LOW_DETAIL_ZOOM);
+  const nodeEnv = useMemo<NodeEnv>(() => ({ registry, readOnly, dark: effectiveTheme === 'dark', lowDetail: lowZoom, run, setRenaming }), [registry, readOnly, effectiveTheme, lowZoom, run, setRenaming]);
 
   // ---------------------------------------------------------------- API del lienzo para otros paneles
   const fitNodes = useCallback((nodeIds?: string[]) => {
@@ -529,6 +627,7 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
     ...(!readOnly ? [
       { label: t('Pegar aquí'), hint: 'Ctrl+V', onClick: () => void pasteFromClipboard('appearance', paneMenu.flow) },
       { label: t('Añadir nota'), onClick: () => addVisual({ visualType: 'core:note' }, paneMenu.flow) },
+      { label: t('Comentar aquí'), onClick: () => ed.openComments({ draft: { kind: 'point', viewId, x: Math.round(paneMenu.flow.x), y: Math.round(paneMenu.flow.y) } }) },
     ] : []),
     { label: t('Seleccionar todo'), hint: 'Ctrl+A', onClick: selectAll },
     { label: t('Ajustar a la vista'), hint: 'Ctrl+Shift+F', onClick: () => fitNodes() },
@@ -537,7 +636,8 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
 
   return (
     <div ref={wrapper} className="ad-canvas" onKeyDown={onKeyDown} tabIndex={0} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave}>
-      <ReactFlow
+      <NodeEnvContext.Provider value={nodeEnv}>
+      {size && <ReactFlow
         nodes={rfNodes} edges={rfEdges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={(chs) => { const sel = new Set(selection.edges); let c = false; for (const ch of chs) if (ch.type === 'select') { c = true; if (ch.selected) sel.add(ch.id); else sel.delete(ch.id); } if (c) select({ nodes: selection.nodes, edges: [...sel] }); }}
@@ -547,7 +647,8 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
         onNodeDoubleClick={onNodeDoubleClick} onNodeContextMenu={onNodeContextMenu} onEdgeDoubleClick={onEdgeDoubleClick}
         onPaneContextMenu={onPaneContextMenu}
         onPaneClick={() => { setPicker(null); setMenu(null); setPaneMenu(null); }}
-        fitView minZoom={0.05} maxZoom={4} deleteKeyCode={null} multiSelectionKeyCode="Shift" selectionKeyCode="Shift"
+        defaultViewport={initialViewport} fitView={!initialViewport} onMoveEnd={onMoveEnd}
+        minZoom={MIN_ZOOM} maxZoom={MAX_ZOOM} deleteKeyCode={null} multiSelectionKeyCode="Shift" selectionKeyCode="Shift"
         onlyRenderVisibleElements={rfNodes.length > VIRTUALIZE_FROM}
         nodesDraggable={!readOnly} nodesConnectable={!readOnly} elementsSelectable
         snapToGrid={snap && !alt} snapGrid={SNAP_GRID}
@@ -560,7 +661,9 @@ function CanvasInner({ onRequestLayout }: CanvasProps) {
         <Controls showInteractive={false} />
         <MiniMap pannable zoomable nodeColor={(n) => { const vn = (n.data as { node?: ViewNode }).node; const el = vn?.elementId ? store.get('elements', vn.elementId) : undefined; return (el && registry.elementType(el.typeId)?.color) || (effectiveTheme === 'dark' ? '#3a4150' : '#ddd'); }} />
         {peers.length > 0 && <PeerCursors peers={peers} viewId={viewId} />}
-      </ReactFlow>
+        <CommentLayer />
+      </ReactFlow>}
+      </NodeEnvContext.Provider>
       <AlignBar />
       {picker && (
         <div className="ad-popover" style={{ left: picker.x, top: picker.y }}>
@@ -592,6 +695,44 @@ function PeerCursors({ peers, viewId }: { peers: Peer[]; viewId: string }) {
 }
 
 // ---------------------------------------------------------------- utilidades
+const MIN_ZOOM = 0.05;
+const MAX_ZOOM = 4;
+const NO_RULE: RuleStyle = {};
+const NO_PORTS: Port[] = [];
+
+/** Mismo nodo React Flow: igualdad simple por campo, salvo `position` y `style`, que se comparan por valor. */
+function sameRfNode(a: Node, b: Node): boolean {
+  const ka = Object.keys(a) as (keyof Node)[];
+  if (ka.length !== Object.keys(b).length) return false;
+  for (const k of ka) {
+    const x = a[k], y = b[k];
+    if (Object.is(x, y)) continue;
+    if ((k === 'position' || k === 'style') && x && y && typeof x === 'object' && typeof y === 'object') {
+      const ox = x as Record<string, unknown>, oy = y as Record<string, unknown>;
+      const kx = Object.keys(ox);
+      if (kx.length !== Object.keys(oy).length || kx.some(kk => !Object.is(ox[kk], oy[kk]))) return false;
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+/** Encuadre de los nodos (padres antes que hijos) en un lienzo de `width`×`height`, igual que `fitView` (margen 0,1). */
+function fitViewport(nodes: Node[], width: number, height: number): Viewport | undefined {
+  if (!nodes.length) return undefined;
+  const abs = new Map<string, { x: number; y: number }>();
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const n of nodes) {
+    const p = n.parentId ? abs.get(n.parentId) : undefined;
+    const x = n.position.x + (p?.x ?? 0), y = n.position.y + (p?.y ?? 0);
+    abs.set(n.id, { x, y });
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y);
+    x1 = Math.max(x1, x + (n.width ?? 0)); y1 = Math.max(y1, y + (n.height ?? 0));
+  }
+  return getViewportForBounds({ x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) }, width, height, MIN_ZOOM, MAX_ZOOM, 0.1);
+}
+
 function cellOf(cellNodeId: string): { layerId: string; stageId: string } {
   const [layerId, stageId] = cellNodeId.slice(CELL_PREFIX.length).split('|');
   return { layerId: layerId ?? '', stageId: stageId ?? '' };

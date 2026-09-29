@@ -6,10 +6,11 @@
  * primaria). `Attribute` existe como elemento suelto para el estilo Chen (óvalos alrededor de
  * la entidad).
  *
- * **Cardinalidades.** `ArrowHead` no tiene pata de gallo (crow's foot): se aproxima con las
- * cabezas existentes (`circle` = uno, `arrow` = muchos, `triangle` = herencia) y los campos
- * `sourceCard` / `targetCard` guardan la cardinalidad textual ("0..1", "1..*"). Cuando el
- * editor añada la cabeza `crow` bastará cambiar `sourceHead`/`targetHead` aquí.
+ * **Cardinalidades (pata de gallo / Information Engineering).** Cada tipo trae sus cabezas IE
+ * (`only-one`, `one-or-many`…). Los campos select `sourceCard` / `targetCard` las sustituyen por
+ * relación: `1` = uno (barra), `1..1` = uno y solo uno (doble barra), `0..1` = cero o uno
+ * (círculo + barra), `*` = muchos (pata), `1..*` = uno o muchos (barra + pata), `0..*` = cero o
+ * muchos (círculo + pata). El editor y los exportadores (SVG, draw.io, Mermaid `erDiagram`) los leen.
  */
 import type { NotationPack, ValidityMatrix, ElementType, RelationType, FieldDef } from '@all-draw/core';
 
@@ -56,17 +57,22 @@ export const ER_ELEMENT_TYPES: ElementType[] = [
   }),
 ];
 
+/** Valores de `sourceCard`/`targetCard` → cabeza IE que dibujan. */
+export const CARDINALITIES = { '1': 'one', '1..1': 'only-one', '0..1': 'zero-or-one', '*': 'many', '1..*': 'one-or-many', '0..*': 'zero-or-many' } as const;
+const CARD_OPTIONS = Object.keys(CARDINALITIES).join(',');
+const CARD_DOC = 'Sustituye la cabeza de este extremo: 1 = uno (barra), 1..1 = uno y solo uno (doble barra), 0..1 = cero o uno, * = muchos (pata de gallo), 1..* = uno o muchos, 0..* = cero o muchos.';
+
 const cardFields: FieldDef[] = [
-  { key: 'sourceCard', label: 'Cardinalidad origen', kind: 'text', doc: '"1", "0..1", "1..*", "0..*".' },
-  { key: 'targetCard', label: 'Cardinalidad destino', kind: 'text' },
+  { key: 'sourceCard', label: 'Cardinalidad origen', kind: 'select', options: CARD_OPTIONS, doc: CARD_DOC },
+  { key: 'targetCard', label: 'Cardinalidad destino', kind: 'select', options: CARD_OPTIONS, doc: CARD_DOC },
   { key: 'identifying', label: 'Identificativa', kind: 'checkbox', doc: 'La clave del hijo incluye la del padre (línea continua en Crow\'s Foot).' },
   { key: 'onDelete', label: 'Al borrar', kind: 'select', options: 'no action,cascade,set null,restrict' },
 ];
 
 export const ER_RELATION_TYPES: RelationType[] = [
-  { id: ONE_TO_ONE, name: 'Uno a uno', category: CAT.relations, line: 'solid', sourceHead: 'circle', targetHead: 'circle', fields: cardFields, doc: '1:1. Cabeza `circle` en ambos extremos (aproximación sin pata de gallo).', meta: { cardinality: '1:1' } },
-  { id: ONE_TO_MANY, name: 'Uno a muchos', category: CAT.relations, line: 'solid', sourceHead: 'circle', targetHead: 'arrow', fields: cardFields, doc: '1:N. Origen = lado uno (`circle`), destino = lado muchos (`arrow`).', meta: { cardinality: '1:N' } },
-  { id: MANY_TO_MANY, name: 'Muchos a muchos', category: CAT.relations, line: 'solid', sourceHead: 'arrow', targetHead: 'arrow', fields: cardFields, doc: 'N:M. Se resuelve en físico con una tabla intermedia.', meta: { cardinality: 'N:M' } },
+  { id: ONE_TO_ONE, name: 'Uno a uno', category: CAT.relations, line: 'solid', sourceHead: 'only-one', targetHead: 'only-one', fields: cardFields, doc: '1:1. Doble barra (uno y solo uno) en ambos extremos.', meta: { cardinality: '1:1' } },
+  { id: ONE_TO_MANY, name: 'Uno a muchos', category: CAT.relations, line: 'solid', sourceHead: 'only-one', targetHead: 'one-or-many', fields: cardFields, doc: '1:N. Origen = lado uno (doble barra), destino = lado muchos (barra + pata de gallo).', meta: { cardinality: '1:N' } },
+  { id: MANY_TO_MANY, name: 'Muchos a muchos', category: CAT.relations, line: 'solid', sourceHead: 'one-or-many', targetHead: 'one-or-many', fields: cardFields, doc: 'N:M (uno o muchos en ambos extremos). Se resuelve en físico con una tabla intermedia.', meta: { cardinality: 'N:M' } },
   { id: INHERITS, name: 'Hereda', category: CAT.relations, line: 'solid', sourceHead: 'none', targetHead: 'triangle', fields: [{ key: 'kind', label: 'Estrategia', kind: 'select', options: 'single table,joined,table per class' }], doc: 'Especialización / generalización (subtipo → supertipo).' },
   { id: HAS, name: 'Tiene', category: CAT.relations, line: 'solid', sourceHead: 'none', targetHead: 'none', fields: [], doc: 'Entidad → Atributo (estilo Chen) y Vista → Entidad (la vista se apoya en ella).' },
 ];
@@ -82,7 +88,7 @@ export const ER_PACK: NotationPack = {
   id: NS,
   name: 'Entidad-relación',
   version: '0.1.0',
-  doc: 'Modelo entidad-relación (conceptual, lógico o físico). Los atributos de una entidad son puertos; falta la cabeza "pata de gallo" en el editor.',
+  doc: 'Modelo entidad-relación (conceptual, lógico o físico). Los atributos de una entidad son puertos; las relaciones usan la notación de pata de gallo (Information Engineering) con cardinalidad por extremo.',
   color: '#6C8EBF',
   viewKind: 'freeform',
   categories: [

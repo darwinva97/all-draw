@@ -13,7 +13,8 @@ export interface AwarenessLike {
   clientID: number;
 }
 
-export interface PresenceMe { name: string; color: string }
+/** Quién soy. `userId` (opcional) identifica al autor de comentarios aunque cambie de nombre. */
+export interface PresenceMe { name: string; color: string; userId?: string }
 
 /** Estado que publica cada cliente (mismo contrato que `Presence` de `@all-draw/sync`). */
 export interface PresenceState {

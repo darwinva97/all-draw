@@ -1,4 +1,7 @@
-import type { Env } from '../src/env';
-declare module 'cloudflare:test' {
-  interface ProvidedEnv extends Env { TEST_MIGRATIONS: import('@cloudflare/vitest-pool-workers').D1Migration[] }
+/** Tipos de `env` en los tests (`cloudflare:test` / `cloudflare:workers` usan `Cloudflare.Env`). */
+import type { Env as WorkerEnv } from '../src/env';
+declare global {
+  namespace Cloudflare {
+    interface Env extends WorkerEnv { TEST_MIGRATIONS: import('@cloudflare/vitest-pool-workers').D1Migration[] }
+  }
 }

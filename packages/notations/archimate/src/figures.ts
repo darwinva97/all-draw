@@ -719,3 +719,46 @@ export function textInset(def: FigureDef, w: number, h: number): Required<Inset>
   const i = def.inset?.(w, h) ?? {};
   return { top: i.top ?? 0, right: i.right ?? 0, bottom: i.bottom ?? 0, left: i.left ?? 0 };
 }
+
+// ---------------------------------------------------------------- Cachés para el lienzo
+/**
+ * Caché acotada: el lienzo pinta muchas veces las mismas figuras (mismo tipo, tamaño y colores), y cada `figureParts`
+ * recalcula los paths. No cambia ninguna geometría: guarda el resultado de las funciones de arriba. Al llenarse se
+ * descarta la entrada más antigua (FIFO: más barato que reordenar en cada acierto y suficiente para este uso).
+ */
+class Bounded<V> {
+  private map = new Map<string, V>();
+  private readonly max: number;
+  constructor(max: number) { this.max = max; }
+  get(key: string, make: () => V): V {
+    let v = this.map.get(key);
+    if (v === undefined) {
+      v = make();
+      if (this.map.size >= this.max) this.map.delete(this.map.keys().next().value!);
+      this.map.set(key, v);
+    }
+    return v;
+  }
+  get size(): number { return this.map.size; }
+  clear(): void { this.map.clear(); }
+}
+
+const partsCache = new Bounded<FigurePart[]>(2000);
+const iconCache = new Bounded<FigurePart[]>(500);
+
+/**
+ * `figureParts(figureOf(typeId, figure), …)` con caché por `(tipo, figura, w, h, colores, trazo)`: dos nodos del mismo tipo,
+ * tamaño y estilo comparten la misma matriz (no hay que tratarla como mutable).
+ */
+export function figurePartsCached(typeId: string, figure: number | undefined, w: number, h: number, fill: string, stroke: string, strokeWidth = 1, dash?: string): FigurePart[] {
+  const alt = figure === 1 ? 1 : 0;
+  return partsCache.get(`${local(typeId)}|${alt}|${w}|${h}|${fill}|${stroke}|${strokeWidth}|${dash ?? ''}`, () => figureParts(figureOf(typeId, alt), w, h, fill, stroke, strokeWidth, dash));
+}
+
+/** `iconParts` con caché por `(tipo, color)`. */
+export function iconPartsCached(typeId: string, stroke: string): FigurePart[] {
+  return iconCache.get(`${local(typeId)}|${stroke}`, () => iconParts(typeId, stroke));
+}
+
+/** Vacía las cachés de figuras (pruebas). */
+export function clearFigureCaches(): void { partsCache.clear(); iconCache.clear(); }

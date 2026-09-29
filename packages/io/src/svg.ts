@@ -62,6 +62,9 @@ export function svgStyle(theme: SvgTheme, fontFamily: string): string {
     '.r-bold .ad-node__label{font-weight:700}',
     '.r-strike .ad-node__label{text-decoration:line-through}',
     '.ad-marker-hollow{fill:var(--ad-panel)}',
+    '.ad-card-hollow{fill:var(--ad-bg)}',
+    '.ad-card-label{font-size:11px;fill:var(--ad-text);paint-order:stroke;stroke:var(--ad-bg);stroke-width:3px;stroke-linejoin:round}',
+    '.ad-card-label--role{fill:var(--ad-muted);font-style:italic}',
     '.ad-edge-label rect{fill:var(--ad-panel);stroke:var(--ad-border)}',
     '.ad-edge-label text{font-size:11px;fill:var(--ad-text)}',
     '.ad-edge-label .ad-edge-label__pins{fill:#f59e0b}',
@@ -175,12 +178,81 @@ function boxShape(shape: Shape, b: Box, fill: string, stroke: string, strokeWidt
   return `<rect class="ad-shape"${attrs({ x: b.x, y: b.y, width: b.w, height: b.h, rx })}${common}/>`;
 }
 
+// ---------------------------------------------------------------- Cardinalidades (pata de gallo)
+/*
+ * Réplica de `packages/editor/src/edges/cardinality.ts` y de los marcadores IE de `RelationEdge.tsx`:
+ * el SVG exportado debe coincidir con el lienzo. Si cambias algo aquí, cámbialo allí también.
+ */
+const IE_W = 24, IE_H = 16, IE_REF = 22;
+const FOOT = 'M10,8 L22,2 M10,8 L22,14 M10,8 L22,8';
+const bar = (x: number) => `M${x},2 L${x},14`;
+const IE_MARKERS: Partial<Record<ArrowHead, { path: string; circle?: number }>> = {
+  'one': { path: bar(14) },
+  'only-one': { path: `${bar(16)} ${bar(11)}` },
+  'zero-or-one': { path: bar(16), circle: 8 },
+  'many': { path: FOOT },
+  'one-or-many': { path: `${FOOT} ${bar(6)}` },
+  'zero-or-many': { path: FOOT, circle: 5.5 },
+};
+/** Claves de extremo: no entran en el rótulo central de la arista. */
+export const END_KEYS = new Set(['sourceCard', 'targetCard', 'sourceRole', 'targetRole']);
+const CARD_HEAD: Record<string, ArrowHead> = {
+  '1': 'one', 'one': 'one',
+  '1..1': 'only-one', '||': 'only-one', 'only-one': 'only-one',
+  '0..1': 'zero-or-one', '?': 'zero-or-one', 'zero-or-one': 'zero-or-one',
+  '*': 'many', 'many': 'many',
+  '1..*': 'one-or-many', '+': 'one-or-many', 'one-or-many': 'one-or-many',
+  '0..*': 'zero-or-many', 'zero-or-many': 'zero-or-many',
+};
+/** "1", "1..1", "0..1", "*", "1..*", "0..*" (también `N`/`M` por `*` y los ids de `ArrowHead`) → cabeza IE. */
+export function cardToHead(v: unknown): ArrowHead | undefined {
+  if (typeof v !== 'string') return undefined;
+  const k = v.trim().toLowerCase().replace(/\s+/g, '').replace(/^(n|m)$/, '*').replace(/\.\.(n|m)$/, '..*');
+  return CARD_HEAD[k];
+}
+export interface CardEnds { sourceHead?: ArrowHead; targetHead?: ArrowHead; sourceCard?: string; targetCard?: string; sourceRole?: string; targetRole?: string }
+/** Campos de extremo de una relación: un select `…Card` que se traduce a cabeza la sustituye; si no, es un rótulo. */
+export function cardEnds(fields: Record<string, unknown> | undefined, defs: { key: string; kind: string }[] | undefined): CardEnds {
+  const out: CardEnds = {};
+  if (!fields) return out;
+  const str = (k: string) => { const v = fields[k]; return typeof v === 'string' && v.trim() ? v.trim() : undefined; };
+  for (const end of ['source', 'target'] as const) {
+    const key = `${end}Card`, v = str(key);
+    if (v) {
+      const def = defs?.find(d => d.key === key);
+      const head = def?.kind === 'select' ? cardToHead(v) : undefined;
+      if (head) out[`${end}Head`] = head; else out[`${end}Card`] = v;
+    }
+    const role = str(`${end}Role`);
+    if (role) out[`${end}Role`] = role;
+  }
+  return out;
+}
+const SIDE_VEC: Record<string, Pt> = { top: { x: 0, y: -1 }, right: { x: 1, y: 0 }, bottom: { x: 0, y: 1 }, left: { x: -1, y: 0 } };
+const unitVec = (x: number, y: number): Pt => { const l = Math.hypot(x, y); return l < 1e-6 ? { x: 1, y: 0 } : { x: x / l, y: y / l }; };
+function endDirection(p: Pt, side: string, next: Pt, router: string, hasBends: boolean): Pt {
+  if (router === 'straight' || (router === 'bezier' && hasBends)) return unitVec(next.x - p.x, next.y - p.y);
+  if (hasBends) {
+    const horizontal = side === 'left' || side === 'right';
+    const dx = next.x - p.x, dy = next.y - p.y;
+    if (horizontal && dx !== 0) return { x: Math.sign(dx), y: 0 };
+    if (!horizontal && dy !== 0) return { x: 0, y: Math.sign(dy) };
+  }
+  return SIDE_VEC[side] ?? { x: 1, y: 0 };
+}
+function endLabel(p: Pt, u: Pt, side: 1 | -1): { x: number; y: number; anchor: 'start' | 'middle' | 'end' } {
+  if (Math.abs(u.x) >= Math.abs(u.y)) return { x: p.x + u.x * 6, y: p.y + u.y * 14 + (side === 1 ? -10 : 11), anchor: u.x >= 0 ? 'start' : 'end' };
+  return { x: p.x + u.x * 14 + (side === 1 ? 7 : -7), y: p.y + u.y * 14, anchor: side === 1 ? 'start' : 'end' };
+}
+
 // ---------------------------------------------------------------- Contexto de render
 interface Ctx {
   store: Store; reg: NotationRegistry; viewId: string; prefix: string; bare: boolean;
   markers: Map<string, string>;
   abs: Map<string, Box>;
   portsOf: Map<string, { port: Port; y: number }[]>;
+  /** Cajas de rótulos que pueden salir de los nodos (cardinalidades y roles): entran en la caja envolvente. */
+  extents: Box[];
 }
 
 function markerId(ctx: Ctx, head: ArrowHead, color: string, start: boolean): string {
@@ -199,7 +271,12 @@ function markerId(ctx: Ctx, head: ArrowHead, color: string, start: boolean): str
       case 'circle': m = `<marker${common({ refX: 10 })}><circle cx="7" cy="7" r="4" ${hollow} stroke="${color}" stroke-width="1.5"/></marker>`; break;
       case 'dot': m = `<marker${common({ refX: 10 })}><circle cx="7" cy="7" r="4" fill="${color}"/></marker>`; break;
       case 'half': m = `<marker${common()}><path d="M1,1 L12,7 L1,7" fill="${color}" stroke="${color}"/></marker>`; break;
-      default: return '';
+      default: {
+        const ie = IE_MARKERS[head];
+        if (!ie) return '';
+        const circle = ie.circle !== undefined ? `<circle class="ad-card-hollow"${attrs({ cx: ie.circle, cy: IE_H / 2, r: 4 })} fill="#fff" stroke="${color}" stroke-width="1.5"/>` : '';
+        m = `<marker${attrs({ id, orient: o, markerUnits: 'userSpaceOnUse', markerWidth: IE_W, markerHeight: IE_H, refX: IE_REF, refY: IE_H / 2 })}><path d="${ie.path}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>${circle}</marker>`;
+      }
     }
     ctx.markers.set(id, m);
   }
@@ -351,8 +428,9 @@ function renderEdge(ctx: Ctx, e: ViewEdge): string {
   const line = e.style.line ?? type?.line ?? 'solid';
   const color = e.style.color ?? type?.color ?? '#444';
   const width = e.style.width ?? 1.5;
-  const sh = e.style.sourceHead ?? type?.sourceHead ?? 'none';
-  const th = e.style.targetHead ?? type?.targetHead ?? 'arrow';
+  const ends = cardEnds(rel?.fields, type?.fields);
+  const sh = e.style.sourceHead ?? ends.sourceHead ?? type?.sourceHead ?? 'none';
+  const th = e.style.targetHead ?? ends.targetHead ?? type?.targetHead ?? 'arrow';
   const router: Router = e.style.router ?? 'smoothstep';
   const bends: Pt[] = e.bendpoints;
   const first = bends[0], last = bends[bends.length - 1];
@@ -372,7 +450,7 @@ function renderEdge(ctx: Ctx, e: ViewEdge): string {
   const dash = line === 'dashed' ? '8 5' : line === 'dotted' ? '2 4' : undefined;
   const ms = sh !== 'none' ? markerId(ctx, sh, color, true) : '';
   const mt = th !== 'none' ? markerId(ctx, th, color, false) : '';
-  const fieldLabel = rel && type ? type.fields.filter(f => ['text', 'select'].includes(f.kind)).map(f => rel.fields[f.key]).filter((v): v is string => typeof v === 'string' && !!v.trim()).join(' · ') : '';
+  const fieldLabel = rel && type ? type.fields.filter(f => ['text', 'select'].includes(f.kind) && !END_KEYS.has(f.key)).map(f => rel.fields[f.key]).filter((v): v is string => typeof v === 'string' && !!v.trim()).join(' · ') : '';
   const label = e.label ?? (rel?.name || fieldLabel);
   const mappings = rel?.mappings.length ? rel.mappings.map(m => `${m.fromPath} → ${m.toPath}`).join('\n') : '';
   const parts: string[] = [];
@@ -381,6 +459,20 @@ function renderEdge(ctx: Ctx, e: ViewEdge): string {
     const txt = label || (type?.name ?? '');
     const w = textW(txt, 11) + 12 + (mappings ? 14 : 0), h = 18;
     parts.push(`<g class="ad-edge-label">${mappings ? `<title>${escapeXml(mappings)}</title>` : ''}<rect${attrs({ x: labelX - w / 2, y: labelY - h / 2, width: w, height: h, rx: 4 })}/>${textBlock([txt], { x: labelX - (mappings ? 7 : 0), y: labelY, fontSize: 11, lineH: 13 })}${mappings ? `<text class="ad-edge-label__pins"${attrs({ x: labelX + w / 2 - 4, y: labelY, 'text-anchor': 'end', 'dominant-baseline': 'central', 'font-size': 11 })}>⇄</text>` : ''}</g>`);
+  }
+  if (ends.sourceCard || ends.targetCard || ends.sourceRole || ends.targetRole) {
+    const S = { x: ep.sourceX, y: ep.sourceY }, T = { x: ep.targetX, y: ep.targetY };
+    const us = endDirection(S, ep.sourcePosition, first ?? T, router, bends.length > 0);
+    const ut = endDirection(T, ep.targetPosition, last ?? S, router, bends.length > 0);
+    const put = (text: string | undefined, p: Pt, u: Pt, side: 1 | -1) => {
+      if (!text) return;
+      const l = endLabel(p, u, side);
+      const w = textW(text, 11);
+      ctx.extents.push({ x: l.anchor === 'start' ? l.x : l.anchor === 'end' ? l.x - w : l.x - w / 2, y: l.y - 7, w, h: 14 });
+      parts.push(`<text${attrs({ class: side === 1 ? 'ad-card-label' : 'ad-card-label ad-card-label--role', x: l.x, y: l.y, 'text-anchor': l.anchor, 'dominant-baseline': 'central' })}>${escapeXml(text)}</text>`);
+    };
+    put(ends.sourceCard, S, us, 1); put(ends.sourceRole, S, us, -1);
+    put(ends.targetCard, T, ut, 1); put(ends.targetRole, T, ut, -1);
   }
   const data = ctx.bare ? {} : { 'data-edge': e.id, 'data-relation': e.relationId };
   const title = !ctx.bare && rel?.doc ? `<title>${escapeXml(rel.doc)}</title>` : '';
@@ -401,7 +493,7 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
   const padding = opts.padding ?? 24;
   const fontFamily = opts.fontFamily ?? 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
   const prefix = safeId(opts.idPrefix ?? `ad-${viewId}`);
-  const ctx: Ctx = { store, reg, viewId, prefix, bare: !!opts.bare, markers: new Map(), abs: new Map(), portsOf: new Map() };
+  const ctx: Ctx = { store, reg, viewId, prefix, bare: !!opts.bare, markers: new Map(), abs: new Map(), portsOf: new Map(), extents: [] };
 
   const nodes = store.list('nodes').filter(n => n.viewId === viewId);
   const edges = store.list('edges').filter(e => e.viewId === viewId);
@@ -495,6 +587,7 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
     grow(b.x - portW, b.y - (rule_has_badge(ctx, el) ? 10 : 0), b.w + portW * 2, b.h + below);
   }
   for (const e of edges) for (const p of e.bendpoints) grow(p.x, p.y);
+  for (const b of ctx.extents) grow(b.x, b.y, b.w, b.h);
   if (!Number.isFinite(minX)) { minX = 0; minY = 0; maxX = 200; maxY = 100; }
   const vx = Math.floor(minX - padding), vy = Math.floor(minY - padding);
   const vw = Math.ceil(maxX + padding) - vx, vh = Math.ceil(maxY + padding) - vy;

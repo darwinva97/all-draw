@@ -3,6 +3,7 @@ import { useT } from '@all-draw/i18n';
 import { useEditor, type Theme } from '../context';
 import { useRecord, useAnyChange } from '../hooks';
 import { usePeers, initials } from '../presence';
+import { CommentsToolButton } from './Comments';
 
 /** Paneles laterales colapsables (rango tableta): estado y conmutadores. */
 export interface PanelToggles {
@@ -61,6 +62,7 @@ export function ToolbarTools({ onSearch, onShortcuts, labels }: { onSearch?: () 
         {peers.length > 6 && <span className="ad-avatar ad-avatar--more">+{peers.length - 6}</span>}
       </div>
     )}
+    <CommentsToolButton labels={labels} />
     {onSearch && <button className="ad-btn" onClick={onSearch} title={t('Buscar (Ctrl+K)')} aria-label={t('Buscar (Ctrl+K)')} aria-haspopup="dialog">⌕{lbl(t('Buscar'))}</button>}
     {!readOnly && <button className={`ad-btn ${snap ? 'is-on' : ''}`} onClick={() => setSnap(!snap)} title={snap ? t('Ajuste a rejilla de 8 px activado (Alt lo desactiva mientras se pulsa)') : t('Ajuste a rejilla desactivado')} aria-pressed={snap} aria-label={t('Ajuste a rejilla')}>⌗{lbl(t('Rejilla'))}</button>}
     <button className="ad-btn" onClick={() => setTheme(THEME_NEXT[theme])} title={`${t(THEME_LABEL[theme])} · ${t('clic para cambiar')}`} aria-label={`${t(THEME_LABEL[theme])} · ${t('cambiar tema')}`}>{THEME_ICON[theme]}{lbl(t(THEME_LABEL[theme]))}</button>

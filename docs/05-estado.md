@@ -19,7 +19,7 @@ Primera implementación funcional de all-draw. Cubre las fases F0, F1 y F2 del p
 | `apps/web` | Vite + React 19, PWA, espacios locales en IndexedDB, demo "Alta de cliente" en 5 dimensiones, importar `.drawer`/JSON, exportar, compartir en línea (sala = id del espacio). | e2e sync |
 | `apps/server` | Node: sirve `apps/web/dist` y sincroniza Yjs por WebSocket en `/ws/<sala>` con persistencia en disco (`~/.alldraw-data`). Sin dependencias de despliegue: el mismo protocolo vale para Durable Objects. | e2e sync |
 
-Total: 380 tests unitarios en verde (más 3 del worker en workerd), `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
+Total: 412 tests unitarios en verde (más 22 del worker en workerd), `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
 
 ## Cómo ejecutarlo
 
@@ -100,3 +100,11 @@ pnpm gen:archimate              # regenera el pack desde _research/archi
 - **Historial**: instantáneas automáticas cada 30 min de actividad y manuales con etiqueta, restaurar y descargar (diálogo Historial).
 - **Responsive y táctil**: tableta con paneles colapsables; móvil con barra inferior y hojas deslizantes, pulsación larga para el menú, áreas táctiles de 44 px; `e2e/mobile.mjs`.
 - **Cloudflare**: el worker está listo pero la cuenta tiene agotada la cuota de bases D1 (10); hace falta liberar una o subir de plan.
+
+## Séptima tanda (29-30 de septiembre de 2026)
+
+- **Cloudflare desplegado**: https://alldraw.darwin-sva-97.workers.dev. Como la cuenta tiene agotada la cuota de D1, el registro de cuentas vive en un Durable Object con SQLite (`RegistryDO`, instancia `registry-2`); D1 sigue siendo opcional con el binding `DB`. Datos migrados desde el VPS (2 usuarios, 3 espacios). Registro cerrado. Endpoint de rescate `POST /api/admin/reset-password` activo solo mientras exista el secreto `RESET_CODE`.
+- **Registro cerrado de verdad**: con `ALLOW_REGISTRATION=false` ya no se puede crear el primer usuario salvo con `INVITE_CODE`.
+- **Comentarios**: hilos anclados a elementos, nodos, aristas, vistas o puntos, con respuestas, menciones y resolver; burbujas en el lienzo; se reanclan al borrar.
+- **Pata de gallo** (notación IE) y cardinalidades en ER y UML, en el editor, SVG, draw.io y Mermaid (`erDiagram`).
+- **Cambio de vista**: 60 nodos de 176 a 124 ms y 300 nodos de 717 a 384 ms en producción.

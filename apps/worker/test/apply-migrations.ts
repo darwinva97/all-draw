@@ -1,2 +1,3 @@
+/** Proyecto `d1`: aplica `migrations/` a la D1 local. En el proyecto `do` no hay `DB` (el RegistryDO migra solo). */
 import { applyD1Migrations, env } from 'cloudflare:test';
-await applyD1Migrations((env as unknown as { DB: D1Database }).DB, (env as unknown as { TEST_MIGRATIONS: never[] }).TEST_MIGRATIONS);
+if (env.DB) await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);

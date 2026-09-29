@@ -1,31 +1,39 @@
 /**
- * Worker de Cloudflare: la misma API Hono de `@all-draw/server-core` sobre D1, con el contenido de
- * cada espacio en su Durable Object (`WorkspaceDO`) y la app web servida por Assets.
+ * Worker de Cloudflare: la misma API Hono de `@all-draw/server-core`, con el registro (cuentas, espacios,
+ * permisos) en el Durable Object `RegistryDO` (o en D1 si existe el binding `DB`), el contenido de cada
+ * espacio en su Durable Object (`WorkspaceDO`) y la app web servida por Assets.
  *
- *   /api/*, /healthz   → createApi (store D1, docs → DO)
+ *   /api/admin/import  → importación desde otra instalación (sólo worker, ver admin-import.ts)
+ *   /api/*, /healthz   → createApi (store RegistryDO o D1, docs → WorkspaceDO)
  *   /ws/<id>?token=    → autoriza aquí y reenvía el upgrade al DO con el rol en una cabecera
  *   resto              → ASSETS (fallback SPA)
  */
 import { SAFE_ID, authorizeConnection, createApi, credentialsFromRequest, isTrustedOrigin, makeHasher, requestHost, withSecurityHeaders, type Hasher } from '@all-draw/server-core';
+import { IMPORT_PATH, handleImport } from './admin-import';
+import { RESET_PATH, handleReset } from './admin-reset';
 import { ROLE_HEADER, WorkspaceDO } from './do';
 import type { Env } from './env';
+import { RegistryDO } from './registry';
 import { RemoteDocHost } from './remote-host';
 import { D1WorkspaceStore } from './store/d1';
+import { registryStore, REGISTRY_NAME, type RegistryStub, type RegistryWorkspaceStore } from './store/do-sql';
 
-export { WorkspaceDO };
+export { RegistryDO, WorkspaceDO };
 
-interface Runtime { api: ReturnType<typeof createApi>; store: D1WorkspaceStore; hash: Hasher }
+interface Runtime { api: ReturnType<typeof createApi>; store: RegistryWorkspaceStore; hash: Hasher; docs: RemoteDocHost }
 let runtime: Runtime | null = null;
 /** Se construye una vez por isolate (los bindings son estables). */
 function boot(env: Env): Runtime {
   if (runtime) return runtime;
-  const store = new D1WorkspaceStore(env.DB);
+  // D1 es opcional: sin el binding `DB`, el registro vive en el SQLite del `RegistryDO`.
+  const store: RegistryWorkspaceStore = env.DB ? new D1WorkspaceStore(env.DB) : registryStore(env.REGISTRY, () => env.REGISTRY.get(env.REGISTRY.idFromName(env.REGISTRY_NAME || REGISTRY_NAME)) as unknown as RegistryStub);
   const hash = makeHasher(env.SESSION_SECRET || null);
+  const docs = new RemoteDocHost(env.WORKSPACES);
   const api = createApi({
-    store, hash, docs: new RemoteDocHost(env.WORKSPACES),
+    store, hash, docs,
     config: { allowRegistration: env.ALLOW_REGISTRATION !== 'false', cookieSecure: true, publicUrl: env.PUBLIC_URL || null, inviteCode: env.INVITE_CODE || null },
   });
-  return (runtime = { api, store, hash });
+  return (runtime = { api, store, hash, docs });
 }
 
 export default {
@@ -56,6 +64,8 @@ export default {
     }
 
     const sec = { https: url.protocol === 'https:', host: requestHost(request.headers, url) };
+    if (url.pathname === RESET_PATH) return withSecurityHeaders(await handleReset(request, rt.store, env.RESET_CODE || null), sec);
+    if (url.pathname === IMPORT_PATH) return withSecurityHeaders(await handleImport(request, { store: rt.store, hash: rt.hash, docs: rt.docs, importSecret: env.IMPORT_SECRET || null }), sec);
     if (url.pathname === '/healthz' || url.pathname === '/api' || url.pathname.startsWith('/api/')) return withSecurityHeaders(await rt.api.fetch(request, env, ctx), sec);
     return withSecurityHeaders(await env.ASSETS.fetch(request), sec);
   },

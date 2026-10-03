@@ -17,17 +17,19 @@ export const PACKS: NotationPack[] = [FREEFORM_PACK, GRID_PACK, ARCHIMATE_PACK, 
 /** Color de cada notación en la interfaz (chips, puntos, paleta). */
 export const PACK_COLORS: Record<string, string> = { freeform: '#64748b', grid: '#0ea5e9', archimate: '#ca8a04', bpmn: '#16a34a', statechart: '#7c3aed', c4: '#1168bd', sequence: '#db2777', er: '#0d9488', uml: '#9333ea', mindmap: '#f59e0b', flow: '#475569', dfd: '#0891b2' };
 
-/** Traduce los nombres visibles de un pack (nombre, categorías, tipos, relaciones, viewpoints) al idioma dado. */
+/** Traduce los nombres y descripciones visibles de un pack (nombre, categorías, tipos, relaciones, viewpoints) al idioma dado. */
 export function localizePack(p: NotationPack, lang: Lang): NotationPack {
   if (lang === 'es') return p;
   const tr = (s: string) => tIn(lang, s);
+  /** Las descripciones (`doc`) se traducen con el diccionario `en-docs` (mismo mecanismo: clave = texto español). */
+  const doc = (s: string | undefined) => (s ? tr(s) : s);
   return {
-    ...p, name: tr(p.name),
+    ...p, name: tr(p.name), doc: doc(p.doc),
     categories: p.categories.map(c => ({ ...c, name: tr(c.name) })),
-    elementTypes: p.elementTypes.map(e => ({ ...e, name: tr(e.name), category: e.category ? tr(e.category) : e.category })),
-    relationTypes: p.relationTypes.map(r => ({ ...r, name: tr(r.name), category: r.category ? tr(r.category) : r.category })),
+    elementTypes: p.elementTypes.map(e => ({ ...e, name: tr(e.name), category: e.category ? tr(e.category) : e.category, doc: doc(e.doc) })),
+    relationTypes: p.relationTypes.map(r => ({ ...r, name: tr(r.name), category: r.category ? tr(r.category) : r.category, doc: doc(r.doc) })),
     portTypes: p.portTypes.map(x => ({ ...x, name: tr(x.name) })),
-    viewpoints: p.viewpoints.map(v => ({ ...v, name: tr(v.name) })),
+    viewpoints: p.viewpoints.map(v => ({ ...v, name: tr(v.name), doc: doc(v.doc) })),
   };
 }
 

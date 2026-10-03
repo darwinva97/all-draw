@@ -241,6 +241,7 @@ Se ejecutan sobre todas las vistas BPMN y aparecen en el [panel de problemas](ed
 | superfluous-gateway | aviso | Compuerta con una entrada y una salida |
 | fake-join | aviso | Actividad que recibe varios flujos sin compuerta |
 | no-inclusive-gateway-without-condition | error | Salida de compuerta inclusiva sin condición ni por defecto |
+| bpmn-pool-rules | error | Flujo de secuencia que cruza pools, flujo de mensaje dentro de una misma pool o evento de borde sin actividad |
 
 ## Errores comunes {#errores-comunes}
 

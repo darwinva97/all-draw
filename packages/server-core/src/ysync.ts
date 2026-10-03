@@ -12,10 +12,20 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
-import type { DocConnection, LiveDoc } from './docs';
+import { matchesIdentity, type ConnMatch, type DocConnection, type LiveDoc } from './docs';
 import type { Role } from './store/types';
 
 export const MSG_SYNC = 0, MSG_AWARENESS = 1, MSG_AUTH = 2;
+/**
+ * Códigos de cierre del WebSocket que el cliente interpreta (además de 1012 «reiniciando» y 4429 «demasiadas»).
+ * y-websocket (≥ 3.1) no reconecta ante 4400–4499 («no tiene sentido reintentar») y sí ante el resto:
+ * - 4401: sin permiso o **acceso revocado** (enlace revocado, miembro quitado, cuenta borrada). No reconecta.
+ * - 4403: origen no permitido. No reconecta.
+ * - 4404 / 4410: el espacio no existe / se acaba de borrar. No reconecta.
+ * - 4205: **cambió el rol** (p. ej. editor → viewer; «reset content»). Fuera del rango 44xx a propósito: el cliente
+ *   reconecta solo y el servidor vuelve a autorizar con el rol nuevo (o cierra con 4401 si ya no tiene acceso).
+ */
+export const WS_REVOKED = 4401, WS_FORBIDDEN_ORIGIN = 4403, WS_NOT_FOUND = 4404, WS_ROLE_CHANGED = 4205, WS_DELETED = 4410;
 export const READ_ONLY_REASON = JSON.stringify({ error: 'read-only' });
 /** Razón del `permissionDenied` cuando un update se descarta porque el espacio llegó a `MAX_DOC_BYTES`. */
 export const quotaReason = (limit: number) => JSON.stringify({ error: 'doc_too_large', limit });
@@ -43,6 +53,24 @@ export function closeConn(live: LiveDoc, conn: SyncSocket) {
     live.touch();
   }
   try { conn.close(); } catch { /* ya cerrada */ }
+}
+
+/**
+ * Cierra (y saca del doc al momento, sin esperar al cierre del socket) las conexiones abiertas con la identidad
+ * indicada. Devuelve cuántas. Lo que mande el cliente después ya no se aplica (`onMessage` comprueba el registro).
+ */
+export function revokeConnections(live: LiveDoc, match: ConnMatch, code: number, reason: string): number {
+  let n = 0;
+  for (const c of [...live.conns.keys()]) {
+    if (!matchesIdentity(c.identity, match)) continue;
+    n++;
+    const ids = live.conns.get(c);
+    live.conns.delete(c);
+    if (ids?.size) awarenessProtocol.removeAwarenessStates(live.awareness, [...ids], null);
+    try { c.close(code, reason); } catch { /* ya cerrada */ }
+  }
+  if (n) live.touch();
+  return n;
 }
 
 /** Difusores por doc (se instalan una vez). */
@@ -122,6 +150,7 @@ export function attachConnection(conn: SyncSocket, live: LiveDoc, role: Role): S
 
   return {
     onMessage(data: Uint8Array) {
+      if (!live.conns.has(conn)) return; // revocada o cerrada: ni se aplica ni se contesta
       try {
         const dec = decoding.createDecoder(data);
         switch (decoding.readVarUint(dec)) {

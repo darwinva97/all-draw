@@ -27,6 +27,8 @@ import { cellRects, normalizeGrid, cellKey, cellAt } from '@all-draw/notation-gr
 import { LifelineNode, ActivationNode, FragmentNode } from './views/SequenceNodes';
 import { SequenceMessageEdge } from './views/SequenceEdges';
 import { useSequenceCanvas } from './views/useSequenceCanvas';
+import { deleteSelection } from './delete-selection';
+import { filterBpmnConnections } from './bpmn-rules';
 
 export const CELL_PREFIX = 'cell:';
 const isCellId = (id: string | undefined | null) => !!id && id.startsWith(CELL_PREFIX);
@@ -75,6 +77,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
   const [picker, setPicker] = useState<Picker | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number; flow: { x: number; y: number } } | null>(null);
+  const [edgeMenu, setEdgeMenu] = useState<{ x: number; y: number; edgeId: string } | null>(null);
   const dragStart = useRef<Map<string, { x: number; y: number }>>(new Map());
   /** Pegados consecutivos del mismo clip: cada uno se desplaza un poco más. */
   const pasteCount = useRef(0);
@@ -384,7 +387,8 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
       const compat = compatibleRelationTypes(registry.allPacks().flatMap(p => p.portRules ?? []), pa?.portTypeId, pb?.portTypeId);
       if (compat) { const set = new Set(compat); const filtered = opts.filter(o => set.has(o)); opts = filtered.length ? filtered : compat; }
     }
-    return opts;
+    // BPMN: flujo de secuencia solo dentro de la misma pool; flujo de mensaje solo entre pools distintas.
+    return filterBpmnConnections(store, c.source, c.target, opts);
   }
 
   const onConnectEnd = useCallback<OnConnectEnd>((event, state: FinalConnectionState) => {
@@ -455,7 +459,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     }
     if (!element) return;
     const type = registry.elementType(element.typeId);
-    const size = defaultSize(type?.shape, !!type?.container);
+    const size = defaultSize(type?.shape, !!type?.container, element.typeId);
     const seqAt = seq.active ? seq.drop(element.typeId, pos) : undefined;
     if (seqAt === null) return;
     const at: { x: number; y: number; w?: number; h?: number; parentNodeId?: string; cell?: ViewNode['cell'] } | null = seqAt ?? placeAt(pos, size); if (!at) return;
@@ -544,7 +548,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     if (mod && e.key === '0') { e.preventDefault(); ed.canvas.current?.resetZoom(); return; }
     if (!mod && (e.key === '+' || e.key === '=')) { e.preventDefault(); rf.zoomIn({ duration: 150 }); return; }
     if (!mod && e.key === '-') { e.preventDefault(); rf.zoomOut({ duration: 150 }); return; }
-    if (e.key === 'Escape') { setPicker(null); setMenu(null); setPaneMenu(null); setRenaming(null); return; }
+    if (e.key === 'Escape') { setPicker(null); setMenu(null); setPaneMenu(null); setEdgeMenu(null); setRenaming(null); return; }
     if (readOnly) return;
     if (mod && key === 'c') { if (copy()) e.preventDefault(); return; }
     if (mod && key === 'v') { e.preventDefault(); void pasteFromClipboard(e.shiftKey ? 'clone' : 'appearance'); return; }
@@ -557,16 +561,16 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
       return;
     }
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      const cmds: Command[] = [
-        ...selection.edges.map(id => ({ type: 'deleteRelation', id: store.get('edges', id)?.relationId ?? '' }) as Command).filter(c => c.type === 'deleteRelation' && c.id),
-        ...selection.nodes.map(id => ({ type: 'deleteNode', id }) as Command),
-      ];
-      if (cmds.length) { run({ type: 'batch', label: 'quitar de la vista', commands: cmds }); select({ nodes: [], edges: [] }); }
+      // Supr quita de esta vista (nodos y aristas); Shift+Supr borra del modelo las relaciones de las aristas (con confirmación).
       e.preventDefault();
+      const sel = { nodes: selection.nodes, edges: selection.edges };
+      // Lo borrado tenía el foco: se devuelve al lienzo para que Ctrl+Z y el resto de atajos sigan funcionando.
+      void deleteSelection(store, run, sel, e.shiftKey, t).then(done => { if (done) select({ nodes: [], edges: [] }); wrapper.current?.focus({ preventScroll: true }); });
+      return;
     }
     if (mod && key === 'z') { e.preventDefault(); if (e.shiftKey) ed.history.redo(); else ed.history.undo(); }
     if (mod && key === 'y') { e.preventDefault(); ed.history.redo(); }
-  }, [selection, store, run, select, readOnly, ed.history, ed.canvas, copy, pasteFromClipboard, duplicate, selectAll, fitNodes, rf, setRenaming, nudge]);
+  }, [selection, store, run, select, readOnly, ed.history, ed.canvas, copy, pasteFromClipboard, duplicate, selectAll, fitNodes, rf, setRenaming, nudge, t]);
 
   /** Doble clic sobre una arista: inserta un bendpoint en el tramo más cercano. */
   const onEdgeDoubleClick = useCallback((e: MouseEvent, edge: Edge) => {
@@ -590,7 +594,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
   const onNodeContextMenu = useCallback((e: MouseEvent, node: Node) => {
     e.preventDefault();
     if ((node.data as { node?: ViewNode }).node?.visualType === 'core:cell') return;
-    setPaneMenu(null);
+    setPaneMenu(null); setEdgeMenu(null);
     setMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
   }, []);
 
@@ -615,9 +619,18 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     return () => { cancel(); el.removeEventListener('touchstart', start, opts); el.removeEventListener('touchmove', move, opts); el.removeEventListener('touchend', cancel, opts); el.removeEventListener('touchcancel', cancel, opts); };
   }, [store]);
 
+  /** Botón derecho sobre una arista: comentar, quitar de esta vista o borrar la relación del modelo. */
+  const onEdgeContextMenu = useCallback((e: MouseEvent, edge: Edge) => {
+    e.preventDefault();
+    if (seq.active || !store.get('edges', edge.id)) return;
+    setMenu(null); setPaneMenu(null);
+    select({ nodes: [], edges: [edge.id] });
+    setEdgeMenu({ x: e.clientX, y: e.clientY, edgeId: edge.id });
+  }, [seq.active, store, select]);
+
   const onPaneContextMenu = useCallback((e: MouseEvent | globalThis.MouseEvent) => {
     e.preventDefault();
-    setMenu(null);
+    setMenu(null); setEdgeMenu(null);
     setPaneMenu({ x: e.clientX, y: e.clientY, flow: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }) });
   }, [rf]);
 
@@ -633,6 +646,14 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     { label: t('Ajustar a la vista'), hint: 'Ctrl+Shift+F', onClick: () => fitNodes() },
     ...(onRequestLayout && !readOnly ? [{ label: t('Layout automático'), onClick: onRequestLayout }] : []),
   ] : [];
+  const edgeMenuEdge = edgeMenu ? store.get('edges', edgeMenu.edgeId) : undefined;
+  const edgeItems: PaneMenuItem[] = edgeMenu && edgeMenuEdge ? [
+    { label: t('Comentar'), onClick: () => ed.openComments({ draft: { kind: 'edge', id: edgeMenuEdge.id, viewId: edgeMenuEdge.viewId } }) },
+    ...(!readOnly ? [
+      { label: t('Quitar de esta vista'), hint: t('Supr'), onClick: () => { void deleteSelection(store, run, { nodes: [], edges: [edgeMenuEdge.id] }, false, t).then(d => { if (d) select({ nodes: [], edges: [] }); wrapper.current?.focus({ preventScroll: true }); }); } },
+      ...(edgeMenuEdge.relationId && store.get('relations', edgeMenuEdge.relationId) ? [{ label: t('Borrar del modelo'), hint: t('Shift+Supr'), danger: true, onClick: () => { void deleteSelection(store, run, { nodes: [], edges: [edgeMenuEdge.id] }, true, t).then(d => { if (d) select({ nodes: [], edges: [] }); wrapper.current?.focus({ preventScroll: true }); }); } }] : []),
+    ] : []),
+  ] : [];
 
   return (
     <div ref={wrapper} className="ad-canvas" onKeyDown={onKeyDown} tabIndex={0} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave}>
@@ -644,9 +665,9 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         onNodeDragStart={onNodeDragStart} onNodeDragStop={onNodeDragStop}
         isValidConnection={isValidConnection} onConnectEnd={onConnectEnd}
         onDrop={onDrop} onDragOver={onDragOver}
-        onNodeDoubleClick={onNodeDoubleClick} onNodeContextMenu={onNodeContextMenu} onEdgeDoubleClick={onEdgeDoubleClick}
+        onNodeDoubleClick={onNodeDoubleClick} onNodeContextMenu={onNodeContextMenu} onEdgeDoubleClick={onEdgeDoubleClick} onEdgeContextMenu={onEdgeContextMenu}
         onPaneContextMenu={onPaneContextMenu}
-        onPaneClick={() => { setPicker(null); setMenu(null); setPaneMenu(null); }}
+        onPaneClick={() => { setPicker(null); setMenu(null); setPaneMenu(null); setEdgeMenu(null); }}
         defaultViewport={initialViewport} fitView={!initialViewport} onMoveEnd={onMoveEnd}
         minZoom={MIN_ZOOM} maxZoom={MAX_ZOOM} deleteKeyCode={null} multiSelectionKeyCode="Shift" selectionKeyCode="Shift"
         onlyRenderVisibleElements={rfNodes.length > VIRTUALIZE_FROM}
@@ -673,6 +694,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
       )}
       {menu && <NodeMenu x={menu.x} y={menu.y} nodeId={menu.nodeId} onClose={() => setMenu(null)} />}
       {paneMenu && <PaneMenu x={paneMenu.x} y={paneMenu.y} items={paneItems} onClose={() => setPaneMenu(null)} />}
+      {edgeMenu && edgeItems.length > 0 && <PaneMenu x={edgeMenu.x} y={edgeMenu.y} items={edgeItems} onClose={() => setEdgeMenu(null)} />}
     </div>
   );
 }
@@ -737,8 +759,10 @@ function cellOf(cellNodeId: string): { layerId: string; stageId: string } {
   const [layerId, stageId] = cellNodeId.slice(CELL_PREFIX.length).split('|');
   return { layerId: layerId ?? '', stageId: stageId ?? '' };
 }
-export function defaultSize(shape: string | undefined, container: boolean): { w: number; h: number } {
+export function defaultSize(shape: string | undefined, container: boolean, typeId?: string): { w: number; h: number } {
   if (container) return { w: 320, h: 220 };
+  // Persona C4: cabeza y cuerpo con el texto dentro (no el monigote pequeño con la etiqueta debajo)
+  if (shape === 'actor' && typeId?.startsWith('c4:')) return { w: 160, h: 150 };
   switch (shape) {
     case 'circle': case 'double-circle': return { w: 40, h: 40 };
     case 'diamond': return { w: 60, h: 60 };

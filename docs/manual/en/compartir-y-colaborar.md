@@ -96,8 +96,14 @@ Links can have an expiry date, but today that can only be set through the API (`
 2. Next to the link, press **Revoke**. You will see "Link revoked".
 
 From then on the link no longer works to open the workspace or to reconnect. Anyone who has it **open at that moment**
-may stay connected until they reload the page or lose the connection; after that they will not be able to get back in.
-Revoking does not delete anything that person may have exported or copied.
+is disconnected immediately and sees the notice "You no longer have access to this workspace" with a **Back to home**
+button; anything they had not sent no longer reaches the server, and the copy their browser kept no longer opens
+offline. Revoking does not delete anything that person may have exported or copied.
+
+The same happens when you **remove a member**, when that person's **account is deleted** and when the **workspace is
+deleted** (then the notice is "This workspace has been deleted"). If a member's **role changes** (for example from
+`editor` to `viewer`), their connection is re-established on its own with the new role: they see "Your permissions in
+this workspace have changed" and, if they become a viewer, they stop being able to edit right away.
 
 ## Presence {#presencia}
 
@@ -106,9 +112,13 @@ it to see who it is and which view they are in. If there are more than six of yo
 
 When you are in the same view, you also see their **cursor**, with their name, moving on the canvas.
 
-> [!NOTE]
-> For now each person appears as "Anonymous" followed by a number, with a random colour; the number and colour change
-> when the page is reloaded. Your account name is not used for presence yet.
+How each person appears:
+
+- **Signed in**, with their **account name** and a fixed colour (the same on every reload and on every device). It is
+  also the signature of their comments.
+- **With a link and no account**, as "Anonymous" followed by a number. That name is generated the first time and saved
+  in the browser, so it does not change when reloading; it is the same one used to sign their comments. If you want to
+  appear with your name, sign in with your account before opening the link.
 
 ## Editing at the same time {#edicion-simultanea}
 
@@ -130,8 +140,17 @@ Every server workspace you open has a **copy in your browser**. If the network d
    `● online`.
 
 all-draw can be installed as an app (PWA) and starts even without a network. Offline you can open and edit all your
-**local workspaces**; **server** workspaces need a connection to open, because your permissions are checked when you
-open them. If you are going to travel, leave the workspace open before losing the network, or work on a local copy.
+**local workspaces** and also the **server workspaces you have already opened in that browser**:
+
+1. The saved copy opens with the last permission you had (if you were a viewer, it stays read-only).
+2. The bar shows `○ offline — changes will sync`. **Share** and **History** are not available until the network
+   returns.
+3. As soon as the connection returns your permissions are checked, it connects and everything syncs; the status
+   changes to `● online`. If your access was removed in the meantime, you will see "You no longer have access to this
+   workspace" and what you did offline is not sent.
+
+A server workspace you have never opened in that browser has no copy: offline you will see "No connection to the
+server" and you can **Retry** when it returns. If you are going to travel, open the workspaces you will need first.
 
 > [!WARNING]
 > Don't clear your browser data while you have unsynced changes (status `○ offline`): you would lose whatever you did
@@ -208,7 +227,13 @@ The token is only kept in the tab where it was opened and is removed from the ad
 You gave them a read-only link. Create a **New edit link**, send it and, if you like, revoke the read-only one.
 
 **"I revoked a link and the person still sees the changes."**
-Their open connection stays active until they reload or the network drops. After that they will not be able to get in.
+Revoking disconnects them immediately. If they still show up in presence, they are getting in another way: with another
+link (revoke it too) or with their account as a member (remove them from the members).
+
+**"It says «You no longer have access to this workspace»."**
+The link you used was revoked or your permission was removed. Press **Back to home** and ask whoever manages the
+workspace for a new link. What you did after losing access was not saved on the server; if you need it, export it
+before leaving (**Import / Export**).
 
 **"It says «offline» and doesn't go back to «online»."**
 Check your internet connection and reload the page: your changes are saved in the browser and will be sent when you
@@ -221,5 +246,6 @@ limit is 10 every 15 minutes). Wait and try again calmly; if you don't remember 
 **"I can't register."**
 The server requires an **Invite code** or has registration closed. Ask whoever runs it for access.
 
-**"We all show up as «Anonymous»."**
-That is a current limitation of presence; see [Presence](#presencia).
+**"I show up as «Anonymous» and a number."**
+You opened the link without being signed in. Sign in with your account and open the link again to appear with your
+name; see [Presence](#presencia).

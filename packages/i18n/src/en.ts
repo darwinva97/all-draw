@@ -1,4 +1,6 @@
 /** Diccionario inglés. Clave = texto en español de la interfaz. Se completa a medida que se traducen pantallas. */
+import { enDocs } from './en-docs';
+
 export const en: Record<string, string> = {
   // ---- rendimiento (panel de problemas, listas largas, espacio de prueba)
   'calculando…': 'computing…',
@@ -691,6 +693,8 @@ export const enPacks: Record<string, string> = {
   'Composite / Other': 'Composite / Other', 'Interacción': 'Interaction', 'Sistemas': 'Systems',
 };
 Object.assign(en, enPacks);
+// Descripciones (`doc`) de tipos, relaciones, viewpoints y packs: diccionario aparte en `en-docs.ts`.
+Object.assign(en, enDocs);
 
 /** Interfaz adaptable (tableta y móvil). */
 export const enResponsive: Record<string, string> = {
@@ -1257,4 +1261,87 @@ Object.assign(en, {
   'propietario': 'owner',
   'puede editar': 'can edit',
   'solo lectura': 'read-only',
+} satisfies Record<string, string>);
+
+// ==== Editor: quitar/borrar aristas, nombre local de los comentarios
+Object.assign(en, {
+  'Shift+Supr': 'Shift+Del',
+  '¿Borrar la relación del modelo y de todas las vistas?': 'Delete the relationship from the model and from every view?',
+  '¿Borrar {n} relaciones del modelo y de todas las vistas?': 'Delete {n} relationships from the model and from every view?',
+  'Se borran también sus aristas en todas las vistas. Puedes deshacerlo con Ctrl+Z.': 'Their edges are deleted from every view too. You can undo it with Ctrl+Z.',
+  'Solo esta arista; la relación sigue en el modelo (Supr)': 'Just this edge; the relationship stays in the model (Del)',
+  'La relación y todas sus aristas, en todas las vistas (Shift+Supr)': 'The relationship and all its edges, in every view (Shift+Del)',
+  'Quitar de esta vista (nodos y aristas)': 'Remove from this view (nodes and edges)',
+  'Borrar del modelo la relación de la arista (pide confirmación)': "Delete the edge's relationship from the model (asks for confirmation)",
+  'Tu nombre': 'Your name',
+  'Firma de tus comentarios en este navegador': 'Signature of your comments in this browser',
+} satisfies Record<string, string>);
+
+// ==== Demo (espacio de ejemplo multidimensión, apps/web/src/demo.ts)
+Object.assign(en, {
+  'Demo · Alta de cliente': 'Demo · Customer onboarding',
+  'Gestor comercial': 'Account manager',
+  'Alta de cliente': 'Customer onboarding',
+  'Proceso de incorporación de un cliente nuevo. Tiene vista BPMN y máquina de estados.': 'Process for bringing on a new customer. It has a BPMN view and a state machine.',
+  'Servicio de onboarding': 'Onboarding service',
+  'Verificación KYC': 'KYC verification',
+  'Expediente de cliente': 'Customer file',
+  'Clúster Kubernetes': 'Kubernetes cluster',
+  'Arquitectura · Alta de cliente': 'Architecture · Customer onboarding',
+  'Vista en capas del proceso de alta.': 'Layered view of the onboarding process.',
+  'Alta de cliente · BPMN': 'Customer onboarding · BPMN',
+  'Gestor': 'Manager',
+  'Solicitud recibida': 'Request received',
+  'Recoger datos': 'Collect data',
+  'Verificar identidad': 'Verify identity',
+  '¿Verificado?': 'Verified?',
+  'Cliente activo': 'Active customer',
+  'Rechazado': 'Rejected',
+  'usa': 'uses',
+  'crea en': 'creates in',
+  'Alta de cliente · Estados': 'Customer onboarding · States',
+  'Pendiente': 'Pending',
+  'En verificación': 'Under verification',
+  'lanzar KYC': 'start KYC',
+  'Activo': 'Active',
+  'datos completos': 'data complete',
+  'CRM · Contenedores': 'CRM · Containers',
+  'Portal del gestor': 'Manager portal',
+  'API de clientes': 'Customers API',
+  'Proveedor KYC': 'KYC provider',
+  'es': 'is',
+  'provee': 'provides',
+  'Captación': 'Acquisition',
+  'Alta': 'Onboarding',
+  'Operación': 'Operation',
+  'clientes-api': 'customers-api',
+  'notificaciones': 'notifications',
+  'expone': 'exposes',
+  'Alta de cliente · Secuencia': 'Customer onboarding · Sequence',
+  'Interacción entre el cliente, el portal, la API y la base de datos al dar de alta un cliente.': 'Interaction between the customer, the portal, the API and the database when onboarding a customer.',
+  '[no existe el email]': '[email does not exist]',
+  'Procesar alta': 'Process onboarding',
+  'procesar alta': 'process onboarding',
+  'rellena el formulario': 'fills in the form',
+  'buscar por email': 'find by email',
+  'ninguno': 'none',
+  'INSERT cliente': 'INSERT customer',
+  'muestra la confirmación': 'shows the confirmation',
+  'Proceso (BPMN)': 'Process (BPMN)',
+  'Externos en gris': 'External in grey',
+  'Servicios sin repo': 'Services without repo',
+} satisfies Record<string, string>);
+
+// ==== QA servidor (revocación con el espacio abierto, espacios del servidor sin conexión)
+Object.assign(en, {
+  'Tus permisos en este espacio han cambiado: ahora {role}.': 'Your permissions in this workspace have changed: now {role}.',
+  'Este espacio se ha borrado': 'This workspace has been deleted',
+  'Ya no tienes acceso a este espacio': 'You no longer have access to this workspace',
+  'Quien lo administra lo ha borrado del servidor. Lo que ves ya no se sincroniza.': 'Its owner deleted it from the server. What you see no longer syncs.',
+  'Han revocado el enlace o tu permiso. Lo que ves ya no se sincroniza y los cambios que no se hubieran enviado no llegarán al servidor.': 'The link or your permission was revoked. What you see no longer syncs, and changes that had not been sent will not reach the server.',
+  'Volver al inicio': 'Back to home',
+  'Este espacio no se ha abierto antes en este navegador, así que no hay copia para trabajar sin conexión. Vuelve a intentarlo cuando tengas red.': 'This workspace has not been opened in this browser before, so there is no copy to work offline. Try again when you are online.',
+  'sin acceso': 'no access',
+  'sin conexión — los cambios se sincronizarán': 'offline — changes will sync',
+  'Abierto con la copia de este navegador; se sincroniza al volver la conexión': 'Opened from this browser’s copy; it syncs when the connection is back',
 } satisfies Record<string, string>);

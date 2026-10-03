@@ -1,5 +1,6 @@
 /**
- * Diez reglas de bpmnlint portadas como `Validator` del núcleo. Operan sobre el modelo semántico
+ * Diez reglas de bpmnlint portadas como `Validator` del núcleo, más `bpmn-pool-rules` (reglas de BPMN que la matriz de
+ * validez no expresa: pools de los flujos y eventos de borde). Operan sobre el modelo semántico
  * (elementos y relaciones `bpmn:*`), sin XML: sirven para modelos importados y para los creados a mano.
  * Los códigos coinciden con los nombres de las reglas de bpmnlint.
  *
@@ -9,6 +10,9 @@
 import { indexOf, type Diagnostic, type Element, type Relation, type Store, type Validator } from '@all-draw/core';
 
 const SEQ = 'bpmn:SequenceFlow';
+const MSG = 'bpmn:MessageFlow';
+/** Participantes: pool con proceso, pool colapsada y proceso sin pool (vista con raíz `Process`). */
+const PARTICIPANTS = new Set(['bpmn:Pool', 'bpmn:Participant', 'bpmn:Process']);
 const SUBPROCESSES = new Set(['bpmn:SubProcess', 'bpmn:EventSubProcess', 'bpmn:AdHocSubProcess', 'bpmn:Transaction']);
 const ACTIVITIES = new Set([...SUBPROCESSES, 'bpmn:Task', 'bpmn:CallActivity']);
 const GATEWAYS = new Set(['bpmn:ExclusiveGateway', 'bpmn:ParallelGateway', 'bpmn:InclusiveGateway', 'bpmn:EventBasedGateway', 'bpmn:ComplexGateway']);
@@ -29,6 +33,10 @@ export interface BpmnIndex {
   scopeOf(id: string): string | undefined;
   /** Nodos de flujo por ámbito (`''` = raíz). */
   scopes: Map<string, Element[]>;
+  /** Contenedor semántico más cercano (nodos de las vistas saltando grupos, o `features.bpmnParent`). */
+  parentOf(id: string): string | undefined;
+  /** Elemento BPMN por id. */
+  get(id: string): Element | undefined;
 }
 
 export function indexBpmn(store: Store): BpmnIndex {
@@ -68,7 +76,7 @@ export function indexBpmn(store: Store): BpmnIndex {
   };
   const scopes = new Map<string, Element[]>();
   for (const e of elements) if (isFlowNode(e)) { const s = scopeOf(e.id) ?? ''; scopes.set(s, [...(scopes.get(s) ?? []), e]); }
-  return { elements, flows, incoming: id => inc.get(id) ?? [], outgoing: id => out.get(id) ?? [], scopeOf, scopes };
+  return { elements, flows, incoming: id => inc.get(id) ?? [], outgoing: id => out.get(id) ?? [], scopeOf, scopes, parentOf, get: id => byId.get(id) };
 }
 
 const diag = (code: string, severity: Diagnostic['severity'], collection: 'elements' | 'relations', id: string, message: string, extra: Partial<Diagnostic> = {}): Diagnostic =>
@@ -242,7 +250,60 @@ export const noInclusiveGatewayWithoutCondition: Validator = {
   },
 };
 
+/** Participante (pool, pool colapsada o proceso) de un elemento: él mismo si lo es, o el contenedor más cercano que lo sea. */
+export function participantOf(ix: BpmnIndex, id: string): string | undefined {
+  let cur: string | undefined = id, guard = 0;
+  while (cur && guard++ < 50) {
+    if (PARTICIPANTS.has(ix.get(cur)?.typeId ?? '')) return cur;
+    cur = ix.parentOf(cur);
+  }
+  return undefined;
+}
+
+/**
+ * Reglas de BPMN que la matriz de validez no puede expresar:
+ * - un **flujo de secuencia** no sale de su pool/proceso (ambos extremos en el mismo participante);
+ * - un **flujo de mensaje** une participantes **distintos** (nunca dos pasos de la misma pool);
+ * - un **evento de borde** está anidado en una actividad (o adherido a una con `attachedTo`, como en los modelos importados).
+ */
+export const bpmnPoolRules: Validator = {
+  id: 'bpmnlint.bpmn-pool-rules',
+  run({ store }) {
+    const ix = indexBpmn(store);
+    const out: Diagnostic[] = [];
+    const name = (id: string | undefined) => { const e = id ? ix.get(id) : undefined; return e ? label(e) : '?'; };
+    for (const r of store.list('relations')) {
+      if ((r.typeId !== SEQ && r.typeId !== MSG) || !r.from.elementId || !r.to.elementId) continue;
+      if (!ix.get(r.from.elementId) || !ix.get(r.to.elementId)) continue;
+      const a = participantOf(ix, r.from.elementId), b = participantOf(ix, r.to.elementId);
+      if (r.typeId === SEQ && a !== b) {
+        out.push(diag('bpmn-pool-rules', 'error', 'relations', r.id,
+          `El flujo de secuencia de "${name(r.from.elementId)}" a "${name(r.to.elementId)}" cruza de pool (${a ? `"${name(a)}"` : 'ninguna'} → ${b ? `"${name(b)}"` : 'ninguna'}): entre pools distintas usa un flujo de mensaje`,
+          { evidence: { rule: 'sequence-flow-same-pool', from: a, to: b } }));
+      }
+      if (r.typeId === MSG && a && a === b) {
+        out.push(diag('bpmn-pool-rules', 'error', 'relations', r.id,
+          `El flujo de mensaje de "${name(r.from.elementId)}" a "${name(r.to.elementId)}" no sale de "${name(a)}": los mensajes van entre pools distintas (dentro de una pool, flujo de secuencia)`,
+          { evidence: { rule: 'message-flow-different-pools', pool: a } }));
+      }
+    }
+    for (const e of ix.elements) {
+      if (e.typeId !== 'bpmn:BoundaryEvent') continue;
+      const parent = ix.parentOf(e.id);
+      const host = typeof e.fields.attachedTo === 'string' ? e.fields.attachedTo : undefined;
+      const nested = !!parent && ACTIVITIES.has(ix.get(parent)?.typeId ?? '');
+      const attached = !!host && ACTIVITIES.has(ix.get(host)?.typeId ?? '');
+      if (!nested && !attached) {
+        out.push(diag('bpmn-pool-rules', 'error', 'elements', e.id, `El evento de borde "${label(e)}" no está sobre una actividad: suéltalo dentro de la tarea o subproceso al que pertenece`,
+          { evidence: { rule: 'boundary-event-in-activity', parent } }));
+      }
+    }
+    return out;
+  },
+};
+
 export const BPMNLINT_VALIDATORS: Validator[] = [
   startEventRequired, endEventRequired, noDisconnected, singleBlankStartEvent, noImplicitSplit,
   noDuplicateSequenceFlows, labelRequired, superfluousGateway, fakeJoin, noInclusiveGatewayWithoutCondition,
+  bpmnPoolRules,
 ];

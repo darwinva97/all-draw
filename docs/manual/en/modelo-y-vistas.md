@@ -173,13 +173,13 @@ This is the most important distinction in all-draw, and the cause of most surpri
 |---|---|---|---|
 | **Remove from this view** | Select the node and press **Del** (or Backspace), or right-click → **Remove from this view** | The node, any nodes inside it and the edges touching it **in this view** | The element, its relations and its appearances in other views |
 | **Delete from model** | Right-click → **Delete from model** (asks for confirmation) | The element, **all** its appearances in **all** views and all its relations | Nothing of that element; views it was the root of are left without a root |
-| **Delete a relation** | Select the edge and press **Del** | The relation in the model and **all** its edges in every view | Both elements |
+| **Remove an edge from this view** | Select the edge and press **Del**, or right-click → **Remove from this view** | That edge, only **in this view** | The relation and its edges in other views |
+| **Delete a relation** | Select the edge and press **Shift+Del**, or right-click → **Delete from model** (asks for confirmation) | The relation in the model and **all** its edges in every view | Both elements |
 | **Delete a view** | **×** next to the view in the panel | The view with its nodes and edges | All elements and relations |
 
 > [!WARNING]
-> **Del** on a *node* is harmless (it only removes it from the view), but **Del** on an *edge* deletes the
-> relation from the whole model. There is currently no option to remove *just the edge* from one view: if you
-> don't want to see it here, the only way is to remove one of its two ends from the view.
+> **Del** is harmless on both *nodes* and *edges*: it only removes them from this view. What deletes from the whole
+> model is **Shift+Del** (on edges) and **Delete from model**, which always ask for confirmation.
 
 Everything can be undone with **Ctrl+Z** (Cmd+Z on a Mac) as long as you don't close the workspace. In server
 workspaces you can also go back to an earlier snapshot from [History](historial.md).

@@ -24,7 +24,33 @@ export interface SvgOptions {
   idPrefix?: string;
   /** Sin `<title>`/`<desc>` accesibles ni atributos `data-*` (más compacto). */
   bare?: boolean;
+  /**
+   * Marcadores numerados encima del dibujo (los usa el HTML exportado para los comentarios). Por defecto ninguno:
+   * el SVG suelto no lleva comentarios.
+   */
+  markers?: SvgMarker[];
 }
+
+/** Marcador numerado sobre un nodo (esquina superior derecha), una arista (su punto medio) o un punto del lienzo. */
+export interface SvgMarker {
+  label: string;
+  at: { node: string } | { edge: string } | { x: number; y: number };
+  /** Atenuado (p. ej. hilo resuelto). */
+  muted?: boolean;
+  /** Texto emergente (`<title>`). */
+  title?: string;
+  /** Va en `data-marker` para enlazarlo desde fuera (p. ej. con el hilo del panel). */
+  id?: string;
+}
+
+const MARKER_R = 10;
+const MARKER_CSS = [
+  '.ad-marker{cursor:pointer}',
+  '.ad-marker circle{fill:var(--ad-accent);stroke:var(--ad-bg);stroke-width:2}',
+  '.ad-marker text{fill:#fff;font-size:11px;font-weight:700}',
+  '.ad-marker.is-muted circle{fill:var(--ad-muted)}',
+  '.ad-marker.is-focus circle{stroke:var(--ad-text)}',
+].join('\n');
 
 // ---------------------------------------------------------------- Tema
 export const THEME_VARS: Record<'light' | 'dark', Record<string, string>> = {
@@ -32,23 +58,34 @@ export const THEME_VARS: Record<'light' | 'dark', Record<string, string>> = {
     '--ad-bg': '#f6f7f9', '--ad-panel': '#ffffff', '--ad-border': '#e3e6ea', '--ad-text': '#1b1f24', '--ad-muted': '#6b7280', '--ad-accent': '#2563eb',
     '--ad-header': '#f3f4f6', '--ad-header-border': '#d1d5db', '--ad-cell': 'rgba(0,0,0,.02)', '--ad-cell-border': '#e5e7eb',
     '--ad-note': '#fff8c5', '--ad-visual-border': '#d4d4d8', '--ad-group': 'rgba(0,0,0,.02)',
-    '--ad-node-fill': '#ffffff', '--ad-node-stroke': '#a6a6a6',
+    '--ad-node-fill': '#ffffff', '--ad-node-stroke': '#a6a6a6', '--ad-edge': '#444444',
   },
   dark: {
     '--ad-bg': '#0f1115', '--ad-panel': '#1a1d23', '--ad-border': '#2b3039', '--ad-text': '#e6e8eb', '--ad-muted': '#9aa3b2', '--ad-accent': '#60a5fa',
     '--ad-header': '#20242c', '--ad-header-border': '#3a404b', '--ad-cell': 'rgba(255,255,255,.03)', '--ad-cell-border': '#2b3039',
     '--ad-note': '#3b3620', '--ad-visual-border': '#3f434b', '--ad-group': 'rgba(255,255,255,.03)',
-    '--ad-node-fill': '#1c2230', '--ad-node-stroke': '#4a5568',
+    '--ad-node-fill': '#1c2230', '--ad-node-stroke': '#4a5568', '--ad-edge': '#9aa3b2',
   },
 };
 
 const vars = (t: 'light' | 'dark') => Object.entries(THEME_VARS[t]).map(([k, v]) => `${k}:${v}`).join(';');
 
+/**
+ * Contenedores "papel" (tipo blanco o gris claro neutro: pool, lane, límite C4, paquete…; clase `ad-lc`) en tema oscuro:
+ * relleno del panel y texto del tema, como en el editor. Sus hijos con la etiqueta debajo (eventos, compuertas) llevan
+ * `ad-on-lc` para que esa etiqueta también siga al tema. En `dual` solo se aplica con el esquema oscuro.
+ */
+const lcRules = (scope: string) => [
+  `${scope} .ad-lc>.ad-shape{fill:var(--ad-panel)}`,
+  `${scope} .ad-lc-text>text{fill:var(--ad-text)}`,
+  `${scope} .ad-on-lc>text.ad-node__label{fill:var(--ad-text)}`,
+].join('');
+
 export function svgStyle(theme: SvgTheme, fontFamily: string): string {
   const base = theme === 'dark' ? vars('dark') : vars('light');
   const themed = theme === 'dual'
-    ? `svg.ad-svg{${vars('light')}}\n@media (prefers-color-scheme: dark){svg.ad-svg{${vars('dark')}}}\nsvg.ad-svg[data-theme="light"]{${vars('light')}}\nsvg.ad-svg[data-theme="dark"]{${vars('dark')}}`
-    : `svg.ad-svg{${base}}`;
+    ? `svg.ad-svg{${vars('light')}}\n@media (prefers-color-scheme: dark){svg.ad-svg{${vars('dark')}}${lcRules('svg.ad-svg:not([data-theme="light"])')}}\nsvg.ad-svg[data-theme="light"]{${vars('light')}}\nsvg.ad-svg[data-theme="dark"]{${vars('dark')}}\n${lcRules('svg.ad-svg[data-theme="dark"]')}`
+    : theme === 'dark' ? `svg.ad-svg{${base}}\n${lcRules('svg.ad-svg')}` : `svg.ad-svg{${base}}`;
   return [
     themed,
     `svg.ad-svg{font-family:${fontFamily};font-size:13px;color:var(--ad-text)}`,
@@ -103,6 +140,13 @@ export function readable(hex: string): string {
   const n = parseInt(m[1]!, 16); const r = n >> 16, g = (n >> 8) & 255, b = n & 255;
   return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#111' : '#fff';
 }
+/** Blanco o gris muy claro sin apenas tinte (#fff, #f5f5f5, #f1f5f9…). Igual que `isNeutralLight` de `shapes.tsx`. */
+export function isNeutralLight(hex: string | undefined): boolean {
+  const m = hex ? /^#?([0-9a-f]{6})$/i.exec(hex.trim()) : null; if (!m) return false;
+  const n = parseInt(m[1]!, 16); const r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  return (r * 299 + g * 587 + b * 114) / 1000 >= 240 && Math.max(r, g, b) - Math.min(r, g, b) <= 24;
+}
+
 /** Mezcla `hex` con blanco (equivale a `color-mix(in srgb, hex pct%, white)`). */
 export function mixWithWhite(hex: string, pct: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim()); if (!m) return hex;
@@ -144,10 +188,44 @@ function textBlock(lines: string[], o: TextOpts): string {
 const SVG_SHAPES = new Set<Shape>(['ellipse', 'diamond', 'hexagon', 'parallelogram', 'cylinder', 'actor', 'circle', 'double-circle', 'bar']);
 const LABEL_BELOW = new Set<Shape>(['circle', 'double-circle', 'diamond', 'bar', 'actor']);
 
-/** Figura en un viewBox 0..100 escalada al rectángulo (como `ShapeSvg` con `preserveAspectRatio="none"`). */
-function shapeSvg(shape: Shape, b: Box, fill: string, stroke: string, strokeWidth: number): string {
+/** Figura que se pinta: la del tipo, salvo la persona de C4 (`c4:Person`, tipo `actor`). Igual que `figureFor` del editor. */
+type Figure = Shape | 'person';
+export function figureFor(typeId: string | undefined, shape: Shape): Figure {
+  return shape === 'actor' && !!typeId && typeId.startsWith('c4:') ? 'person' : shape;
+}
+
+/** Persona C4 (cabeza + cuerpo redondeado, texto dentro del cuerpo). Réplica de `personGeometry` de `shapes.tsx`. */
+export function personGeometry(w: number, h: number): { cx: number; cy: number; r: number; bodyTop: number; bodyH: number; rx: number } {
+  const r = Math.max(6, Math.min(w * 0.17, h * 0.19));
+  const bodyTop = Math.round(2 * r + 3);
+  const bodyH = Math.max(4, h - bodyTop - 1);
+  return { cx: w / 2, cy: r + 1, r, bodyTop, bodyH, rx: Math.min(r * 1.3, bodyH / 2, (w - 2) / 2) };
+}
+
+/** Actor (monigote) sin deformar la cabeza. Réplica de `actorGeometry` de `shapes.tsx`. */
+function actorGeometry(w: number, h: number): { cx: number; cy: number; r: number; path: string } {
+  const r = Math.max(4, Math.min(w * 0.2, h * 0.12));
+  const cx = w / 2, cy = r + 1, neck = cy + r, hip = h * 0.62, arm = neck + (hip - neck) * 0.3, dx = w * 0.32, leg = w * 0.25;
+  const f = (n: number) => Math.round(n * 100) / 100;
+  return { cx, cy, r, path: `M${f(cx)},${f(neck)} V${f(hip)} M${f(cx - dx)},${f(arm)} H${f(cx + dx)} M${f(cx)},${f(hip)} L${f(cx - leg)},${f(h - 1)} M${f(cx)},${f(hip)} L${f(cx + leg)},${f(h - 1)}` };
+}
+
+/**
+ * Figura en un viewBox 0..100 escalada al rectángulo (como `ShapeSvg` con `preserveAspectRatio="none"`); el actor y la
+ * persona C4 se dibujan en coordenadas del nodo para no deformar la cabeza.
+ */
+function shapeSvg(shape: Figure, b: Box, fill: string, stroke: string, strokeWidth: number): string {
   const f = fill === 'transparent' ? 'var(--ad-panel)' : fill;
   const c = attrs({ fill: f, stroke, 'stroke-width': strokeWidth, 'vector-effect': 'non-scaling-stroke' });
+  if (shape === 'person' || shape === 'actor') {
+    const move = attrs({ transform: `translate(${num(b.x)},${num(b.y)})` });
+    if (shape === 'person') {
+      const g = personGeometry(b.w, b.h);
+      return `<g class="ad-shape"${move}><rect${attrs({ x: 1, y: g.bodyTop, width: b.w - 2, height: g.bodyH, rx: g.rx })}${c}/><circle${attrs({ cx: g.cx, cy: g.cy, r: g.r })}${c}/></g>`;
+    }
+    const g = actorGeometry(b.w, b.h);
+    return `<g class="ad-shape"${move}><path${attrs({ d: g.path, fill: 'none', stroke, 'stroke-width': 2, 'stroke-linecap': 'round' })}/><circle${attrs({ cx: g.cx, cy: g.cy, r: g.r })}${c}/></g>`;
+  }
   let body: string;
   switch (shape) {
     case 'ellipse': body = `<ellipse cx="50" cy="50" rx="49" ry="49"${c}/>`; break;
@@ -158,7 +236,6 @@ function shapeSvg(shape: Shape, b: Box, fill: string, stroke: string, strokeWidt
     case 'parallelogram': body = `<polygon points="20,2 98,2 80,98 2,98"${c}/>`; break;
     case 'bar': body = `<rect x="0" y="40" width="100" height="20"${attrs({ fill: stroke, stroke, 'vector-effect': 'non-scaling-stroke' })}/>`; break;
     case 'cylinder': body = `<path d="M2,15 v70 a48,12 0 0 0 96,0 v-70"${c}/><ellipse cx="50" cy="15" rx="48" ry="12"${c}/>`; break;
-    case 'actor': body = `<circle cx="50" cy="14" r="12"${c}/><path d="M50,26 v34 M20,40 h60 M50,60 l-22,38 M50,60 l22,38"${attrs({ fill: 'none', stroke, 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' })}/>`; break;
     default: return '';
   }
   return `<g class="ad-shape"${attrs({ transform: `translate(${num(b.x)},${num(b.y)}) scale(${num(b.w / 100)},${num(b.h / 100)})` })}>${body}</g>`;
@@ -253,6 +330,8 @@ interface Ctx {
   portsOf: Map<string, { port: Port; y: number }[]>;
   /** Cajas de rótulos que pueden salir de los nodos (cardinalidades y roles): entran en la caja envolvente. */
   extents: Box[];
+  /** Color de las aristas sin color propio: el del editor en cada tema (`#444` claro, `#9aa3b2` oscuro). */
+  edgeColor: string;
 }
 
 function markerId(ctx: Ctx, head: ArrowHead, color: string, start: boolean): string {
@@ -300,18 +379,29 @@ function explicitFill(ctx: Ctx, vn: ViewNode): string | undefined {
   return rule.bg ?? vn.style.fill ?? ctx.reg.elementType(el.typeId)?.color;
 }
 
-function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementType | undefined, b: Box, dimmed: boolean, parentFill: string | undefined): string {
+/** ¿El nodo es un contenedor "papel" (su tipo es blanco o gris neutro y nadie le ha puesto otro relleno)? */
+function isPaperContainer(ctx: Ctx, vn: ViewNode): boolean {
+  const el = vn.elementId ? ctx.store.get('elements', vn.elementId) : undefined;
+  const type = el ? ctx.reg.elementType(el.typeId) : undefined;
+  if (!el || !type?.container || !isNeutralLight(type.color) || vn.style.fill !== undefined) return false;
+  return resolveStyle(ctx.store, ctx.reg, el, ctx.viewId).style.bg === undefined;
+}
+
+function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementType | undefined, b: Box, dimmed: boolean, parentFill: string | undefined, onPaper = false): string {
   const rule = resolveStyle(ctx.store, ctx.reg, el, ctx.viewId).style as RuleStyle;
   const shape: Shape = type?.shape ?? 'rounded';
+  const figure = figureFor(el.typeId, shape);
+  const person = figure === 'person';
   const isContainer = !!type?.container;
   const explicit = rule.bg ?? vn.style.fill ?? type?.color;
   // Sin color propio, el relleno sigue al tema (blanco en claro, panel en oscuro), como el editor.
   const fill = explicit ?? 'var(--ad-node-fill)';
   const stroke = rule.border ?? vn.style.stroke ?? (explicit ? darken(explicit, 0.35) : 'var(--ad-node-stroke)');
   const svgShape = SVG_SHAPES.has(shape);
+  const below = LABEL_BELOW.has(shape) && !person;
   // Etiquetas bajo la figura (círculos, rombos…): color legible sobre el contenedor que las rodea, o el del tema.
   const onParent = parentFill ? readable(parentFill) : 'var(--ad-text)';
-  const textColor = rule.text ?? vn.style.text ?? (svgShape && LABEL_BELOW.has(shape) ? onParent : !explicit ? 'var(--ad-text)' : readable(explicit));
+  const textColor = rule.text ?? vn.style.text ?? (svgShape && below ? onParent : !explicit ? 'var(--ad-text)' : readable(explicit));
   const opacity = rule.opacity ?? vn.style.opacity ?? 1;
   const fontSize = vn.style.fontSize ?? 13;
   const strokeWidth = rule.borderWidth ?? 1;
@@ -320,9 +410,14 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
   // ArchiMate: figuras e iconos de Archi (mismas `FIGURES` que el editor).
   const archi = ctx.reg.notationOf(el.typeId) === 'archimate' ? figureEntry(el.typeId) : undefined;
   const archiDef = archi ? figureOf(el.typeId, vn.style.figure === 1 ? 1 : 0) : undefined;
-  const inset = archiDef ? textInset(archiDef, b.w, b.h) : { top: 0, right: 0, bottom: 0, left: 0 };
+  // Persona C4: el texto va en el cuerpo, bajo la cabeza.
+  const inset = archiDef ? textInset(archiDef, b.w, b.h) : person ? { top: personGeometry(b.w, b.h).bodyTop - 2, right: 0, bottom: 0, left: 0 } : { top: 0, right: 0, bottom: 0, left: 0 };
   const icon = archi || LABEL_BELOW.has(shape) ? undefined : ((rule.icon ?? type?.icon) || undefined);
-  const cls = ['ad-node', `ad-shape-${shape}`, archi ? 'ad-node--archimate' : '', isContainer ? 'is-container' : '', dimmed ? 'is-dimmed' : '', rule.bold ? 'r-bold' : '', rule.strike ? 'r-strike' : ''].filter(Boolean).join(' ');
+  // Contenedor "papel": en tema oscuro toma el panel y el texto del tema (reglas `lcRules`), si nadie fijó otros colores.
+  const paper = isContainer && explicit !== undefined && rule.bg === undefined && vn.style.fill === undefined && isNeutralLight(type?.color);
+  const autoText = rule.text === undefined && vn.style.text === undefined;
+  const cls = ['ad-node', `ad-shape-${figure}`, archi ? 'ad-node--archimate' : '', isContainer ? 'is-container' : '', paper ? 'ad-lc' : '', paper && autoText ? 'ad-lc-text' : '',
+    onPaper && below && autoText ? 'ad-on-lc' : '', dimmed ? 'is-dimmed' : '', rule.bold ? 'r-bold' : '', rule.strike ? 'r-strike' : ''].filter(Boolean).join(' ');
 
   const parts: string[] = [];
   // Cuerpo
@@ -337,7 +432,7 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
       inset.right += 12;
     }
   }
-  else if (svgShape) parts.push(shapeSvg(shape, b, fill, stroke, 1.5));
+  else if (svgShape) parts.push(shapeSvg(figure, b, fill, stroke, 1.5));
   else if (shape === 'pool' || shape === 'lane') {
     const band = shape === 'pool' ? 24 : 18;
     parts.push(`<rect class="ad-shape"${attrs({ x: b.x, y: b.y, width: b.w, height: b.h, rx: 4, fill, stroke, 'stroke-width': strokeWidth })}/>`);
@@ -352,7 +447,7 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
   // Etiqueta
   if (shape !== 'pool' && shape !== 'lane') {
     const lineH = fontSize * 1.25;
-    if (LABEL_BELOW.has(shape)) {
+    if (below) {
       parts.push(textBlock([label], { x: b.x + b.w / 2, y: b.y + b.h + 2 + lineH / 2, cls: 'ad-node__label', fill: textColor, fontSize }));
     } else {
       const padX = 10, padY = 4;
@@ -426,7 +521,7 @@ function renderEdge(ctx: Ctx, e: ViewEdge): string {
   const rel = e.relationId ? ctx.store.get('relations', e.relationId) : undefined;
   const type = rel ? ctx.reg.relationType(rel.typeId) : undefined;
   const line = e.style.line ?? type?.line ?? 'solid';
-  const color = e.style.color ?? type?.color ?? '#444';
+  const color = e.style.color ?? type?.color ?? ctx.edgeColor;
   const width = e.style.width ?? 1.5;
   const ends = cardEnds(rel?.fields, type?.fields);
   const sh = e.style.sourceHead ?? ends.sourceHead ?? type?.sourceHead ?? 'none';
@@ -493,7 +588,8 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
   const padding = opts.padding ?? 24;
   const fontFamily = opts.fontFamily ?? 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
   const prefix = safeId(opts.idPrefix ?? `ad-${viewId}`);
-  const ctx: Ctx = { store, reg, viewId, prefix, bare: !!opts.bare, markers: new Map(), abs: new Map(), portsOf: new Map(), extents: [] };
+  const ctx: Ctx = { store, reg, viewId, prefix, bare: !!opts.bare, markers: new Map(), abs: new Map(), portsOf: new Map(), extents: [],
+    edgeColor: theme === 'dark' ? THEME_VARS.dark['--ad-edge']! : theme === 'dual' ? 'var(--ad-edge)' : '#444' };
 
   const nodes = store.list('nodes').filter(n => n.viewId === viewId);
   const edges = store.list('edges').filter(e => e.viewId === viewId);
@@ -565,13 +661,42 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
     if (!el) { nodeSvg.push(renderVisualNode(ctx, n, b)); continue; }
     const type = reg.elementType(el.typeId);
     const dimmed = (reg.notationOf(el.typeId) !== view.notationId && reg.notationOf(el.typeId) !== 'freeform' && !el.libraryId) || !reg.inViewpoint(view.notationId, view.viewpointId, el.typeId);
-    let pf: string | undefined, anc = n.parentNodeId ? byId.get(n.parentNodeId) : undefined, guard = 0;
-    while (anc && pf === undefined && guard++ < 50) { pf = explicitFill(ctx, anc); anc = anc.parentNodeId ? byId.get(anc.parentNodeId) : undefined; }
-    nodeSvg.push(renderElementNode(ctx, n, el, type, b, dimmed, pf));
+    let pf: string | undefined, anc = n.parentNodeId ? byId.get(n.parentNodeId) : undefined, guard = 0, onPaper = false;
+    while (anc && pf === undefined && guard++ < 50) { pf = explicitFill(ctx, anc); if (pf !== undefined) onPaper = isPaperContainer(ctx, anc); anc = anc.parentNodeId ? byId.get(anc.parentNodeId) : undefined; }
+    nodeSvg.push(renderElementNode(ctx, n, el, type, b, dimmed, pf, onPaper));
   }
   const edgeSvg = edges.map(e => renderEdge(ctx, e)).filter(Boolean);
   body.push(`<g class="ad-nodes">${nodeSvg.join('')}</g>`);
   body.push(`<g class="ad-edges">${edgeSvg.join('')}</g>`);
+
+  // Marcadores (comentarios del HTML): encima de todo; varios en el mismo sitio se ponen en fila.
+  const markerBoxes: Box[] = [];
+  if (opts.markers?.length) {
+    const used = new Map<string, number>();
+    const out: string[] = [];
+    for (const m of opts.markers) {
+      let p: Pt | undefined;
+      if ('node' in m.at) { const b = ctx.abs.get(m.at.node); if (b) p = { x: b.x + b.w - 2, y: b.y + 2 }; }
+      else if ('edge' in m.at) {
+        const id = m.at.edge;
+        const e = edges.find(x => x.id === id);
+        const a = e ? ctx.abs.get(e.fromNodeId) : undefined, b = e ? ctx.abs.get(e.toNodeId) : undefined;
+        if (e && a && b) {
+          const bp = e.bendpoints, i = Math.floor(bp.length / 2);
+          p = bp.length ? (bp.length % 2 ? bp[i]! : { x: (bp[i - 1]!.x + bp[i]!.x) / 2, y: (bp[i - 1]!.y + bp[i]!.y) / 2 }) : { x: (a.x + a.w / 2 + b.x + b.w / 2) / 2, y: (a.y + a.h / 2 + b.y + b.h / 2) / 2 };
+        }
+      } else p = { x: m.at.x, y: m.at.y };
+      if (!p) continue;
+      const key = `${Math.round(p.x)},${Math.round(p.y)}`;
+      const k = used.get(key) ?? 0; used.set(key, k + 1);
+      const x = p.x + k * (MARKER_R * 2 + 2), y = p.y;
+      markerBoxes.push({ x: x - MARKER_R - 2, y: y - MARKER_R - 2, w: MARKER_R * 2 + 4, h: MARKER_R * 2 + 4 });
+      // `(` escapado: un `url(https://…)` escrito por el usuario no debe parecer un recurso externo.
+      const title = m.title ? `<title>${escapeXml(m.title).replace(/\(/g, '&#40;')}</title>` : '';
+      out.push(`<g${attrs({ class: `ad-marker${m.muted ? ' is-muted' : ''}`, 'data-marker': m.id })}>${title}<circle${attrs({ cx: x, cy: y, r: MARKER_R })}/>${textBlock([m.label], { x, y, fontSize: 11, lineH: 12 })}</g>`);
+    }
+    if (out.length) body.push(`<g class="ad-markers">${out.join('')}</g>`);
+  }
 
   // Caja envolvente
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -581,13 +706,14 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
     const b = ctx.abs.get(n.id)!;
     const el = n.elementId ? store.get('elements', n.elementId) : undefined;
     const shape = el ? reg.elementType(el.typeId)?.shape : undefined;
-    const below = shape && LABEL_BELOW.has(shape) ? 22 : 0;
+    const below = shape && LABEL_BELOW.has(shape) && figureFor(el?.typeId, shape) !== 'person' ? 22 : 0;
     const ports = ctx.portsOf.get(n.id) ?? [];
     const portW = ports.length ? Math.max(...ports.map(p => textW(p.port.label ?? p.port.key, 10) + 14)) : 0;
     grow(b.x - portW, b.y - (rule_has_badge(ctx, el) ? 10 : 0), b.w + portW * 2, b.h + below);
   }
   for (const e of edges) for (const p of e.bendpoints) grow(p.x, p.y);
   for (const b of ctx.extents) grow(b.x, b.y, b.w, b.h);
+  for (const b of markerBoxes) grow(b.x, b.y, b.w, b.h);
   if (!Number.isFinite(minX)) { minX = 0; minY = 0; maxX = 200; maxY = 100; }
   const vx = Math.floor(minX - padding), vy = Math.floor(minY - padding);
   const vw = Math.ceil(maxX + padding) - vx, vh = Math.ceil(maxY + padding) - vy;
@@ -601,7 +727,7 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg"${attrs({ class: 'ad-svg', viewBox: `${vx} ${vy} ${vw} ${vh}`, width: vw, height: vh, role: 'img', 'aria-labelledby': ctx.bare ? undefined : `${tId} ${dId}`, 'data-view': ctx.bare ? undefined : viewId, 'data-theme': theme === 'dual' ? undefined : theme })}>`,
     head,
-    `<style>${svgStyle(theme, fontFamily)}</style>`,
+    `<style>${svgStyle(theme, fontFamily)}${markerBoxes.length ? `\n${MARKER_CSS}` : ''}</style>`,
     `<defs>${[...ctx.markers.values()].join('')}</defs>`,
     bg === 'transparent' || bg === 'none' ? '' : `<rect class="ad-bg"${attrs({ x: vx, y: vy, width: vw, height: vh, fill: bg })}/>`,
     ...body,

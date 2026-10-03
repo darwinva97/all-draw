@@ -4,7 +4,8 @@
  * sobre un `DocManager`) o en otro isolate (el worker de Cloudflare lo reenvía a un Durable Object).
  */
 import type { Command, Diagnostic, Workspace, WorkspaceMeta } from '@all-draw/core';
-import type { DocManager } from './docs';
+import type { ConnMatch, DocManager } from './docs';
+import { WS_DELETED, revokeConnections } from './ysync';
 import { opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, type SvgOpts } from './ops';
 import type { SnapshotMeta } from './store/types';
 
@@ -21,6 +22,11 @@ export interface DocHost {
   renderSvg(id: string, viewId: string, opts: SvgOpts): Promise<string | null>;
   /** El espacio se borra: cierra conexiones (4410) y olvida el doc. */
   drop(id: string): Promise<void>;
+  /**
+   * Cierra con `code` las conexiones WebSocket abiertas a este espacio por ese usuario o enlace (4401 acceso revocado,
+   * 4205 cambio de rol). Devuelve cuántas cerró. No abre el doc si no está cargado (sin conexiones no hay nada que cerrar).
+   */
+  revoke(id: string, match: ConnMatch, code: number, reason: string): Promise<number>;
 
   // Historial de versiones (instantáneas del doc; viven junto al doc: BD en Node, storage del DO en Cloudflare)
   listSnapshots(id: string): Promise<SnapshotMeta[]>;
@@ -45,9 +51,14 @@ export class LocalDocHost implements DocHost {
   async drop(id: string) {
     if (!this.docs.has(id)) return;
     const d = await this.docs.get(id);
-    d.closeConnections(4410, 'espacio borrado');
+    d.closeConnections(WS_DELETED, 'espacio borrado');
     d.conns.clear();
     await this.docs.unload(id);
+  }
+
+  async revoke(id: string, match: ConnMatch, code: number, reason: string) {
+    if (!this.docs.has(id)) return 0;
+    return revokeConnections(await this.docs.get(id), match, code, reason);
   }
 
   async listSnapshots(id: string) { return (await this.docs.get(id)).listSnapshots(); }

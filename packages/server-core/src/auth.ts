@@ -11,6 +11,7 @@
  * - Principal: sesión (cookie o Bearer), API key (Bearer `adk_…`) o enlace compartido (`?token=` / Bearer `lnk_…`).
  */
 import type { Role, Session, ShareLink, User, WorkspaceStore } from './store/types';
+import type { ConnIdentity } from './docs';
 
 export const PBKDF2_ITERATIONS = 100_000;
 const subtle = globalThis.crypto.subtle;
@@ -177,13 +178,19 @@ export async function roleFor(store: WorkspaceStore, p: Principal | null, worksp
   return store.getRole(workspaceId, p.user.id);
 }
 
-/** Identifica y autoriza una conexión (WebSocket) a un espacio; devuelve el código de cierre si no procede. */
-export async function authorizeConnection(ctx: AuthContext, token: string | null, workspaceId: string): Promise<{ role: Role } | { close: number; reason: string }> {
+/** Identidad de una conexión a partir de su principal (para poder cerrarla al revocar ese acceso). */
+export const identityOf = (p: Principal): ConnIdentity => (p.kind === 'link' ? { userId: null, linkToken: p.link.token } : { userId: p.user.id, linkToken: null });
+
+/**
+ * Identifica y autoriza una conexión (WebSocket) a un espacio; devuelve el código de cierre si no procede.
+ * Con permiso, además del rol devuelve la identidad (usuario o enlace) que hay que registrar en la conexión.
+ */
+export async function authorizeConnection(ctx: AuthContext, token: string | null, workspaceId: string): Promise<{ role: Role; identity: ConnIdentity } | { close: number; reason: string }> {
   const principal = await resolveToken(ctx, token);
   if (!(await ctx.store.getWorkspace(workspaceId))) return { close: 4404, reason: 'el espacio no existe' };
   const role = await roleFor(ctx.store, principal, workspaceId);
-  if (!role) return { close: 4401, reason: 'sin permiso' };
-  return { role };
+  if (!role || !principal) return { close: 4401, reason: 'sin permiso' };
+  return { role, identity: identityOf(principal) };
 }
 export const SAFE_ID = /^[A-Za-z0-9_\-:.]{1,120}$/;
 

@@ -237,6 +237,7 @@ They run on every BPMN view and show up in the [problems panel](editor.md#proble
 | superfluous-gateway | warning | Gateway with one incoming and one outgoing flow |
 | fake-join | warning | Activity receiving several flows without a gateway |
 | no-inclusive-gateway-without-condition | error | Outgoing flow of an inclusive gateway with no condition and not default |
+| bpmn-pool-rules | error | Sequence flow crossing pools, message flow inside one pool, or boundary event not attached to an activity |
 
 ## Common mistakes {#errores-comunes}
 

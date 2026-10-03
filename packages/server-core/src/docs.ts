@@ -32,8 +32,18 @@ export function workspaceFromUpdate(update: Uint8Array): Workspace {
   return ws;
 }
 
+/**
+ * Quién abrió una conexión: el usuario (sesión o API key) o el enlace compartido con el que entró. Se guarda al
+ * aceptar el WebSocket para poder cerrarla cuando ese acceso se revoca (`revokeConnections`).
+ */
+export interface ConnIdentity { userId: string | null; linkToken: string | null }
+/** Qué conexiones cerrar: las de un usuario, las de un enlace, o ambas. */
+export interface ConnMatch { userId?: string; linkToken?: string }
+export const matchesIdentity = (id: ConnIdentity | undefined, m: ConnMatch): boolean =>
+  !!id && ((!!m.userId && id.userId === m.userId) || (!!m.linkToken && id.linkToken === m.linkToken));
+
 /** Conexión registrada en un doc: lo que `ysync` y la API necesitan poder hacer con ella. */
-export interface DocConnection { close(code?: number, reason?: string): void }
+export interface DocConnection { close(code?: number, reason?: string): void; identity?: ConnIdentity }
 
 export class LiveDoc {
   readonly doc: Y.Doc;

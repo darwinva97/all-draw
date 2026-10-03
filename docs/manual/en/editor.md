@@ -203,7 +203,8 @@ There is an important difference between **removing from the view** and **deleti
 |---|---|---|
 | Remove a node from the view | **Delete** (or Backspace) with the node selected, or **Remove from this view** in its menu | The node disappears from this view, but the element stays in the model and in other views. |
 | Delete an element from the model | **Delete from model** in the right-click menu (asks for confirmation) | The element disappears from **every** view, along with its relationships. |
-| Delete an edge | **Delete** with the edge selected | The **relationship** is deleted from the model, and with it all its edges in every view. |
+| Remove an edge from the view | **Delete** with the edge selected, or **Remove from this view** in its menu or the inspector | The edge disappears from this view; the **relationship** stays in the model and in other views. |
+| Delete a relationship from the model | **Shift+Delete** with the edge selected, or **Delete from model** in its menu or the inspector (asks for confirmation) | The **relationship** is deleted from the model, and with it all its edges in every view. |
 
 If you make a mistake, **Ctrl+Z** brings it back.
 
@@ -238,6 +239,9 @@ and, in a grid, its layers and stages.
 - **Appears in**: the views where it is already drawn.
 - **Traces**: up to three trace suggestions with similar elements of other notations (**Link to…**).
 - **Comment**, **Show pins** / **Hide pins**, **Remove from this view** and **Delete from model**.
+
+**On an edge**: **Comment**, **Remove from this view** (**Delete**) and **Delete from model** (**Shift+Delete**, asks
+for confirmation). The same two buttons are at the bottom of the edge inspector.
 
 **On the empty canvas**: **Paste here**, **Add note**, **Comment here**, **Select all**, **Fit to view** and **Auto
 layout**.
@@ -329,7 +333,8 @@ The eight most used ones (on a Mac, **Cmd** instead of **Ctrl**):
 | **Ctrl+K** | Search elements, views and actions |
 | **Ctrl+Z** / **Ctrl+Y** | Undo / redo |
 | **F2** | Rename the selected element |
-| **Delete** | Remove from the view |
+| **Delete** | Remove from the view (nodes and edges) |
+| **Shift+Delete** | Delete the selected edge's relationship from the model |
 | **Ctrl+C** / **Ctrl+V** | Copy / paste (same occurrence) |
 | **Ctrl+D** | Duplicate |
 | **Ctrl+Shift+F** | Fit to view |
@@ -364,9 +369,9 @@ panels with the buttons at the ends of the bar.
 That is expected: both nodes are occurrences of the same element. If you wanted an independent copy, use
 **Ctrl+Shift+V** or **Ctrl+D**.
 
-**"I pressed Delete and the relationship vanished from every view."**
-Delete on an **edge** deletes the relationship from the model. Undo with **Ctrl+Z**. On a **node**, Delete only removes
-it from the view.
+**"I pressed Delete on an edge and the relationship is still in the model."**
+That is expected: **Delete** only removes the edge from this view, just like with nodes. To delete the relationship in
+every view use **Shift+Delete** or **Delete from model** (right-click menu or inspector).
 
 **"I drop a node on the grid and it does not appear."**
 In a *Layers × stages* view you can only drop inside a cell.

@@ -52,7 +52,7 @@ worker (`withSecurityHeaders`):
 
 | Cabecera | Valor |
 |---|---|
-| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws://<host> wss://<host>; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'` |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' ws://<host> wss://<host>; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'` |
 | `X-Content-Type-Options` | `nosniff` |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` |
 | `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=()` |
@@ -64,6 +64,17 @@ worker (`withSecurityHeaders`):
 Por qué así: `vite-plugin-pwa` registra el service worker desde `/registerSW.js` (fichero, no inline), así que
 `script-src 'self'` basta; React Flow y el editor ponen estilos en línea → `style-src 'unsafe-inline'`; los iconos SVG van
 en `data:` y la exportación PNG/SVG usa `blob:`; el WebSocket de sincronización va al mismo host.
+
+**`img-src … https:` (desde el 3-10-2026).** El nodo visual «imagen» acepta una URL externa (logotipos, capturas,
+fotos alojadas en otra web) y con `img-src 'self' data: blob:` el navegador la bloqueaba: el nodo salía vacío. Se
+admite cualquier origen **https** sólo para imágenes. Riesgo asumido: una imagen no ejecuta código (`script-src` y
+`object-src` no cambian) ni puede leer la página; lo único que revela es una petición GET al servidor de la imagen
+(IP, `User-Agent` y, por `Referrer-Policy: strict-origin-when-cross-origin`, sólo el origen, nunca la ruta con el id del
+espacio ni un `?token=`). Quien ve un diagrama con una imagen externa hace esa petición, igual que en cualquier web con
+imágenes de terceros. `http:` sigue bloqueado (contenido mixto) y `connect-src` sigue cerrado al propio origen, así que
+una URL de imagen no sirve para sacar datos con `fetch`. Si se quiere evitar del todo, basta quitar `https:` en
+`contentSecurityPolicy()` (`server-core/src/headers.ts`): las imágenes externas volverán a no verse y las de `data:`
+seguirán funcionando.
 
 Comprobado con Chromium (playwright-core) contra un build en `/tmp/alldraw-dist` servido por un servidor temporal:
 portada, demo, cambio de vista, pantalla Cuenta, registro, espacio en servidor con WebSocket «en línea», diálogo
@@ -83,8 +94,8 @@ pendiente, fuera del alcance de esta revisión).
 - **Ids en rutas**: `id` de espacio y `sid` de instantánea validados con `SAFE_ID` (`^[A-Za-z0-9_\-:.]{1,120}$`) →
   400 antes de tocar la BD. El WebSocket ya lo hacía.
 - **Enlaces caducados**: `resolveShareLink` ya devolvía `null` pasado `expires_at`; ahora hay test de que el WebSocket
-  cierra con `4401` con un enlace caducado. Una conexión ya abierta no se corta al caducar (la revocación tampoco lo
-  hacía); es una mejora pendiente.
+  cierra con `4401` con un enlace caducado. Una conexión ya abierta no se corta al caducar (pendiente: no hay temporizador
+  por conexión); la **revocación** sí la corta al momento (ver «Revocación con el WebSocket abierto», más abajo).
 - **Token fuera de la URL**: la SPA (`share.ts: takeShareToken`) lee `?token=` del hash, lo guarda en
   `sessionStorage` (`alldraw:token:<id>`) y lo **borra de la URL** con `history.replaceState`: no queda en historial,
   marcadores ni capturas. (El fragmento nunca viaja en `Referer`, pero así tampoco se copia por accidente.) Al recargar
@@ -222,8 +233,38 @@ Node real, SQLite, scripts), `apps/worker/test/production.test.ts` (workerd) y e
      falla, no se borra nada** (500). En Cloudflare no hay copias del VPS: el espacio se borra con su Durable Object.
 3. Se borran tus sesiones, tus API keys y tus membresías en espacios ajenos; las instantáneas que firmaste quedan con
    autor `null` (en el worker las instantáneas viven en el DO y conservan el id, que ya no resuelve a ningún nombre).
-4. Las conexiones WebSocket ya abiertas no se cortan al instante (no se rastrea el usuario por conexión); cualquier
-   petición o reconexión siguiente falla con 401/4401.
+4. Las conexiones WebSocket ya abiertas **se cortan al momento** (desde el 3-10-2026): las del usuario en sus espacios
+   y en los ajenos (4401), las de los espacios borrados (4410) y las del heredero (4205, reconecta como dueño).
+
+**Revocación con el WebSocket abierto** (desde el 3-10-2026). Al aceptar un WebSocket se guarda en la conexión con qué
+entró: `{ userId }` (sesión o API key) o `{ linkToken }` (enlace) — `authorizeConnection` → `identity`. Cuando un acceso
+cambia, la API llama a `DocHost.revoke(id, { userId | linkToken }, código, motivo)`:
+
+| Operación | Conexiones afectadas | Código |
+|---|---|---|
+| `DELETE /api/workspaces/:id/links/:token` | las abiertas con ese enlace | `4401` «enlace revocado» |
+| `PUT /api/workspaces/:id/members/:userId` (rol distinto) | las de ese usuario en el espacio | `4205` «rol cambiado» |
+| `DELETE /api/workspaces/:id/members/:userId` | las de ese usuario en el espacio | `4401` «acceso revocado» |
+| `PATCH /api/workspaces/:id` con `ownerId` | dueño anterior y nuevo | `4205` |
+| `DELETE /api/workspaces/:id` | todas | `4410` «espacio borrado» |
+| `DELETE /api/auth/account` | las del usuario en todos los espacios a los que llegaba (todos, si era admin) | `4401` (y `4205` al heredero) |
+
+- `4205` está fuera de 4400–4499 a propósito: y-websocket (≥ 3.1) no reconecta ante 44xx y sí ante el resto, así que
+  con un cambio de rol el cliente reconecta solo y el servidor vuelve a autorizar con el rol nuevo (o responde 4401).
+  La app web vuelve a pedir `GET /api/workspaces/:id` para actualizar el modo de solo lectura.
+- Ante `4401`/`4403`/`4404`/`4410` la app muestra «Ya no tienes acceso a este espacio» / «Este espacio se ha borrado»,
+  deja de sincronizar, pone el editor en solo lectura y olvida el rol guardado de la copia local (para que no se abra
+  sin conexión con un permiso que ya no tiene).
+- Node (`LocalDocHost.revoke` → `revokeConnections`): saca la conexión del doc y de la presencia **antes** de cerrar el
+  socket, y `onMessage` ignora lo que llegue de una conexión que ya no está registrada (un update rezagado no se aplica).
+  Sólo mira docs cargados: sin doc vivo no hay conexiones.
+- Cloudflare: el worker pasa la identidad al `WorkspaceDO` en `x-alldraw-user`/`x-alldraw-link` (borra las que mande
+  el cliente) y el DO acepta el socket con etiquetas de hibernación `[rol, "u:<userId>" | "l:<token>"]`; `POST /revoke`
+  cierra `ctx.getWebSockets(etiqueta)` (vale también tras hibernar) sin cargar el doc. `webSocketMessage` ignora sockets
+  que ya no están abiertos.
+- No cubierto: cerrar sesión, «Cerrar todas las sesiones», cambiar la contraseña o que un admin la restablezca no cortan
+  los WebSockets ya abiertos con esas sesiones (la siguiente petición o reconexión sí falla). Pequeña ventana entre
+  autorizar el upgrade y registrar la conexión.
 
 Interfaz: «Cuenta» (`Keys.tsx`) tiene «Perfil» (nombre, email y cuotas) y «Tus datos» (Exportar mis datos; Eliminar
 cuenta… → formulario con la contraseña y botón «Eliminar mi cuenta definitivamente»).

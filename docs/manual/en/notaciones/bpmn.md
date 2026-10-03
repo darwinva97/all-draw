@@ -69,19 +69,24 @@ This is how the demo's BPMN view (*Alta de cliente · BPMN*, "customer onboardin
 - **Validity matrix by role**: a sequence flow cannot leave an end event or enter a start or boundary
   event; a message flow leaves tasks, end events, throw events or pools and enters tasks, start, catch or
   boundary events; data goes into tasks and throw events and comes out of tasks and catch events.
-- **BPMN rules the matrix cannot express**, which you must follow yourself (all-draw doesn't check them
-  when connecting yet):
-    - A **sequence flow** joins steps **of the same pool** (and the same subprocess).
-    - A **message flow** joins **different pools**; never two steps of the same one.
-    - A **boundary event** is attached to an activity and placed on its edge.
+- **BPMN rules the matrix cannot express**:
+    - A **sequence flow** joins steps **of the same pool** (and the same subprocess). When connecting, the
+      editor does not offer a sequence flow between different pools.
+    - A **message flow** joins **different pools**; never two steps of the same one. It is not offered when
+      connecting inside one pool.
+    - A **boundary event** is attached to an activity: drop it inside the task or subprocess.
     - A gateway has at most **one default flow**; the other flows out of an exclusive gateway carry a
       condition.
+
+  The first three are also checked across the whole model by the *bpmn-pool-rules* rule in the problems
+  panel.
 - **Nesting** without an implicit relation: a pool or lane contains lanes, steps, data, annotations and
   messages; a subprocess contains steps, data and annotations; a **Group** contains anything.
 - **Viewpoints**: *Collaboration* (everything), *Process* (no pools, lanes, message flows, choreographies
   or conversations) and *Choreography*.
 - **bpmnlint rules**: the problems panel applies 10 rules from the bpmnlint tool (start and end events
-  required, disconnected nodes, superfluous gateways, labels…). The list is in
+  required, disconnected nodes, superfluous gateways, labels…) and *bpmn-pool-rules* (pools of the flows and
+  boundary events). The list is in
   [Import and export](../importar-exportar.md#bpmn).
 
 ## Import and export {#importar-exportar}

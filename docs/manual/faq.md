@@ -52,10 +52,12 @@ menos de un segundo; el indicador "● en línea" confirma la conexión. Ver
 
 ### ¿Funciona sin conexión? {#sin-conexion}
 
-En buena parte. Los espacios locales no necesitan red nunca, y la aplicación arranca sin conexión.
-Los espacios del servidor necesitan red **para abrirse** (se comprueban tus permisos), pero si la
-conexión se cae mientras trabajas, el indicador pasa a "○ sin conexión (se sincroniza al volver)" y
-sigues editando; al volver la red se fusiona todo. Ver
+Sí. Los espacios locales no necesitan red nunca, y la aplicación arranca sin conexión. Los
+espacios del servidor que ya hayas abierto en ese navegador también se abren sin red, desde su copia
+y con el último permiso que tenías ("○ sin conexión — los cambios se sincronizarán"); si la conexión
+se cae mientras trabajas, el indicador pasa a "○ sin conexión (se sincroniza al volver)" y sigues
+editando. Al volver la red se comprueban tus permisos y se fusiona todo. Solo un espacio del
+servidor que nunca abriste en ese navegador necesita red para abrirse. Ver
 [sin conexión](compartir-y-colaborar.md#sin-conexion).
 
 ### ¿Dónde están mis espacios locales y cómo no perderlos? {#espacios-locales}
@@ -156,9 +158,9 @@ de otra persona. Ver [compartir y colaborar](compartir-y-colaborar.md).
 ### ¿Cómo quito el acceso a alguien? {#quitar-acceso}
 
 **Compartir** → **Revocar** junto al enlace que le diste. Desde ese momento el enlace ya no abre el
-espacio; quien lo tenga abierto en ese instante puede seguir conectado hasta que recargue la página
-o pierda la conexión. Si varias personas usaban el mismo enlace, crea uno nuevo para quienes deban
-seguir. Ver [compartir y colaborar](compartir-y-colaborar.md).
+espacio, y quien lo tenga abierto se desconecta al instante con el aviso "Ya no tienes acceso a este
+espacio". Si varias personas usaban el mismo enlace, crea uno nuevo para quienes deban seguir. Ver
+[revocar un enlace](compartir-y-colaborar.md#revocar).
 
 ## Importar y exportar {#importar-y-exportar}
 

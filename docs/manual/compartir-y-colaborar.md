@@ -97,8 +97,14 @@ Los enlaces pueden llevar fecha de caducidad, pero hoy eso solo se configura por
 2. Junto al enlace, pulsa **Revocar**. Verás "Enlace revocado".
 
 A partir de ese momento el enlace ya no sirve para abrir el espacio ni para reconectarse. Quien lo tenga **abierto en
-ese momento** puede seguir conectado hasta que recargue la página o pierda la conexión; después ya no podrá volver a
-entrar. Revocar no borra lo que esa persona haya podido exportar o copiar.
+ese momento** se desconecta al instante y ve el aviso «Ya no tienes acceso a este espacio» con el botón **Volver al
+inicio**; lo que tuviera sin enviar ya no llega al servidor, y la copia que guardaba su navegador deja de abrirse sin
+conexión. Revocar no borra lo que esa persona haya podido exportar o copiar.
+
+Lo mismo ocurre al **quitar a un miembro**, al **borrar la cuenta** de esa persona y al **borrar el espacio** (en ese
+caso el aviso es «Este espacio se ha borrado»). Si a un miembro se le **cambia el rol** (por ejemplo, de `editor` a
+`viewer`), su conexión se rehace sola con el rol nuevo: ve «Tus permisos en este espacio han cambiado» y, si pasa a
+lector, deja de poder editar en ese mismo momento.
 
 ## Presencia {#presencia}
 
@@ -107,9 +113,13 @@ sus iniciales. Pasa el ratón por encima para ver quién es y en qué vista est�
 
 Cuando estáis en la misma vista, ves también su **cursor** con su nombre, moviéndose en el lienzo.
 
-> [!NOTE]
-> Por ahora cada persona aparece como "Anónimo" seguido de un número, con un color al azar; el número y el color
-> cambian al recargar la página. Tu nombre de cuenta todavía no se usa en la presencia.
+Cómo aparece cada persona:
+
+- **Con la sesión iniciada**, con el **nombre de su cuenta** y un color fijo (el mismo en cada recarga y en cada equipo).
+  Es también la firma de sus comentarios.
+- **Con un enlace y sin cuenta**, como "Anónimo" seguido de un número. Ese nombre se genera la primera vez y se guarda
+  en el navegador, así que no cambia al recargar; es el mismo con el que firma sus comentarios. Si quieres salir con tu
+  nombre, entra con tu cuenta antes de abrir el enlace.
 
 ## Edición simultánea {#edicion-simultanea}
 
@@ -130,8 +140,17 @@ Cada espacio del servidor que abres tiene una **copia en tu navegador**. Si se v
 3. Cuando vuelve la conexión, tus cambios y los de los demás se fusionan solos y el estado vuelve a `● en línea`.
 
 all-draw se puede instalar como aplicación (PWA) y arranca aunque no haya red. Sin conexión puedes abrir y editar
-todos tus **espacios locales**; los espacios **del servidor** necesitan conexión para abrirse, porque al abrirlos se
-comprueban tus permisos. Si vas a viajar, deja abierto el espacio antes de perder la red, o trabaja en una copia local.
+todos tus **espacios locales** y también los **espacios del servidor que ya hayas abierto antes en ese navegador**:
+
+1. Se abre la copia guardada con el último permiso que tenías (si eras lector, sigues en solo lectura).
+2. La barra muestra `○ sin conexión — los cambios se sincronizarán`. **Compartir** e **Historial** no están
+   disponibles hasta que vuelva la red.
+3. En cuanto vuelve la conexión se comprueban tus permisos, se conecta y se sincroniza todo; el estado pasa a
+   `● en línea`. Si mientras tanto te quitaron el acceso, verás «Ya no tienes acceso a este espacio» y lo que hiciste
+   sin red no se envía.
+
+Un espacio del servidor que nunca has abierto en ese navegador no tiene copia: sin red verás «Sin conexión con el
+servidor» y podrás **Reintentar** cuando vuelva. Si vas a viajar, abre antes los espacios que vayas a necesitar.
 
 > [!WARNING]
 > No borres los datos del navegador mientras tengas cambios sin sincronizar (estado `○ sin conexión`): perderías lo
@@ -208,7 +227,13 @@ un marcador de la dirección sin token).
 Le diste un enlace de lectura. Crea un **Nuevo enlace de edición**, envíaselo y, si quieres, revoca el de lectura.
 
 **"Revoqué un enlace y la persona sigue viendo los cambios."**
-Su conexión abierta sigue activa hasta que recargue o se corte la red. Después ya no podrá entrar.
+Al revocar se desconecta al instante. Si sigue apareciendo en la presencia, es que entra por otro camino: con otro
+enlace (revócalo también) o con su cuenta como miembro (quítala de los miembros).
+
+**"Sale «Ya no tienes acceso a este espacio»."**
+Han revocado el enlace con el que entraste o te han quitado el permiso. Pulsa **Volver al inicio** y pide un enlace nuevo
+a quien administra el espacio. Lo que hicieras después de perder el acceso no se ha guardado en el servidor; si lo
+necesitas, expórtalo antes de salir (**Importar / Exportar**).
 
 **"Pone «sin conexión» y no vuelve a «en línea»."**
 Comprueba tu conexión a internet y recarga la página: tus cambios están guardados en el navegador y se enviarán al
@@ -221,5 +246,6 @@ con calma; si no recuerdas la contraseña, pide a un administrador que la restab
 **"No puedo registrarme."**
 El servidor pide un **Código de invitación** o tiene el registro cerrado. Pide acceso a quien lo administre.
 
-**"Todos aparecemos como «Anónimo»."**
-Es una limitación actual de la presencia; ver [Presencia](#presencia).
+**"Aparezco como «Anónimo» y un número."**
+Has abierto el enlace sin haber iniciado sesión. Entra con tu cuenta y vuelve a abrir el enlace para aparecer con tu
+nombre; ver [Presencia](#presencia).

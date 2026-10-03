@@ -8,6 +8,7 @@ import { addLayer, addStage, removeLayer, removeStage, updateLayer, updateStage,
 import { useRecord, usePorts, useAnyChange, useCollection } from '../hooks';
 import { assignmentsTo, suggestedRoles, newAssignment } from './workspace-helpers';
 import { Icon } from '../icons';
+import { deleteSelection } from '../delete-selection';
 
 /** Inspector: lo seleccionado (nodo→elemento, arista→relación) o la vista. */
 export function Inspector() {
@@ -135,7 +136,7 @@ function VisualInspector({ vn }: { vn: ViewNode }) {
 
 function EdgeInspector({ edgeId }: { edgeId: string }) {
   const t = useT();
-  const { store, registry, run, readOnly } = useEditor();
+  const { store, registry, run, readOnly, select } = useEditor();
   const ve = useRecord('edges', edgeId);
   const rel = useRecord('relations', ve?.relationId);
   if (!ve) return null;
@@ -145,6 +146,7 @@ function EdgeInspector({ edgeId }: { edgeId: string }) {
   const allowed = a && b ? registry.allowedRelations(a.typeId, b.typeId) : [];
   const patchRel = (patch: Record<string, unknown>) => rel && run({ type: 'patch', collection: 'relations', id: rel.id, patch });
   const patchEdge = (patch: Record<string, unknown>) => run({ type: 'patch', collection: 'edges', id: ve.id, patch });
+  const remove = (fromModel: boolean) => { void deleteSelection(store, run, { nodes: [], edges: [ve.id] }, fromModel, t).then(done => { if (done) select({ nodes: [], edges: [] }); }); };
   return <>
     <header className="ad-insp__head"><div className="ad-insp__meta">{t('Relación')} · {type?.name ?? rel?.typeId}</div>
       <div className="ad-insp__ends">{a?.name ?? '?'} → {b?.name ?? '?'}</div></header>
@@ -167,6 +169,10 @@ function EdgeInspector({ edgeId }: { edgeId: string }) {
       <label className="ad-field"><span>{t('Trazado')}</span><select className="ad-input" disabled={readOnly} value={ve.style.router ?? 'smoothstep'} onChange={e => patchEdge({ style: { router: e.target.value } })}><option value="smoothstep">{t('Ortogonal')}</option><option value="bezier">{t('Curva')}</option><option value="straight">{t('Recta')}</option></select></label>
       <label className="ad-field"><span>{t('Línea')}</span><select className="ad-input" disabled={readOnly} value={ve.style.line ?? ''} onChange={e => patchEdge({ style: { line: e.target.value || undefined } })}><option value="">{t('(del tipo)')}</option><option value="solid">{t('Continua')}</option><option value="dashed">{t('Discontinua')}</option><option value="dotted">{t('Punteada')}</option></select></label>
       <label className="ad-field"><span>{t('Color')}</span><input type="color" disabled={readOnly} value={ve.style.color ?? type?.color ?? '#444444'} onChange={e => patchEdge({ style: { color: e.target.value } })} /><button className="ad-btn" title={t('Quitar')} onClick={() => patchEdge({ style: { color: undefined } })}><Icon name="close" size={14} /></button></label>
+      {!readOnly && <div className="ad-row ad-insp__danger">
+        <button className="ad-btn" onClick={() => remove(false)} title={t('Solo esta arista; la relación sigue en el modelo (Supr)')}>{t('Quitar de esta vista')}</button>
+        {rel && <button className="ad-btn ad-btn--danger" onClick={() => remove(true)} title={t('La relación y todas sus aristas, en todas las vistas (Shift+Supr)')}>{t('Borrar del modelo')}</button>}
+      </div>}
       <CommentsSection anchors={[{ kind: 'edge', id: ve.id }, ...(rel ? [{ kind: 'relation' as const, id: rel.id }] : [])]} newAnchor={{ kind: 'edge', id: ve.id, viewId: ve.viewId }} />
     </div>
   </>;

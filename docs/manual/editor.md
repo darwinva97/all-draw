@@ -213,7 +213,8 @@ Hay una diferencia importante entre **quitar de la vista** y **borrar del modelo
 |---|---|---|
 | Quitar un nodo de la vista | **Supr** (o Retroceso) con el nodo seleccionado, o **Quitar de esta vista** en su menú | El nodo desaparece de esta vista, pero el elemento sigue en el modelo y en las demás vistas. |
 | Borrar un elemento del modelo | **Borrar del modelo** en el menú del botón derecho (pide confirmación) | El elemento desaparece de **todas** las vistas, con sus relaciones. |
-| Borrar una arista | **Supr** con la arista seleccionada | Se borra la **relación** del modelo, y con ella todas sus aristas en todas las vistas. |
+| Quitar una arista de la vista | **Supr** con la arista seleccionada, o **Quitar de esta vista** en su menú o en el inspector | La arista desaparece de esta vista; la **relación** sigue en el modelo y en las demás vistas. |
+| Borrar una relación del modelo | **Shift+Supr** con la arista seleccionada, o **Borrar del modelo** en su menú o en el inspector (pide confirmación) | Se borra la **relación** del modelo, y con ella todas sus aristas en todas las vistas. |
 
 Si te equivocas, **Ctrl+Z** lo recupera.
 
@@ -248,6 +249,9 @@ elemento raíz y, en una rejilla, las capas y etapas.
 - **Aparece en**: las vistas donde ya está dibujado.
 - **Trazas**: hasta tres sugerencias de traza con elementos parecidos de otras notaciones (**Enlazar con…**).
 - **Comentar**, **Mostrar pines** / **Ocultar pines**, **Quitar de esta vista** y **Borrar del modelo**.
+
+**Sobre una arista**: **Comentar**, **Quitar de esta vista** (**Supr**) y **Borrar del modelo** (**Shift+Supr**, pide
+confirmación). Los mismos dos botones están al final del inspector de la arista.
 
 **Sobre el lienzo vacío**: **Pegar aquí**, **Añadir nota**, **Comentar aquí**, **Seleccionar todo**, **Ajustar a la
 vista** y **Layout automático**.
@@ -336,7 +340,8 @@ Los ocho que más se usan (en Mac, **Cmd** en lugar de **Ctrl**):
 | **Ctrl+K** | Buscar elementos, vistas y acciones |
 | **Ctrl+Z** / **Ctrl+Y** | Deshacer / rehacer |
 | **F2** | Renombrar el elemento seleccionado |
-| **Supr** | Quitar de la vista |
+| **Supr** | Quitar de la vista (nodos y aristas) |
+| **Shift+Supr** | Borrar del modelo la relación de la arista seleccionada |
 | **Ctrl+C** / **Ctrl+V** | Copiar / pegar (misma aparición) |
 | **Ctrl+D** | Duplicar |
 | **Ctrl+Shift+F** | Ajustar a la vista |
@@ -371,9 +376,9 @@ paneles con los botones de los extremos de la barra.
 Es lo esperado: los dos nodos son apariciones del mismo elemento. Si querías una copia independiente, usa
 **Ctrl+Shift+V** o **Ctrl+D**.
 
-**"Pulsé Supr y la relación desapareció de todas las vistas."**
-Supr sobre una **arista** borra la relación del modelo. Deshaz con **Ctrl+Z**. Sobre un **nodo**, Supr solo lo quita
-de la vista.
+**"Pulsé Supr sobre una arista y la relación sigue en el modelo."**
+Es lo esperado: **Supr** solo quita la arista de esta vista, igual que con los nodos. Para borrar la relación en
+todas las vistas usa **Shift+Supr** o **Borrar del modelo** (menú del botón derecho o inspector).
 
 **"Suelto un nodo en la rejilla y no aparece."**
 En una vista *Capas × etapas* solo se puede soltar dentro de una celda.

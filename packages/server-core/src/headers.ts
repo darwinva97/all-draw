@@ -3,8 +3,10 @@
  *
  * La CSP está pensada para la SPA compilada con Vite: scripts sólo del propio origen (el registro del service
  * worker va en `/registerSW.js`, no inline), estilos propios más `'unsafe-inline'` (React Flow y el editor
- * ponen estilos en línea), imágenes `data:`/`blob:` (iconos SVG en `data:`, exportación PNG/SVG por `blob:`),
- * conexiones al propio origen incluido el WebSocket de sincronización.
+ * ponen estilos en línea), imágenes `data:`/`blob:` (iconos SVG en `data:`, exportación PNG/SVG por `blob:`) y
+ * `https:` (el nodo visual «imagen» acepta una URL externa: sin esto el navegador la bloquea; una imagen no ejecuta
+ * código y `connect-src` sigue cerrado al propio origen, ver docs/07-seguridad.md), conexiones al propio origen
+ * incluido el WebSocket de sincronización.
  */
 export interface SecurityHeaderOpts {
   /** La petición llegó por https (directo o `x-forwarded-proto`): añade HSTS. */
@@ -28,7 +30,7 @@ export function contentSecurityPolicy(host?: string | null, nonce?: string): str
     "default-src 'self'",
     `script-src 'self'${nonce ? ` 'nonce-${nonce}'` : ''}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
     `connect-src 'self'${ws}`,
     "worker-src 'self' blob:",

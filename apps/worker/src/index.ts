@@ -6,7 +6,7 @@
  *   /api/admin/import  → importación desde otra instalación (sólo worker, ver admin-import.ts)
  *   /.well-known/security.txt → contacto de seguridad (RFC 9116)
  *   /api/*, /healthz   → createApi (store RegistryDO o D1, docs → WorkspaceDO)
- *   /ws/<id>?token=    → autoriza aquí y reenvía el upgrade al DO con el rol en una cabecera
+ *   /ws/<id>?token=    → autoriza aquí y reenvía el upgrade al DO con el rol y la identidad (usuario o enlace) en cabeceras
  *   resto              → ASSETS (fallback SPA)
  */
 import {
@@ -15,7 +15,7 @@ import {
 } from '@all-draw/server-core';
 import { IMPORT_PATH, handleImport } from './admin-import';
 import { RESET_PATH, handleReset } from './admin-reset';
-import { ROLE_HEADER, WorkspaceDO } from './do';
+import { LINK_HEADER, ROLE_HEADER, USER_HEADER, WorkspaceDO } from './do';
 import { envInt, type Env } from './env';
 import { RegistryDO } from './registry';
 import { RemoteDocHost } from './remote-host';
@@ -71,6 +71,10 @@ export default {
       const stub = env.WORKSPACES.get(env.WORKSPACES.idFromName(id));
       const headers = new Headers(request.headers);
       headers.set(ROLE_HEADER, auth.role);
+      // Identidad para poder cerrar la conexión al revocar el acceso; las que mande el cliente se descartan.
+      headers.delete(USER_HEADER); headers.delete(LINK_HEADER);
+      if (auth.identity.userId) headers.set(USER_HEADER, auth.identity.userId);
+      else if (auth.identity.linkToken) headers.set(LINK_HEADER, auth.identity.linkToken);
       return stub.fetch(new Request('https://do/ws', { headers }));
     }
 

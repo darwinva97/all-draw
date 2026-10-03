@@ -54,12 +54,13 @@ los atajos del lienzo no se disparan. Así **Supr** borra letras y no nodos.
 | **Ctrl+D** | Duplica la selección (elementos nuevos), un poco desplazada |
 | **Flechas** | Mueven la selección 1 px |
 | **Shift+flechas** | Mueven la selección 10 px |
-| **Supr** o **Retroceso** | Sobre nodos: los **quita de la vista** (siguen en el modelo). Sobre aristas: **borra la relación** del modelo |
+| **Supr** o **Retroceso** | **Quita de la vista** los nodos y aristas seleccionados (elementos y relaciones siguen en el modelo) |
+| **Shift+Supr** | Sobre aristas: **borra la relación** del modelo, con todas sus aristas en todas las vistas (pide confirmación) |
 | **Alt** (mantener) | Desactiva el ajuste a rejilla mientras arrastras |
 
 > [!WARNING]
-> **Supr** sobre una arista no solo la quita de la vista: borra la relación en todas las vistas. Si te
-> equivocas, **Ctrl+Z**. Cuidado con **Ctrl+A** seguido de **Supr**: como **Ctrl+A** selecciona también las
+> **Shift+Supr** sobre una arista no solo la quita de la vista: borra la relación en todas las vistas. Si te
+> equivocas, **Ctrl+Z**. Cuidado con **Ctrl+A** seguido de **Shift+Supr**: como **Ctrl+A** selecciona también las
 > aristas, borraría todas las relaciones dibujadas en la vista. Más en
 > [Modelo y vistas](modelo-y-vistas.md#quitar-o-borrar).
 
@@ -175,8 +176,9 @@ lienzo no funcionan a propósito.
 **Ctrl+V no pega nada.**
 Primero hay que copiar nodos de all-draw con **Ctrl+C**. En un espacio de solo lectura no se puede pegar.
 
-**He pulsado Supr y ha desaparecido una relación de todas las vistas.**
-Tenías seleccionada una arista: **Supr** borra la relación del modelo. Pulsa **Ctrl+Z**.
+**He pulsado Shift+Supr y ha desaparecido una relación de todas las vistas.**
+Tenías seleccionada una arista: **Shift+Supr** borra la relación del modelo. Pulsa **Ctrl+Z**. **Supr** solo la
+habría quitado de esta vista.
 
 **Las flechas desplazan la página en vez de mover el nodo.**
 El foco no está en el lienzo, o no hay nada seleccionado. Selecciona el nodo con un clic y vuelve a probar.

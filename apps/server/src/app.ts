@@ -16,7 +16,7 @@ import { createApi } from './api';
 import { archiveWriter } from './archive';
 import {
   SAFE_ID, SECURITY_TXT_PATH, authorizeConnection, credentialsFromRequest, isTrustedOrigin, jsonLogger, makeHasher, redactPath, requestHost, safeEqualString,
-  securityHeaders, securityTxt, truncateIp, type BuildInfo, type Logger, type Principal,
+  securityHeaders, securityTxt, truncateIp, type BuildInfo, type ConnIdentity, type Logger, type Principal,
 } from './auth';
 import { buildInfo } from './build';
 import type { Config } from './config';
@@ -162,7 +162,7 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
     // Identidad y doc se resuelven ANTES de aceptar el socket: el cliente manda su sync step1 nada
     // más abrirse y, si el listener de `message` se registrara tras un `await`, ese mensaje se perdería.
     void (async () => {
-      let outcome: { live: Awaited<ReturnType<DocManager['get']>>; role: Role } | { close: number; reason: string; metric: string };
+      let outcome: { live: Awaited<ReturnType<DocManager['get']>>; role: Role; identity: ConnIdentity } | { close: number; reason: string; metric: string };
       try {
         if (draining) outcome = { close: WS_RESTART, reason: 'servidor reiniciando', metric: 'shutdown' };
         else if (!SAFE_ID.test(id)) outcome = { close: 4400, reason: 'id no válido', metric: 'bad_id' };
@@ -179,7 +179,7 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
               const live = await docs.get(id);
               outcome = config.maxWsPerWorkspace > 0 && live.conns.size >= config.maxWsPerWorkspace
                 ? { close: WS_TOO_MANY, reason: 'demasiadas conexiones a este espacio', metric: 'per_workspace' }
-                : { live, role: auth.role };
+                : { live, role: auth.role, identity: auth.identity };
             }
           }
         }
@@ -193,7 +193,7 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
         }
         perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
         ws.once('close', () => { const n = (perIp.get(ip) ?? 1) - 1; if (n <= 0) perIp.delete(ip); else perIp.set(ip, n); });
-        setupConnection(ws, outcome.live, outcome.role);
+        setupConnection(ws, outcome.live, outcome.role, outcome.identity);
       });
     })();
   });

@@ -15,7 +15,8 @@ import { useEditor } from '../context';
 import { useAnyChange, useCollection } from '../hooks';
 import { initials, colorFor } from '../presence';
 import {
-  anchorLabel, anchorNodesIn, anchorTarget, applyMention, commentAuthor, isOwn, matchPeople, mentionQuery, mentionsIn, relativeTime, splitMentions,
+  anchorLabel, anchorNodesIn, anchorTarget, anonymousNumber, applyMention, commentAuthor, isOwn, matchPeople, mentionQuery, mentionsIn, onLocalAuthorName,
+  relativeTime, saveLocalAuthorName, splitMentions,
 } from './comments-helpers';
 import { Icon, type IconName } from '../icons';
 import { HelpLink } from './HelpLink';
@@ -27,11 +28,31 @@ const AnchorIcon = ({ glyph }: { glyph: string }) => <Icon name={ANCHOR_ICON[gly
 
 type Filter = 'open' | 'resolved' | 'all';
 
-/** Autor de los comentarios propios (presencia → `localStorage('alldraw:me')` → "Anónimo"). */
+/**
+ * Autor de los comentarios propios: la presencia que da la app (con `userId` si hay cuenta) o, sin presencia, el
+ * nombre local estable de `localStorage('alldraw:me')` (se genera "Anónimo NNN" una vez y se edita en "Tu nombre").
+ */
 function useCommentAuthor(): CommentAuthor {
   const t = useT();
   const { presence } = useEditor();
-  return useMemo(() => commentAuthor(presence?.me, t('Anónimo')), [presence, t]);
+  const [version, setVersion] = useState(0);
+  useEffect(() => onLocalAuthorName(() => setVersion(v => v + 1)), []);
+  return useMemo(() => commentAuthor(presence?.me, () => t('Anónimo {n}', { n: anonymousNumber() })), [presence, t, version]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/** Campo "Tu nombre" (solo sin presencia): firma de los comentarios nuevos en este navegador. */
+function MyName({ name }: { name: string }) {
+  const t = useT();
+  const [value, setValue] = useState(name);
+  useEffect(() => setValue(name), [name]);
+  const commit = () => { if (value.trim() && value.trim() !== name) saveLocalAuthorName(value); else setValue(name); };
+  return (
+    <label className="ad-cm-myname" title={t('Firma de tus comentarios en este navegador')}>
+      <span>{t('Tu nombre')}</span>
+      <input className="ad-input" value={value} maxLength={60} onChange={e => setValue(e.target.value)} onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); (e.target as HTMLInputElement).blur(); } }} />
+    </label>
+  );
 }
 
 /** Reloj para las fechas relativas (se refresca cada 30 s). */
@@ -84,7 +105,7 @@ export function CommentsToolButton({ labels }: { labels?: boolean }) {
 // ---------------------------------------------------------------- panel
 export function CommentsPanel() {
   const t = useT();
-  const { store, viewId, readOnly, comments, closeComments, openComments, run } = useEditor();
+  const { store, viewId, readOnly, comments, closeComments, openComments, run, presence } = useEditor();
   useAnyChange();
   const me = useCommentAuthor();
   const people = useCollection('people');
@@ -140,6 +161,7 @@ export function CommentsPanel() {
           ))}
         </div>
         <label className="ad-cm-onlyview"><input type="checkbox" checked={onlyView} disabled={!viewId} onChange={e => setOnlyView(e.target.checked)} /> {t('Solo esta vista')}</label>
+        {!presence && !readOnly && <MyName name={me.name} />}
       </div>
       <div className="ad-cm-panel__scroll" ref={listRef}>
         {comments.draft && !readOnly && draftLabel && (

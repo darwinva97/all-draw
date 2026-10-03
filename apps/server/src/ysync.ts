@@ -3,14 +3,16 @@
  * envuelve el socket como `SyncSocket`, entrega los eventos y mantiene el ping/pong de keepalive.
  */
 import type { WebSocket } from 'ws';
-import { attachConnection, closeConn, type LiveDoc, type Role, type SyncSocket } from '@all-draw/server-core';
+import { attachConnection, closeConn, type ConnIdentity, type LiveDoc, type Role, type SyncSocket } from '@all-draw/server-core';
 
 export { MSG_AUTH, MSG_AWARENESS, MSG_SYNC, READ_ONLY_REASON } from '@all-draw/server-core';
 const PING_MS = 30_000;
 
-export function setupConnection(ws: WebSocket, live: LiveDoc, role: Role): void {
+/** `identity` (usuario o enlace con el que entró) permite cerrarla al revocar ese acceso (`LocalDocHost.revoke`). */
+export function setupConnection(ws: WebSocket, live: LiveDoc, role: Role, identity?: ConnIdentity): void {
   ws.binaryType = 'arraybuffer';
   const conn: SyncSocket = {
+    ...(identity ? { identity } : {}),
     isOpen: () => ws.readyState === ws.CONNECTING || ws.readyState === ws.OPEN,
     send: buf => ws.send(buf, err => { if (err) closeConn(live, conn); }),
     close: (code, reason) => { try { ws.close(code, reason); } catch { /* ya cerrada */ } },

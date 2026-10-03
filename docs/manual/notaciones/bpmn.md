@@ -70,19 +70,24 @@ Así se construye la vista *Alta de cliente · BPMN* de la demo:
   evento de inicio o de borde; el flujo de mensaje sale de tareas, eventos de fin, eventos de
   lanzamiento o pools y llega a tareas, eventos de inicio, de captura o de borde; los datos entran en
   tareas y eventos de lanzamiento y salen de tareas y eventos de captura.
-- **Reglas de BPMN que la matriz no puede expresar** y que debes respetar tú (all-draw todavía no las
-  comprueba al conectar):
-    - El **flujo de secuencia** une pasos **de la misma pool** (y del mismo subproceso).
-    - El **flujo de mensaje** une **pools distintas**; nunca dos pasos de la misma.
-    - El **evento de borde** va adherido a una actividad y colocado sobre su borde.
+- **Reglas de BPMN que la matriz no puede expresar**:
+    - El **flujo de secuencia** une pasos **de la misma pool** (y del mismo subproceso). Al conectar, el
+      editor no ofrece flujo de secuencia entre pools distintas.
+    - El **flujo de mensaje** une **pools distintas**; nunca dos pasos de la misma. Al conectar dentro de una
+      pool no se ofrece.
+    - El **evento de borde** va adherido a una actividad: suéltalo dentro de la tarea o subproceso.
     - Una compuerta tiene como mucho **una salida por defecto**; las demás salidas de una compuerta
       exclusiva llevan condición.
+
+  Las tres primeras se comprueban también en todo el modelo con la regla *bpmn-pool-rules* del panel de
+  problemas.
 - **Anidamiento** sin relación implícita: una pool o una lane contienen lanes, pasos, datos, anotaciones
   y mensajes; un subproceso contiene pasos, datos y anotaciones; un **Grupo** contiene cualquier cosa.
 - **Viewpoints**: *Colaboración* (todo), *Proceso* (sin pools, lanes, flujos de mensaje, coreografías ni
   conversaciones) y *Coreografía*.
 - **Reglas de bpmnlint**: el panel de problemas aplica 10 reglas de la herramienta bpmnlint (evento de
-  inicio y de fin obligatorios, nodos desconectados, compuertas superfluas, etiquetas…). La lista está en
+  inicio y de fin obligatorios, nodos desconectados, compuertas superfluas, etiquetas…) y *bpmn-pool-rules*
+  (pools de los flujos y eventos de borde). La lista está en
   [Importar y exportar](../importar-exportar.md#bpmn).
 
 ## Importar y exportar {#importar-exportar}

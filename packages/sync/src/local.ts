@@ -1,6 +1,9 @@
 /**
  * Workspaces locales: `Y.Doc` persistido en IndexedDB (`y-indexeddb`) y un índice ligero en
  * `localStorage` (`alldraw:index`) para listar sin abrir cada base.
+ *
+ * Las copias de los espacios del servidor (`srv_<id>`) guardan además en su entrada el último rol conocido
+ * (`role`), para poder abrirlas sin conexión con los mismos permisos (`setLocalWorkspaceRole`).
  */
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
@@ -11,7 +14,8 @@ export const DB_PREFIX = 'alldraw:';
 export const INDEX_KEY = 'alldraw:index';
 const INDEX_DEBOUNCE_MS = 300;
 
-export interface LocalWorkspaceEntry { id: string; name: string; updatedAt: string }
+export type CachedRole = 'owner' | 'editor' | 'viewer';
+export interface LocalWorkspaceEntry { id: string; name: string; updatedAt: string; role?: CachedRole }
 
 export interface LocalWorkspace {
   store: YjsStore;
@@ -35,8 +39,27 @@ function writeIndex(idx: Record<string, Omit<LocalWorkspaceEntry, 'id'>>) { stor
 function upsertIndex(id: string, store: YjsStore) {
   const idx = readIndex();
   const m = store.meta();
-  idx[id] = { name: m.name, updatedAt: m.updatedAt ?? idx[id]?.updatedAt ?? new Date().toISOString() };
+  const role = idx[id]?.role;
+  idx[id] = { name: m.name, updatedAt: m.updatedAt ?? idx[id]?.updatedAt ?? new Date().toISOString(), ...(role ? { role } : {}) };
   writeIndex(idx);
+}
+
+const ROLES: readonly string[] = ['owner', 'editor', 'viewer'];
+/**
+ * Último rol conocido de la copia local de un espacio del servidor (`null` lo olvida). Sólo se guarda si la copia
+ * ya está en el índice (se ha abierto al menos una vez): una entrada sin copia haría creer que se puede abrir sin red.
+ */
+export function setLocalWorkspaceRole(id: string, role: CachedRole | null): void {
+  const idx = readIndex();
+  const e = idx[id];
+  if (!e) return;
+  if (role) e.role = role; else delete e.role;
+  writeIndex(idx);
+}
+/** Último rol conocido de la copia local (o `null` si no hay copia o no se guardó). */
+export function localWorkspaceRole(id: string): CachedRole | null {
+  const r = readIndex()[id]?.role;
+  return r && ROLES.includes(r) ? r : null;
 }
 
 export async function openLocalWorkspace(id: string): Promise<LocalWorkspace> {

@@ -284,6 +284,15 @@ describe('log y cabeceras', () => {
     expect(Date.parse(exp)).toBeGreaterThan(Date.now() + 300 * 86_400_000);
   });
 
+  it('CSP: img-src admite https: (imágenes por URL del nodo imagen) pero no http: ni amplía connect-src/script-src', () => {
+    const csp = securityHeaders({ https: true, host: 'x.io' })['content-security-policy']!;
+    const dir = (name: string) => csp.split('; ').find(d => d.startsWith(`${name} `))!;
+    expect(dir('img-src').split(' ')).toEqual(['img-src', "'self'", 'data:', 'blob:', 'https:']);
+    expect(dir('connect-src')).toBe("connect-src 'self' ws://x.io wss://x.io");
+    expect(dir('script-src')).toMatch(/^script-src 'self' 'nonce-[A-Za-z0-9+/=]+'$/);
+    expect(dir('default-src')).toBe("default-src 'self'");
+  });
+
   it('el SVG de una vista se puede incrustar desde otro origen (CORP cross-origin)', async () => {
     const t = makeApi();
     const a = await t.register('ana@x.io');

@@ -2,7 +2,7 @@ import { memo, type CSSProperties, type MouseEvent } from 'react';
 import { Handle, NodeResizer, Position, type NodeProps, type Node } from '@xyflow/react';
 import type { Element, ElementType, Port, RuleStyle, ViewNode } from '@all-draw/core';
 import { textInset, figureOf, showsIcon } from '@all-draw/notation-archimate';
-import { shapeStyle, ShapeSvg } from './shapes';
+import { shapeStyle, shapeColors, ShapeSvg, figureFor, personGeometry, readable } from './shapes';
 import { ArchimateFigure, archimateBox } from './ArchimateFigure';
 import { InlineEdit } from './InlineEdit';
 import { useNodeEnv } from './env';
@@ -61,6 +61,15 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   const visible = visiblePorts(data.ports, vn);
   const shape = type?.shape ?? 'rounded';
   const css = shapeStyle(shape, type, vn, rule, dark);
+  // Las figuras SVG reciben el relleno y el trazo reales (la caja CSS de esas figuras es transparente).
+  const colors = shapeColors(type, vn, rule, dark);
+  const figure = figureFor(element.typeId, shape);
+  if (figure === 'person') {
+    // Persona C4: el texto va dentro del cuerpo, bajo la cabeza, con el color legible sobre el del tipo.
+    css.color = rule.text ?? vn.style.text ?? readable(colors.fill);
+    css.paddingTop = personGeometry(vn.w, vn.h).bodyTop + 2;
+    css.paddingBottom = 4;
+  }
   const label = vn.text ?? (element.name || (type?.name ?? ''));
   // Figuras de Archi: el fondo lo pinta `ArchimateFigure` (path + icono) y el texto se centra en la zona útil.
   const archiFill = css.background as string, archiStroke = css.borderColor as string;
@@ -89,13 +98,13 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   };
 
   return (
-    <div className={`ad-node ad-shape-${shape}${archimate ? ' ad-node--archimate' : ''}${type?.container ? ' is-container' : ''}${selected ? ' is-selected' : ''}${data.dimmed ? ' is-dimmed' : ''}${rule.bold ? ' r-bold' : ''}${rule.strike ? ' r-strike' : ''}`} style={css} title={element.doc || undefined}>
+    <div className={`ad-node ad-shape-${figure}${archimate ? ' ad-node--archimate' : ''}${type?.container ? ' is-container' : ''}${selected ? ' is-selected' : ''}${data.dimmed ? ' is-dimmed' : ''}${rule.bold ? ' r-bold' : ''}${rule.strike ? ' r-strike' : ''}`} style={css} title={element.doc || undefined}>
       {/* El redimensionador (8 controles) solo existe con el nodo seleccionado. */}
       {!readOnly && selected && !editing && <NodeResizer minWidth={24} minHeight={16} lineClassName="ad-resizer__line" handleClassName="ad-resizer__handle" />}
       {boxRadius !== undefined && <div className="ad-archi-box" style={archimateBoxStyle(vn.w, vn.h, boxRadius, dark && archiFill === '#fff' ? '#1c2230' : archiFill, archiStroke)} />}
       {archimate
         ? <ArchimateFigure typeId={element.typeId} figure={vn.style.figure} w={vn.w} h={vn.h} fill={archiFill} stroke={archiStroke} strokeWidth={rule.borderWidth ?? 1} borderStyle={rule.borderStyle} box={boxRadius !== undefined} lowDetail={lowDetail} />
-        : <ShapeSvg shape={shape} fill={css.background as string} stroke={css.borderColor as string} figure={vn.style.figure} />}
+        : <ShapeSvg shape={figure} fill={colors.fill} stroke={colors.stroke} figure={vn.style.figure} w={vn.w} h={vn.h} />}
       {/* Manejadores del cuerpo: React Flow los necesita para situar las aristas (aunque sean flotantes). */}
       <Handle type="target" position={Position.Top} id="" className="ad-handle ad-handle--body" />
       <Handle type="source" position={Position.Bottom} id="" className="ad-handle ad-handle--body" />

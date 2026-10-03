@@ -110,3 +110,72 @@ describe('websocket con roles', () => {
     expect(d.getMap('meta').get('description')).toBe('vía REST');
   });
 });
+
+describe('revocar acceso con el WebSocket abierto', () => {
+  /** Socket crudo ya abierto + promesa con el código de cierre. */
+  const open = async (room: string, token: string) => {
+    const w = new WebSocket(`${s.wsUrl}/${room}?token=${token}`);
+    const closed = new Promise<{ code: number; reason: string }>(r => w.on('close', (code: number, reason: Buffer) => r({ code, reason: reason.toString() })));
+    w.on('error', () => {});
+    await new Promise<void>((r, j) => { w.once('open', () => r()); w.once('close', c => j(new Error(`cerrado ${c}`))); });
+    return { w, closed };
+  };
+  const code = (url: string) => new Promise<number>(r => { const w = new WebSocket(url); w.on('close', (c: number) => r(c)); w.on('error', () => {}); });
+
+  it('revocar el enlace desconecta (4401) a quien lo tiene abierto, y ya no puede volver a entrar', async () => {
+    const id = (await owner.api.post('/api/workspaces', { name: 'Revocar' })).body.id as string;
+    const tok = (await owner.api.post(`/api/workspaces/${id}/links`, { role: 'editor' })).body.token as string;
+    const other = (await owner.api.post(`/api/workspaces/${id}/links`, { role: 'editor' })).body.token as string;
+    const a = await open(id, tok);
+    const b = await open(id, other);
+    expect((await owner.api.del(`/api/workspaces/${id}/links/${tok}`)).status).toBe(204);
+    expect(await a.closed).toEqual({ code: 4401, reason: 'enlace revocado' });
+    expect(b.w.readyState).toBe(WebSocket.OPEN);
+    expect(await code(`${s.wsUrl}/${id}?token=${tok}`)).toBe(4401);
+    b.w.close();
+  });
+
+  it('bajar a un miembro de editor a viewer cierra con 4205; y-websocket reconecta y sus cambios ya se descartan', async () => {
+    const id = (await owner.api.post('/api/workspaces', { name: 'Roles' })).body.id as string;
+    const bea = await register(s.url, `bea-${Date.now()}@example.com`);
+    await owner.api.put(`/api/workspaces/${id}/members/${bea.user.id}`, { role: 'editor' });
+    const o = connect(id, owner.token); await synced(o.provider);
+    const b = connect(id, bea.token); await synced(b.provider);
+    const closes: number[] = [];
+    b.provider.on('connection-close', (ev: { code: number } | null) => { if (ev) closes.push(ev.code); });
+    const before = makeElement('freeform:box', 'Como editora');
+    b.store.set('elements', before.id, before);
+    await until(() => o.store.get('elements', before.id) !== undefined);
+
+    expect((await owner.api.put(`/api/workspaces/${id}/members/${bea.user.id}`, { role: 'viewer' })).status).toBe(200);
+    await until(() => closes.includes(4205));
+    await until(() => b.provider.wsconnected && b.provider.synced);
+    const after = makeElement('freeform:box', 'Ya como lectora');
+    b.store.set('elements', after.id, after);
+    await wait(400);
+    expect(o.store.get('elements', after.id)).toBeUndefined();
+    expect((await owner.api.get(`/api/workspaces/${id}/snapshot`)).body.elements[after.id]).toBeUndefined();
+
+    // Quitarlo del todo: 4401 y las reconexiones siguen rechazadas
+    expect((await owner.api.del(`/api/workspaces/${id}/members/${bea.user.id}`)).status).toBe(204);
+    await until(() => closes.includes(4401));
+    b.provider.destroy();
+  });
+
+  it('borrar el espacio cierra con 4410', async () => {
+    const id = (await owner.api.post('/api/workspaces', { name: 'Borrar' })).body.id as string;
+    const a = await open(id, owner.token);
+    expect((await owner.api.del(`/api/workspaces/${id}`)).status).toBe(204);
+    expect((await a.closed).code).toBe(4410);
+  });
+
+  it('borrar la cuenta cierra (4401) sus conexiones a espacios ajenos', async () => {
+    const id = (await owner.api.post('/api/workspaces', { name: 'Ajeno' })).body.id as string;
+    const eva = await register(s.url, `eva-${Date.now()}@example.com`);
+    await owner.api.put(`/api/workspaces/${id}/members/${eva.user.id}`, { role: 'editor' });
+    const a = await open(id, eva.token);
+    const r = await fetch(`${s.url}/api/auth/account`, { method: 'DELETE', headers: { authorization: `Bearer ${eva.token}`, 'content-type': 'application/json' }, body: JSON.stringify({ password: 'contraseña-larga' }) });
+    expect(r.status).toBe(200);
+    expect((await a.closed).code).toBe(4401);
+  });
+});

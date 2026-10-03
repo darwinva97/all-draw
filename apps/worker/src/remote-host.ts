@@ -1,6 +1,6 @@
 /** `DocHost` que reenvía cada operación al Durable Object del espacio (`WorkspaceDO`). */
 import type { Command, Diagnostic, Workspace, WorkspaceMeta } from '@all-draw/core';
-import { CommandError, type DocHost, type SnapshotMeta, type SvgOpts } from '@all-draw/server-core';
+import { CommandError, type ConnMatch, type DocHost, type SnapshotMeta, type SvgOpts } from '@all-draw/server-core';
 
 export class RemoteDocHost implements DocHost {
   constructor(private ns: DurableObjectNamespace) {}
@@ -33,6 +33,7 @@ export class RemoteDocHost implements DocHost {
     return r ? r.text : null;
   }
   async drop(id: string) { await this.call(id, 'POST', '/drop'); }
+  async revoke(id: string, match: ConnMatch, code: number, reason: string) { return (await this.call<{ closed: number }>(id, 'POST', '/revoke', { ...match, code, reason })).closed; }
 
   async listSnapshots(id: string) { return (await this.call<{ snapshots: SnapshotMeta[] }>(id, 'GET', '/snapshots')).snapshots; }
   createSnapshot(id: string, authorId: string | null, label: string | null) { return this.call<SnapshotMeta>(id, 'POST', '/snapshots', { authorId, label }); }

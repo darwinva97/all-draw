@@ -3,12 +3,16 @@
  * habla el protocolo y-websocket con la Hibernation API (`ctx.acceptWebSocket`) y persiste el estado
  * completo del doc en su storage (troceado: el límite por valor es 128 KiB en KV / 2 MiB en SQLite).
  *
- * El worker le reenvía por `stub.fetch` tanto el upgrade del WebSocket (`GET /ws`, con el rol ya
- * resuelto en la cabecera `x-alldraw-role`) como las operaciones de la API (`RemoteDocHost`):
+ * El worker le reenvía por `stub.fetch` tanto el upgrade del WebSocket (`GET /ws`, con el rol y la identidad ya
+ * resueltos en las cabeceras `x-alldraw-role` y `x-alldraw-user` o `x-alldraw-link`) como las operaciones de la API
+ * (`RemoteDocHost`):
  *
  *   POST /init {name, initial}       PUT /snapshot (Workspace)    POST /meta {patch}
  *   GET  /snapshot                   POST /commands {commands, label}   GET /validate
- *   GET  /svg?viewId&theme&padding   POST /drop
+ *   GET  /svg?viewId&theme&padding   POST /drop    POST /revoke {userId?, linkToken?, code, reason}
+ *
+ * Cada WebSocket se acepta con etiquetas de hibernación `[rol, "u:<userId>" | "l:<token de enlace>"]`: sobreviven a
+ * la hibernación y `/revoke` las usa (`ctx.getWebSockets(tag)`) para cerrar las conexiones de un acceso revocado.
  *   GET  /snapshots                  POST /snapshots {authorId, label}
  *   GET  /snapshots/:sid             POST /snapshots/:sid/restore {authorId}   DELETE /snapshots/:sid
  *
@@ -18,13 +22,29 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Command, Workspace, WorkspaceMeta } from '@all-draw/core';
 import {
-  CommandError, DEFAULT_MAX_DOC_BYTES, LiveDoc, attachConnection, closeConn, opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, parseCommands, parseWorkspaceJson,
-  type DocPersistence, type Role, type Snapshot, type SnapshotMeta, type SyncHandlers, type SyncSocket,
+  CommandError, DEFAULT_MAX_DOC_BYTES, LiveDoc, WS_DELETED, attachConnection, closeConn, opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, parseCommands, parseWorkspaceJson,
+  type ConnIdentity, type ConnMatch, type DocPersistence, type Role, type Snapshot, type SnapshotMeta, type SyncHandlers, type SyncSocket,
 } from '@all-draw/server-core';
 import { newId } from '@all-draw/core';
 import { envInt, type Env } from './env';
 
 export const ROLE_HEADER = 'x-alldraw-role';
+/** Identidad de la conexión (sólo una de las dos): la pone el worker tras autorizar; nunca se fía de la del cliente. */
+export const USER_HEADER = 'x-alldraw-user';
+export const LINK_HEADER = 'x-alldraw-link';
+const userTag = (id: string) => `u:${id}`;
+const linkTag = (token: string) => `l:${token}`;
+/** Etiquetas de hibernación de un socket: el rol primero (compatibles con los aceptados antes) y la identidad. */
+export function socketTags(role: Role, identity: ConnIdentity | null): string[] {
+  const tags: string[] = [role];
+  if (identity?.userId) tags.push(userTag(identity.userId));
+  else if (identity?.linkToken) tags.push(linkTag(identity.linkToken));
+  return tags;
+}
+function identityFromTags(tags: string[]): ConnIdentity | undefined {
+  const u = tags.find(t => t.startsWith('u:')), l = tags.find(t => t.startsWith('l:'));
+  return u || l ? { userId: u ? u.slice(2) : null, linkToken: l ? l.slice(2) : null } : undefined;
+}
 /** WebSockets por espacio por defecto (`MAX_WS_PER_WORKSPACE`) y código de cierre al pasarse (igual que Node). */
 export const DEFAULT_MAX_WS_PER_WORKSPACE = 100;
 export const WS_TOO_MANY = 4429;
@@ -117,8 +137,9 @@ export class WorkspaceDO extends DurableObject<Env> {
   }
 
   /** Registra (o re-registra tras hibernar) un WebSocket aceptado en el doc. */
-  private attach(ws: WebSocket, live: LiveDoc, role: Role) {
+  private attach(ws: WebSocket, live: LiveDoc, role: Role, identity?: ConnIdentity) {
     const conn: SyncSocket = {
+      ...(identity ? { identity } : {}),
       isOpen: () => ws.readyState === 1 /* OPEN */,
       send: buf => ws.send(buf),
       close: (code, reason) => { try { ws.close(code ?? 1000, reason); } catch { /* ya cerrada */ } },
@@ -131,13 +152,35 @@ export class WorkspaceDO extends DurableObject<Env> {
   private async socketFor(ws: WebSocket) {
     const known = this.sockets.get(ws);
     if (known) return known;
-    // Despertar de hibernación: el rol viaja en las etiquetas del socket
-    const role = (this.ctx.getTags(ws)[0] ?? 'viewer') as Role;
-    return this.attach(ws, await this.doc(), role);
+    // Despertar de hibernación: el rol y la identidad viajan en las etiquetas del socket
+    const tags = this.ctx.getTags(ws);
+    const role = (tags[0] ?? 'viewer') as Role;
+    return this.attach(ws, await this.doc(), role, identityFromTags(tags));
+  }
+
+  /** Cierra con `code` los sockets abiertos con ese usuario o enlace (por etiqueta: vale también tras hibernar). */
+  private async revoke(match: ConnMatch, code: number, reason: string): Promise<number> {
+    const targets = new Set<WebSocket>();
+    if (match.userId) for (const ws of this.ctx.getWebSockets(userTag(match.userId))) targets.add(ws);
+    if (match.linkToken) for (const ws of this.ctx.getWebSockets(linkTag(match.linkToken))) targets.add(ws);
+    const live = targets.size && this.live ? await this.live : null;
+    for (const ws of targets) {
+      try { ws.close(code, reason); } catch { /* ya cerrada */ }
+      const s = this.sockets.get(ws);
+      this.sockets.delete(ws);
+      if (s && live) closeConn(live, s.conn); // lo saca del doc y de la presencia (el cierre de arriba manda el código)
+    }
+    return targets.size;
   }
 
   override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    // Antes de cargar el doc: sin sockets abiertos no hay nada que cerrar ni motivo para leer el storage.
+    if (url.pathname === '/revoke' && request.method === 'POST') {
+      const b = await request.json() as ConnMatch & { code?: number; reason?: string };
+      const match: ConnMatch = { ...(typeof b.userId === 'string' && b.userId ? { userId: b.userId } : {}), ...(typeof b.linkToken === 'string' && b.linkToken ? { linkToken: b.linkToken } : {}) };
+      return json({ closed: await this.revoke(match, Number(b.code) || 4401, String(b.reason ?? 'acceso revocado')) });
+    }
     const live = await this.doc();
 
     if (url.pathname === '/ws') {
@@ -151,8 +194,10 @@ export class WorkspaceDO extends DurableObject<Env> {
         server.close(WS_TOO_MANY, 'demasiadas conexiones a este espacio');
         return new Response(null, { status: 101, webSocket: client });
       }
-      this.ctx.acceptWebSocket(server, [role]);
-      this.attach(server, live, role);
+      const userId = request.headers.get(USER_HEADER), linkToken = request.headers.get(LINK_HEADER);
+      const identity: ConnIdentity | null = userId || linkToken ? { userId: userId || null, linkToken: userId ? null : linkToken || null } : null;
+      this.ctx.acceptWebSocket(server, socketTags(role, identity));
+      this.attach(server, live, role, identity ?? undefined);
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -208,8 +253,8 @@ export class WorkspaceDO extends DurableObject<Env> {
           return svg === null ? json({ error: 'La vista no existe' }, 404) : new Response(svg, { headers: { 'content-type': 'image/svg+xml; charset=utf-8' } });
         }
         case 'POST /drop': {
-          live.closeConnections(4410, 'espacio borrado');
-          for (const ws of this.ctx.getWebSockets()) { try { ws.close(4410, 'espacio borrado'); } catch { /* nada */ } }
+          live.closeConnections(WS_DELETED, 'espacio borrado');
+          for (const ws of this.ctx.getWebSockets()) { try { ws.close(WS_DELETED, 'espacio borrado'); } catch { /* nada */ } }
           this.sockets.clear();
           live.conns.clear();
           this.live = null;
@@ -229,6 +274,8 @@ export class WorkspaceDO extends DurableObject<Env> {
 
   override async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
     if (typeof message === 'string') return;
+    // Un socket que ya cerramos (revocado) no se vuelve a registrar aunque llegue algo rezagado.
+    if (ws.readyState !== 1 /* OPEN */) return;
     const { handlers } = await this.socketFor(ws);
     handlers.onMessage(new Uint8Array(message));
     const live = await this.doc();

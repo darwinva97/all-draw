@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { MemoryStore, exampleWorkspace, parseWorkspace, type Person } from '@all-draw/core';
+import { describe, it, expect, afterEach } from 'vitest';
+import { MemoryStore, exampleWorkspace, makeComment, parseWorkspace, type Person } from '@all-draw/core';
 import { t } from '@all-draw/i18n';
 import {
   applyMention, anchorLabel, anchorTarget, anchorNodesIn, commentAuthor, isOwn, matchPeople, mentionQuery, mentionsIn, relativeTime, splitMentions,
+  localAuthorName, saveLocalAuthorName, onLocalAuthorName, ME_KEY,
 } from '../src/panels/comments-helpers';
 
 const person = (id: string, name: string, extra: Partial<Person> = {}): Person => ({ id, name, assignments: [], ...extra });
@@ -41,6 +42,45 @@ describe('comentarios: autor, fechas y anclas', () => {
     expect(isOwn({ author: { name: 'Eva', userId: 'u9' } }, { name: 'Otra', userId: 'u9' })).toBe(true);
     expect(isOwn({ author: { name: 'Eva', userId: 'u9' } }, { name: 'Eva', userId: 'u1' })).toBe(false);
     expect(isOwn({ author: { name: 'Eva' } }, { name: 'Eva' })).toBe(true);
+  });
+  it('con presencia y userId (sesión iniciada) el comentario guarda author.userId y se reconoce como propio aunque cambie el nombre', () => {
+    const me = commentAuthor({ name: 'Eva Martín', color: '#0a0', userId: 'usr_42' }, 'Anónimo');
+    const c = makeComment({ kind: 'view', id: 'vw_1', viewId: 'vw_1' }, me, 'hola');
+    expect(c.author).toEqual({ name: 'Eva Martín', color: '#0a0', userId: 'usr_42' });
+    expect(isOwn(c, commentAuthor({ name: 'Eva', color: '#0a0', userId: 'usr_42' }, 'Anónimo'))).toBe(true);
+    // Otra cuenta con el mismo nombre no puede editarlo ni borrarlo
+    expect(isOwn(c, commentAuthor({ name: 'Eva Martín', color: '#00f', userId: 'usr_7' }, 'Anónimo'))).toBe(false);
+  });
+  describe('sin presencia: nombre local estable', () => {
+    const mem = new Map<string, string>();
+    const fake = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, v); }, removeItem: (k: string) => { mem.delete(k); } };
+    const g = globalThis as { localStorage?: unknown };
+    const prev = g.localStorage;
+    afterEach(() => { mem.clear(); g.localStorage = prev; });
+    it('se genera una vez, se guarda en alldraw:me y no cambia', () => {
+      g.localStorage = fake;
+      let n = 0;
+      const gen = () => `Anónimo ${100 + n++}`;
+      expect(commentAuthor(null, gen)).toEqual({ name: 'Anónimo 100' });
+      expect(mem.get(ME_KEY)).toBe('Anónimo 100');
+      expect(commentAuthor(undefined, gen).name).toBe('Anónimo 100');
+      expect(localAuthorName(gen)).toBe('Anónimo 100');
+      expect(n).toBe(1);
+    });
+    it('"Tu nombre" lo cambia, avisa y los comentarios siguientes lo usan', () => {
+      g.localStorage = fake;
+      let calls = 0;
+      const off = onLocalAuthorName(() => calls++);
+      saveLocalAuthorName('  Lucía  ');
+      saveLocalAuthorName('   ');
+      off();
+      saveLocalAuthorName('Otra');
+      expect(calls).toBe(1);
+      expect(mem.get(ME_KEY)).toBe('Otra');
+      expect(commentAuthor(null, () => 'X')).toEqual({ name: 'Otra' });
+      // Sin userId, lo propio se reconoce por nombre
+      expect(isOwn({ author: { name: 'Otra' } }, commentAuthor(null, () => 'X'))).toBe(true);
+    });
   });
   it('fecha relativa', () => {
     const now = Date.parse('2026-01-10T12:00:00Z');

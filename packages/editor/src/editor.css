@@ -120,6 +120,9 @@
 .ad-popover__item:hover { background: var(--ad-bg); }
 .ad-popover__item--sub { padding-left: 20px; }
 .ad-popover__item--danger { color: var(--ad-danger); }
+.ad-btn--danger { color: var(--ad-danger); }
+.ad-btn--danger:hover:not(:disabled) { border-color: var(--ad-danger); color: var(--ad-danger); }
+.ad-insp__danger { flex-wrap: wrap; margin-top: 10px; }
 .ad-popover__item small { margin-left: auto; color: var(--ad-muted); padding-left: 8px; }
 .ad-popover__details summary { list-style: none; }
 
@@ -476,6 +479,8 @@ button.ad-tr-count { color: var(--ad-text); }
 .ad-cm-seg button small { font-variant-numeric: tabular-nums; opacity: .8; margin-left: 2px; }
 .ad-cm-seg button.is-on { background: var(--ad-panel); color: var(--ad-text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
 .ad-cm-onlyview { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ad-muted); cursor: pointer; }
+.ad-cm-myname { display: flex; align-items: center; gap: 6px; flex-basis: 100%; font-size: 12px; color: var(--ad-muted); }
+.ad-cm-myname .ad-input { flex: 1; min-width: 0; height: 26px; font-size: 12px; }
 .ad-cm-panel__scroll { flex: 1; min-height: 0; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
 .ad-cm-empty { color: var(--ad-muted); text-align: center; padding: 24px 12px; }
 .ad-cm-empty__hint { font-size: 12px; margin-top: 6px; }

@@ -14,6 +14,8 @@ import { setCookie, deleteCookie } from 'hono/cookie';
 import { bodyLimit } from 'hono/body-limit';
 import { CommandSchema, Workspace as WorkspaceSchema, type Command, type NotationPack, type Workspace } from '@all-draw/core';
 import type { DocHost } from './host';
+import type { ConnMatch } from './docs';
+import { WS_REVOKED, WS_ROLE_CHANGED } from './ysync';
 import { ALL_PACKS, describePacks } from './notations';
 import { CommandError, DOC_TOO_LARGE, formatBytes, normalizeCommand } from './ops';
 import { jsonLogger, redactPath, redactTokens, truncateIp, type Logger } from './log';
@@ -214,6 +216,16 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     if (!role) throw fail(p ? 403 : 401, p ? 'No tienes acceso a este espacio' : 'Identifícate para acceder al espacio');
     if (!atLeast(role, min)) throw fail(403, `Se requiere rol ${min} (tienes ${role})`);
     return { ws, role, principal: p! };
+  };
+  /**
+   * Cierra las conexiones WebSocket abiertas con un acceso que acaba de cambiar (4401 revocado, 4205 cambio de rol).
+   * Es un efecto secundario: si falla se registra, pero la operación (ya guardada en el store) no se deshace.
+   */
+  const kick = async (workspaceId: string, match: ConnMatch, code: number, reason: string) => {
+    try {
+      const n = await docs.revoke(workspaceId, match, code, reason);
+      if (n) logger.info('ws revocado', { workspace: workspaceId, code, closed: n, ...(match.userId ? { user: match.userId } : { link: true }) });
+    } catch (e) { logger.error('no se pudieron cerrar las conexiones revocadas', { workspace: workspaceId, code, err: e }); }
   };
   const cookieSecure = (c: { req: { header(n: string): string | undefined } }) => config.cookieSecure || c.req.header('x-forwarded-proto') === 'https';
   const clientIp = (c: { req: { header(n: string): string | undefined } }) => c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'local';
@@ -462,7 +474,10 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
       if (others.length > 0 && !others.some(x => x.isAdmin)) throw fail(409, 'Eres el único administrador: nombra antes a otro administrador (Cuenta → Usuarios del servidor)', { code: 'last_admin' });
     }
     // 1. Plan: cada espacio propio pasa a su editor más antiguo; sin editores, se borra (archivándolo antes).
-    const owned = (await store.listWorkspaces(u.id)).filter(w => w.role === 'owner');
+    const mine = await store.listWorkspaces(u.id);
+    const owned = mine.filter(w => w.role === 'owner');
+    // Espacios en los que puede tener un WebSocket abierto y dejará de tener acceso (un admin entra en todos).
+    const reachable = u.isAdmin ? (await store.listAllWorkspaces()).map(w => w.id) : mine.map(w => w.id);
     const plan: { ws: WorkspaceRow; heir: string | null; members: (Member & { user: Pick<User, 'id' | 'email' | 'name'> | null })[]; links: ShareLink[] }[] = [];
     for (const ws of owned) {
       const members = await store.listMembers(ws.id);
@@ -503,6 +518,9 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
       }
     }
     await store.deleteUser(u.id);
+    // 4. Fuera los WebSockets: los del usuario (4401) donde aún podía estar; el heredero pasa a dueño (4205, reconecta).
+    for (const wid of reachable) if (!deleted.includes(wid)) await kick(wid, { userId: u.id }, WS_REVOKED, 'cuenta borrada');
+    for (const t of transferred) await kick(t.id, { userId: t.to }, WS_ROLE_CHANGED, 'rol cambiado');
     deleteCookie(c, SESSION_COOKIE, { path: '/' });
     logger.info('cuenta borrada', { user: u.id, deleted: deleted.length, transferred: transferred.length });
     return c.json({ ok: true as const, deleted, transferred }, 200);
@@ -646,13 +664,18 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     const { role, principal } = await requireRole(c, id, body.ownerId !== undefined ? 'owner' : 'editor');
     if (principal.kind !== 'user') throw fail(403, 'Un enlace compartido no puede cambiar la meta');
     if (body.ownerId !== undefined && !(await store.getUser(body.ownerId))) throw fail(400, 'ownerId no existe');
+    const prevOwner = (await store.getWorkspace(id))?.ownerId;
     const row = await store.updateMeta(id, body);
     if (body.name !== undefined) await docs.setMeta(id, { name: body.name });
+    // Cambio de dueño: el anterior y el nuevo cambian de rol → reconectan y el servidor les da el que tengan ahora.
+    if (body.ownerId !== undefined && prevOwner && prevOwner !== body.ownerId) {
+      for (const uid of [prevOwner, body.ownerId]) await kick(id, { userId: uid }, WS_ROLE_CHANGED, 'rol cambiado');
+    }
     return c.json({ ...row!, role }, 200);
   });
 
   app.openapi(createRoute({
-    method: 'delete', path: '/api/workspaces/{id}', tags: ['espacios'], summary: 'Borrar espacio (owner)', security: bearer, request: { params: Id },
+    method: 'delete', path: '/api/workspaces/{id}', tags: ['espacios'], summary: 'Borrar espacio (owner); los WebSockets abiertos se cierran con 4410', security: bearer, request: { params: Id },
     responses: { 204: { description: 'Borrado' }, ...errors },
   }), async c => {
     const id = c.req.valid('param').id;
@@ -674,7 +697,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   });
 
   app.openapi(createRoute({
-    method: 'put', path: '/api/workspaces/{id}/members/{userId}', tags: ['permisos'], summary: 'Dar o cambiar rol a un usuario (owner)', security: bearer,
+    method: 'put', path: '/api/workspaces/{id}/members/{userId}', tags: ['permisos'], summary: 'Dar o cambiar rol a un usuario (owner); si cambia, sus WebSockets abiertos se cierran con 4205 y reconectan con el rol nuevo', security: bearer,
     request: { params: Id.extend({ userId: z.string().min(1) }), body: jsonBody(z.object({ role: MemberRoleSchema })) },
     responses: { 200: jsonRes(MemberOut, 'Rol fijado'), ...errors },
   }), async c => {
@@ -683,20 +706,26 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     if (userId === ws.ownerId) throw fail(400, 'El dueño no necesita rol');
     const u = await store.getUser(userId);
     if (!u) throw fail(404, 'Usuario desconocido');
+    const prev = await store.getRole(id, userId);
     await store.setRole(id, userId, role);
+    // Si ya tenía rol y cambia, sus WebSockets se cierran con 4205: el cliente reconecta y recibe el rol nuevo
+    // (un editor que pasa a viewer deja de poder escribir al momento). Un admin es dueño igualmente: no se toca.
+    if (prev && prev !== role && !u.isAdmin) await kick(id, { userId }, WS_ROLE_CHANGED, 'rol cambiado');
     const m = (await store.listMembers(id)).find(x => x.userId === userId)!;
     const { workspaceId: _w, ...out } = m;
     return c.json(out, 200);
   });
 
   app.openapi(createRoute({
-    method: 'delete', path: '/api/workspaces/{id}/members/{userId}', tags: ['permisos'], summary: 'Quitar a un usuario (owner)', security: bearer,
+    method: 'delete', path: '/api/workspaces/{id}/members/{userId}', tags: ['permisos'], summary: 'Quitar a un usuario (owner); sus WebSockets abiertos se cierran con 4401', security: bearer,
     request: { params: Id.extend({ userId: z.string().min(1) }) },
     responses: { 204: { description: 'Quitado' }, ...errors },
   }), async c => {
     const { id, userId } = c.req.valid('param');
-    await requireRole(c, id, 'owner');
+    const { ws } = await requireRole(c, id, 'owner');
+    const prev = userId === ws.ownerId ? null : await store.getRole(id, userId);
     await store.setRole(id, userId, null);
+    if (prev && !(await store.getUser(userId))?.isAdmin) await kick(id, { userId }, WS_REVOKED, 'acceso revocado');
     return c.body(null, 204);
   });
 
@@ -724,13 +753,14 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   });
 
   app.openapi(createRoute({
-    method: 'delete', path: '/api/workspaces/{id}/links/{token}', tags: ['permisos'], summary: 'Revocar enlace (owner)', security: bearer,
+    method: 'delete', path: '/api/workspaces/{id}/links/{token}', tags: ['permisos'], summary: 'Revocar enlace (owner); quien lo tenga abierto se desconecta (WebSocket 4401)', security: bearer,
     request: { params: Id.extend({ token: z.string().min(1) }) },
     responses: { 204: { description: 'Revocado' }, ...errors },
   }), async c => {
     const { id, token } = c.req.valid('param');
     await requireRole(c, id, 'owner');
     if (!(await store.deleteShareLink(id, token))) throw fail(404, 'No existe ese enlace');
+    await kick(id, { linkToken: token }, WS_REVOKED, 'enlace revocado');
     return c.body(null, 204);
   });
 

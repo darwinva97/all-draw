@@ -176,13 +176,13 @@ Es la diferencia más importante de all-draw, y la causa de la mayoría de susto
 |---|---|---|---|
 | **Quitar de esta vista** | Selecciona el nodo y pulsa **Supr** (o Retroceso), o clic derecho → **Quitar de esta vista** | El nodo, los nodos que tuviera dentro y las aristas que lo tocan **en esta vista** | El elemento, sus relaciones y sus apariciones en otras vistas |
 | **Borrar del modelo** | Clic derecho → **Borrar del modelo** (pide confirmación) | El elemento, **todas** sus apariciones en **todas** las vistas y todas sus relaciones | Nada de ese elemento; las vistas de las que era raíz se quedan sin raíz |
-| **Borrar una relación** | Selecciona la arista y pulsa **Supr** | La relación del modelo y **todas** sus aristas en todas las vistas | Los dos elementos |
+| **Quitar una arista de esta vista** | Selecciona la arista y pulsa **Supr**, o clic derecho → **Quitar de esta vista** | Esa arista, solo **en esta vista** | La relación y sus aristas en otras vistas |
+| **Borrar una relación** | Selecciona la arista y pulsa **Shift+Supr**, o clic derecho → **Borrar del modelo** (pide confirmación) | La relación del modelo y **todas** sus aristas en todas las vistas | Los dos elementos |
 | **Borrar una vista** | **×** junto a la vista en el panel | La vista con sus nodos y aristas | Todos los elementos y relaciones |
 
 > [!WARNING]
-> **Supr** sobre un *nodo* es inofensivo (solo lo quita de la vista), pero **Supr** sobre una *arista* borra la
-> relación del modelo entero. Hoy no hay una opción para quitar *solo la arista* de una vista: si no quieres
-> verla aquí, la única forma es quitar de la vista uno de sus dos extremos.
+> **Supr** es inofensivo tanto sobre *nodos* como sobre *aristas*: solo los quita de esta vista. Lo que borra del
+> modelo entero es **Shift+Supr** (sobre aristas) y **Borrar del modelo**, que siempre piden confirmación.
 
 Todo se puede deshacer con **Ctrl+Z** (Cmd+Z en Mac) mientras no cierres el espacio. En los espacios del
 servidor también puedes volver a una instantánea anterior desde [Historial](historial.md).

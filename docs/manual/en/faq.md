@@ -49,10 +49,12 @@ browser ("saved in this browser"). In a server workspace changes are sent in und
 
 ### Does it work offline? {#sin-conexion}
 
-Largely, yes. Local workspaces never need a network, and the application starts offline. Server
-workspaces need a network **to open** (your permissions are checked), but if the connection drops
-while you work, the indicator changes to "○ offline (syncs when back)" and you keep editing; when
-the network returns everything is merged. See [offline](compartir-y-colaborar.md#sin-conexion).
+Yes. Local workspaces never need a network, and the application starts offline. Server workspaces
+you have already opened in that browser also open offline, from their copy and with the last
+permission you had ("○ offline — changes will sync"); if the connection drops while you work, the
+indicator changes to "○ offline (syncs when back)" and you keep editing. When the network returns
+your permissions are checked and everything is merged. Only a server workspace you have never
+opened in that browser needs a network to open. See [offline](compartir-y-colaborar.md#sin-conexion).
 
 ### Where are my local workspaces and how do I avoid losing them? {#espacios-locales}
 
@@ -150,9 +152,9 @@ own changes, never someone else's. See [sharing and collaborating](compartir-y-c
 ### How do I remove someone's access? {#quitar-acceso}
 
 **Share** → **Revoke** next to the link you gave them. From then on the link no longer opens the
-workspace; anyone who has it open at that moment may stay connected until they reload the page or
-lose the connection. If several people used the same link, create a new one for those who should
-keep access. See [sharing and collaborating](compartir-y-colaborar.md).
+workspace, and anyone who has it open is disconnected immediately with the notice "You no longer
+have access to this workspace". If several people used the same link, create a new one for those
+who should keep access. See [revoking a link](compartir-y-colaborar.md#revocar).
 
 ## Import and export {#importar-y-exportar}
 

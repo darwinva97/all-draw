@@ -49,10 +49,14 @@ export function Crumbs() {
   );
 }
 
-/** Herramientas comunes: presencia, búsqueda, rejilla, tema y atajos. Van en la barra (escritorio/tableta) o en la hoja "Más" (móvil). */
+/**
+ * Herramientas comunes: presencia, búsqueda, rejilla, tema y atajos. Van en la barra (escritorio/tableta) o en la hoja
+ * "Más" (móvil). El botón de atajos solo sale si la app no inyecta su ayuda (`docsHref`): entonces los atajos están en
+ * el menú Ayuda de la app (y en la tecla `?`), y no hay dos botones para lo mismo.
+ */
 export function ToolbarTools({ onSearch, onShortcuts, labels }: { onSearch?: () => void; onShortcuts?: () => void; /** Con texto junto al icono (hoja móvil). */ labels?: boolean }) {
   const t = useT();
-  const { readOnly, store, presence, theme, setTheme, snap, setSnap } = useEditor();
+  const { readOnly, store, presence, theme, setTheme, snap, setSnap, docsHref } = useEditor();
   const peers = usePeers(presence?.awareness);
   const lbl = (s: string) => (labels ? <span className="ad-btn__label">{s}</span> : null);
   return <>
@@ -67,7 +71,7 @@ export function ToolbarTools({ onSearch, onShortcuts, labels }: { onSearch?: () 
     {onSearch && <button className="ad-btn" onClick={onSearch} title={t('Buscar (Ctrl+K)')} aria-label={t('Buscar (Ctrl+K)')} aria-haspopup="dialog"><Icon name="search" />{lbl(t('Buscar'))}</button>}
     {!readOnly && <button className={`ad-btn ${snap ? 'is-on' : ''}`} onClick={() => setSnap(!snap)} title={snap ? t('Ajuste a rejilla de 8 px activado (Alt lo desactiva mientras se pulsa)') : t('Ajuste a rejilla desactivado')} aria-pressed={snap} aria-label={t('Ajuste a rejilla')}><Icon name="snap" />{lbl(t('Rejilla'))}</button>}
     <button className="ad-btn" onClick={() => setTheme(THEME_NEXT[theme])} title={`${t(THEME_LABEL[theme])} · ${t('clic para cambiar')}`} aria-label={`${t(THEME_LABEL[theme])} · ${t('cambiar tema')}`}><Icon name={THEME_ICON[theme]} />{lbl(t(THEME_LABEL[theme]))}</button>
-    {onShortcuts && <button className="ad-btn" onClick={onShortcuts} title={t('Atajos de teclado (?)')} aria-label={t('Atajos de teclado')} aria-haspopup="dialog"><Icon name="keyboard" />{lbl(t('Atajos'))}</button>}
+    {onShortcuts && !docsHref && <button className="ad-btn" onClick={onShortcuts} title={t('Atajos de teclado (?)')} aria-label={t('Atajos de teclado')} aria-haspopup="dialog"><Icon name="keyboard" />{lbl(t('Atajos'))}</button>}
   </>;
 }
 

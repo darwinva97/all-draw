@@ -29,7 +29,10 @@ describe('cabeceras de seguridad', () => {
       const r = await fetch(s.url + p);
       expect(r.headers.get('content-security-policy')).toContain("default-src 'self'");
       expect(r.headers.get('content-security-policy')).toContain("style-src 'self' 'unsafe-inline'");
-      expect(r.headers.get('content-security-policy')).toContain('img-src \'self\' data: blob:');
+      // `https:` en img-src: el nodo imagen admite URLs externas (docs/07-seguridad.md)
+      expect(r.headers.get('content-security-policy')).toContain("img-src 'self' data: blob: https:;");
+      expect(r.headers.get('content-security-policy')).not.toMatch(/img-src[^;]*\bhttp:/);
+      expect(r.headers.get('content-security-policy')).toMatch(/connect-src 'self' ws:\/\/[^ ;]+ wss:\/\/[^ ;]+;/);
       expect(r.headers.get('x-content-type-options')).toBe('nosniff');
       expect(r.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
       expect(r.headers.get('permissions-policy')).toContain('camera=()');

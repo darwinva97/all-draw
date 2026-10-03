@@ -8,12 +8,42 @@ import type { PresenceMe } from '../presence';
 
 export const ME_KEY = 'alldraw:me';
 
-/** Autor de los comentarios propios: la presencia si hay sesión compartida; si no, `localStorage('alldraw:me')` o `fallback`. */
-export function commentAuthor(me: PresenceMe | null | undefined, fallback: string): CommentAuthor {
-  if (me?.name) return { name: me.name, color: me.color, ...(me.userId ? { userId: me.userId } : {}) };
+const nameListeners = new Set<() => void>();
+const storage = (): Storage | undefined => { try { return globalThis.localStorage ?? undefined; } catch { return undefined; } };
+
+/**
+ * Nombre local estable (sin presencia, p. ej. en un espacio local): el guardado en `localStorage('alldraw:me')`
+ * o, la primera vez, `generate()` (p. ej. "Anónimo 123"), que se guarda para que no cambie entre sesiones.
+ */
+export function localAuthorName(generate: () => string): string {
+  const ls = storage();
   let stored: string | null = null;
-  try { stored = globalThis.localStorage?.getItem(ME_KEY) ?? null; } catch { /* sin almacenamiento */ }
-  return { name: stored?.trim() || fallback };
+  try { stored = ls?.getItem(ME_KEY) ?? null; } catch { /* sin almacenamiento */ }
+  if (stored?.trim()) return stored.trim();
+  const name = generate();
+  try { ls?.setItem(ME_KEY, name); } catch { /* sin almacenamiento */ }
+  return name;
+}
+
+/** Cambia el nombre local (campo "Tu nombre"). Vacío no se guarda. Avisa a quien escuche (`onLocalAuthorName`). */
+export function saveLocalAuthorName(name: string): void {
+  const v = name.trim();
+  if (!v) return;
+  try { storage()?.setItem(ME_KEY, v); } catch { /* sin almacenamiento */ }
+  for (const f of nameListeners) f();
+}
+export function onLocalAuthorName(f: () => void): () => void { nameListeners.add(f); return () => { nameListeners.delete(f); }; }
+
+/** "Anónimo 123": número de 3 cifras al azar para distinguir a varios anónimos. */
+export const anonymousNumber = (): number => 100 + Math.floor(Math.random() * 900);
+
+/**
+ * Autor de los comentarios propios: la presencia si la app la da (con `userId` si hay cuenta: así se reconocen los
+ * propios aunque cambie el nombre); si no, el nombre local estable (`localAuthorName`), generado con `fallback`.
+ */
+export function commentAuthor(me: PresenceMe | null | undefined, fallback: string | (() => string)): CommentAuthor {
+  if (me?.name) return { name: me.name, color: me.color, ...(me.userId ? { userId: me.userId } : {}) };
+  return { name: localAuthorName(typeof fallback === 'function' ? fallback : () => fallback) };
 }
 
 /** ¿Lo escribí yo? Por `userId` si ambos lo tienen; si no, por nombre. */

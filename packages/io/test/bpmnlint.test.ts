@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { MemoryStore, NotationRegistry, CORE_PACK, parseWorkspace, validate, type Workspace } from '@all-draw/core';
 import { BPMN_PACK } from '@all-draw/notation-bpmn';
-import { BPMNLINT_VALIDATORS, importBpmn, indexBpmn } from '../src';
+import { BPMNLINT_VALIDATORS, importBpmn, indexBpmn, participantOf } from '../src';
 
 const reg = new NotationRegistry().register(CORE_PACK).register(BPMN_PACK);
 type El = { id: string; typeId: string; name?: string; fields?: Record<string, unknown>; features?: Record<string, unknown> };
@@ -36,11 +36,11 @@ const GOOD = ws(
 );
 
 describe('bpmnlint', () => {
-  it('expone 10 validadores con ids bpmnlint.* y un proceso correcto no produce diagnósticos', () => {
+  it('expone 10 validadores de bpmnlint más bpmn-pool-rules, y un proceso correcto no produce diagnósticos', () => {
     expect(BPMNLINT_VALIDATORS.map(v => v.id)).toEqual([
       'bpmnlint.start-event-required', 'bpmnlint.end-event-required', 'bpmnlint.no-disconnected', 'bpmnlint.single-blank-start-event',
       'bpmnlint.no-implicit-split', 'bpmnlint.no-duplicate-sequence-flows', 'bpmnlint.label-required', 'bpmnlint.superfluous-gateway',
-      'bpmnlint.fake-join', 'bpmnlint.no-inclusive-gateway-without-condition',
+      'bpmnlint.fake-join', 'bpmnlint.no-inclusive-gateway-without-condition', 'bpmnlint.bpmn-pool-rules',
     ]);
     expect(lint(GOOD)).toEqual([]);
   });
@@ -191,5 +191,70 @@ describe('bpmnlint', () => {
     expect(c).toEqual(expect.arrayContaining(['end-event-required:P', 'single-blank-start-event:s1', 'single-blank-start-event:s2', 'no-disconnected:orphan', 'fake-join:t', 'superfluous-gateway:g', 'label-required:s1', 'label-required:s2']));
     expect(c).not.toContain('start-event-required:P');
     expect(c.filter(x => x.startsWith('no-implicit-split'))).toEqual([]);
+  });
+});
+
+describe('bpmn-pool-rules: pools de los flujos y eventos de borde', () => {
+  /** Dos pools con lanes y tareas dibujadas (los padres salen de los nodos de la vista). */
+  function collab(rels: [string, string, string, string][], extraEls: Record<string, unknown> = {}, extraNodes: Record<string, unknown> = {}): Workspace {
+    return parseWorkspace({
+      meta: { name: 'c' },
+      views: { v: { id: 'v', notationId: 'bpmn', name: 'v' } },
+      elements: {
+        pa: { id: 'pa', typeId: 'bpmn:Pool', name: 'Banco' }, la: { id: 'la', typeId: 'bpmn:Lane', name: 'Gestor' },
+        pb: { id: 'pb', typeId: 'bpmn:Pool', name: 'Cliente' },
+        ta: { id: 'ta', typeId: 'bpmn:Task', name: 'Revisar' }, ta2: { id: 'ta2', typeId: 'bpmn:Task', name: 'Aprobar' }, tb: { id: 'tb', typeId: 'bpmn:Task', name: 'Pedir' },
+        ext: { id: 'ext', typeId: 'bpmn:Participant', name: 'Proveedor' },
+        ...extraEls,
+      },
+      nodes: {
+        npa: { id: 'npa', viewId: 'v', elementId: 'pa' }, nla: { id: 'nla', viewId: 'v', elementId: 'la', parentNodeId: 'npa' },
+        nta: { id: 'nta', viewId: 'v', elementId: 'ta', parentNodeId: 'nla' }, nta2: { id: 'nta2', viewId: 'v', elementId: 'ta2', parentNodeId: 'nla' },
+        npb: { id: 'npb', viewId: 'v', elementId: 'pb' }, ntb: { id: 'ntb', viewId: 'v', elementId: 'tb', parentNodeId: 'npb' },
+        next: { id: 'next', viewId: 'v', elementId: 'ext' },
+        ...extraNodes,
+      },
+      relations: Object.fromEntries(rels.map(([id, type, from, to]) => [id, { id, typeId: `bpmn:${type}`, from: { elementId: from }, to: { elementId: to } }])),
+    });
+  }
+  const pool = (w: Workspace) => lint(w, ['bpmn-pool-rules']);
+
+  it('participante: la pool (saltando lanes), la pool colapsada o el proceso', () => {
+    const ix = indexBpmn(new MemoryStore(collab([])));
+    expect(participantOf(ix, 'ta')).toBe('pa');
+    expect(participantOf(ix, 'la')).toBe('pa');
+    expect(participantOf(ix, 'tb')).toBe('pb');
+    expect(participantOf(ix, 'ext')).toBe('ext');
+    expect(participantOf(ix, 's')).toBeUndefined();
+    expect(participantOf(indexBpmn(new MemoryStore(GOOD)), 'a')).toBe('p');
+  });
+
+  it('flujo de secuencia: dentro de la misma pool vale; entre pools distintas es error', () => {
+    expect(pool(collab([['f', 'SequenceFlow', 'ta', 'ta2']]))).toEqual([]);
+    const d = pool(collab([['f', 'SequenceFlow', 'ta', 'tb']]));
+    expect(d.map(x => `${x.code}:${x.severity}:${x.subject.id}`)).toEqual(['bpmn-pool-rules:error:f']);
+    expect(d[0]!.message).toMatch(/Banco.*Cliente/);
+    expect(d[0]!.evidence).toMatchObject({ rule: 'sequence-flow-same-pool', from: 'pa', to: 'pb' });
+  });
+
+  it('flujo de mensaje: entre pools distintas (o con una pool colapsada) vale; dentro de la misma, error', () => {
+    expect(pool(collab([['m1', 'MessageFlow', 'ta', 'tb'], ['m2', 'MessageFlow', 'tb', 'ext'], ['m3', 'MessageFlow', 'pa', 'pb']]))).toEqual([]);
+    const d = pool(collab([['m', 'MessageFlow', 'ta', 'ta2']]));
+    expect(d.map(x => x.subject.id)).toEqual(['m']);
+    expect(d[0]!.evidence).toMatchObject({ rule: 'message-flow-different-pools', pool: 'pa' });
+  });
+
+  it('evento de borde: anidado en una actividad (o adherido con attachedTo) vale; suelto, error', () => {
+    const be = (parent: string | undefined, fields: Record<string, unknown> = {}) => collab([], { be: { id: 'be', typeId: 'bpmn:BoundaryEvent', name: 'Plazo', fields } }, { nbe: { id: 'nbe', viewId: 'v', elementId: 'be', parentNodeId: parent } });
+    expect(pool(be('nta'))).toEqual([]);
+    expect(pool(be('nla', { attachedTo: 'ta' }))).toEqual([]);
+    expect(pool(be('nla')).map(x => `${x.subject.collection}:${x.subject.id}`)).toEqual(['elements:be']);
+    expect(pool(be(undefined)).map(x => x.evidence?.rule)).toEqual(['boundary-event-in-activity']);
+    // Adherido a algo que no es una actividad tampoco vale
+    expect(pool(be('npa', { attachedTo: 'la' }))).toHaveLength(1);
+  });
+
+  it('modelos sin pools (proceso por bpmnParent) no dan avisos', () => {
+    expect(pool(GOOD)).toEqual([]);
   });
 });

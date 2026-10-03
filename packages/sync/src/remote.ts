@@ -16,26 +16,32 @@ export interface RemoteOptions {
   token?: string;
   /** Polyfill de WebSocket (node). */
   WebSocketPolyfill?: typeof WebSocket;
+  /** `false` crea el proveedor (y su awareness) sin conectar; se conecta luego con `connect()` (p. ej. al volver la red). */
+  connect?: boolean;
 }
 
 export interface RemoteConnection {
   provider: WebsocketProvider;
   awareness: Awareness;
   status(): RemoteStatus;
+  /** Conecta (o reanuda tras un cierre definitivo del servidor). */
+  connect(): void;
   disconnect(): void;
 }
 
-export function connectRemote(doc: Y.Doc, { url, room, token, WebSocketPolyfill }: RemoteOptions): RemoteConnection {
+export function connectRemote(doc: Y.Doc, { url, room, token, WebSocketPolyfill, connect = true }: RemoteOptions): RemoteConnection {
   const provider = new WebsocketProvider(url, room, doc, {
     params: token ? { token } : {},
+    connect,
     ...(WebSocketPolyfill ? { WebSocketPolyfill } : {}),
   });
-  let status: RemoteStatus = 'connecting';
+  let status: RemoteStatus = connect ? 'connecting' : 'disconnected';
   provider.on('status', (ev: { status: RemoteStatus }) => { status = ev.status; });
   return {
     provider,
     awareness: provider.awareness,
     status: () => status,
+    connect() { if (!provider.wsconnected && !provider.wsconnecting) provider.connect(); },
     disconnect() { provider.destroy(); status = 'disconnected'; },
   };
 }

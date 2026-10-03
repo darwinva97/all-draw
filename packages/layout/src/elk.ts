@@ -33,25 +33,36 @@ export interface LayoutEngine {
   layoutSequence(store: Store, viewId: string, reg?: NotationRegistry): Promise<Command>;
 }
 
-/** Algoritmo y dirección por defecto según la notación de la vista. */
-export function autoLayoutDefaults(notationId: string): Required<Pick<LayoutOpts, 'algorithm' | 'direction'>> {
-  switch (notationId) {
-    case 'bpmn':
-    case 'statechart':
-    case 'sequence':
-      return { algorithm: 'layered', direction: 'RIGHT' };
-    case 'archimate':
-    case 'c4':
-    case 'uml':
-    case 'uml-class':
-    case 'er':
-    case 'flowchart':
-      return { algorithm: 'layered', direction: 'DOWN' };
-    case 'mindmap':
-      return { algorithm: 'mrtree', direction: 'RIGHT' };
-    default:
-      return { algorithm: 'stress', direction: 'DOWN' };
-  }
+type LayoutDefaults = Required<Pick<LayoutOpts, 'algorithm' | 'direction'>>;
+
+/**
+ * Algoritmo y dirección por notación, **por id de pack** (`flow`, `uml`… no el nombre de la carpeta). Un test recorre
+ * los packs reales para que no se cuele un id que no existe ni falte alguno.
+ */
+export const AUTO_LAYOUT: Readonly<Record<string, LayoutDefaults>> = {
+  // Flujos de izquierda a derecha
+  bpmn: { algorithm: 'layered', direction: 'RIGHT' },
+  statechart: { algorithm: 'layered', direction: 'RIGHT' },
+  sequence: { algorithm: 'layered', direction: 'RIGHT' },
+  dfd: { algorithm: 'layered', direction: 'RIGHT' },
+  // Estructuras y diagramas de flujo de arriba abajo
+  archimate: { algorithm: 'layered', direction: 'DOWN' },
+  c4: { algorithm: 'layered', direction: 'DOWN' },
+  uml: { algorithm: 'layered', direction: 'DOWN' },
+  er: { algorithm: 'layered', direction: 'DOWN' },
+  flow: { algorithm: 'layered', direction: 'DOWN' },
+  // Árbol
+  mindmap: { algorithm: 'mrtree', direction: 'RIGHT' },
+  // Sin dirección propia
+  freeform: { algorithm: 'stress', direction: 'DOWN' },
+  grid: { algorithm: 'stress', direction: 'DOWN' },
+  catalog: { algorithm: 'stress', direction: 'DOWN' },
+};
+
+/** Algoritmo y dirección por defecto según la notación de la vista (id de pack); desconocida → como `freeform`. */
+export function autoLayoutDefaults(notationId: string): LayoutDefaults {
+  const d = Object.hasOwn(AUTO_LAYOUT, notationId) ? AUTO_LAYOUT[notationId] : undefined;
+  return { ...(d ?? AUTO_LAYOUT.freeform!) };
 }
 
 /** Padding interior de un contenedor según su figura (espacio para la cabecera o la banda lateral). */

@@ -14,10 +14,11 @@ export interface DeleteAccountResult { ok: true; deleted: string[]; transferred:
 let bearer: string | null = null;
 export function setBearer(t: string | null) { bearer = t; }
 
-async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+/** `opts.bearer: false` no manda el token de enlace aunque haya uno: la petición va sólo con la cookie de sesión. */
+async function req<T>(method: string, path: string, body?: unknown, opts: { bearer?: boolean } = {}): Promise<T> {
   // `x-requested-with` es la marca anti-CSRF que el servidor exige a las peticiones con cookie que modifican algo.
   const headers: Record<string, string> = { 'content-type': 'application/json', 'x-requested-with': 'all-draw' };
-  if (bearer) headers.authorization = `Bearer ${bearer}`;
+  if (bearer && opts.bearer !== false) headers.authorization = `Bearer ${bearer}`;
   let r: Response;
   try { r = await fetch(path, { method, headers, credentials: 'same-origin', body: body === undefined ? undefined : JSON.stringify(body) }); }
   catch (e) { throw new ApiError(0, (e as Error).message || 'network error'); } // sin red o servidor caído
@@ -77,6 +78,11 @@ async function download(path: string, fallbackName: string): Promise<void> {
 export const api = {
   available: () => fetch('/api/notations', { method: 'HEAD' }).then(r => (r.ok && !(r.headers.get('content-type') ?? '').includes('text/html')) || r.status === 405, () => false),
   me: () => req<{ user: User }>('GET', '/api/auth/me').then(r => r.user, () => null),
+  /**
+   * Usuario de la sesión (cookie), sin el token de enlace que pueda haber puesto un espacio compartido: `null` si no
+   * hay sesión; **lanza** si no hay red (para distinguir "sin cuenta" de "sin conexión").
+   */
+  sessionUser: () => req<{ user: User }>('GET', '/api/auth/me', undefined, { bearer: false }).then(r => r.user, (e: unknown) => { if (isNetworkError(e)) throw e; return null; }),
   login: (email: string, password: string) => req<{ user: User; token: string }>('POST', '/api/auth/login', { email, password }),
   /** `website` es la trampa para bots del formulario (un campo oculto que una persona deja vacío). */
   register,

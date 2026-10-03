@@ -32,6 +32,7 @@ export function takeShareToken(room: string): string | null {
   try { return sessionStorage.getItem(tokenKey(room)); } catch { return null; }
 }
 
-export function connectRoom(doc: Y.Doc, room: string, token?: string): RemoteConnection {
-  return connectRemote(doc, { url: syncUrl(), room, token });
+/** `connect: false` crea el proveedor sin conectar (espacio abierto sin red): se conecta con `conn.connect()` al volver. */
+export function connectRoom(doc: Y.Doc, room: string, token?: string, opts: { connect?: boolean } = {}): RemoteConnection {
+  return connectRemote(doc, { url: syncUrl(), room, token, ...(opts.connect === false ? { connect: false } : {}) });
 }

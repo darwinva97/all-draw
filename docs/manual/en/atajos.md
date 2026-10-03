@@ -54,12 +54,13 @@ do not fire. That way **Del** deletes letters, not nodes.
 | **Ctrl+D** | Duplicates the selection (new elements), slightly offset |
 | **Arrow keys** | Move the selection 1 px |
 | **Shift+arrows** | Move the selection 10 px |
-| **Del** or **Backspace** | On nodes: **removes them from the view** (they stay in the model). On edges: **deletes the relation** from the model |
+| **Del** or **Backspace** | **Removes the selected nodes and edges from the view** (elements and relations stay in the model) |
+| **Shift+Del** | On edges: **deletes the relation** from the model, with all its edges in every view (asks for confirmation) |
 | **Alt** (hold) | Disables snap to grid while you drag |
 
 > [!WARNING]
-> **Del** on an edge does not just remove it from the view: it deletes the relation in every view. If you get
-> it wrong, **Ctrl+Z**. Be careful with **Ctrl+A** followed by **Del**: since **Ctrl+A** also selects edges, it
+> **Shift+Del** on an edge does not just remove it from the view: it deletes the relation in every view. If you get
+> it wrong, **Ctrl+Z**. Be careful with **Ctrl+A** followed by **Shift+Del**: since **Ctrl+A** also selects edges, it
 > would delete every relation drawn in the view. More in
 > [Model and views](modelo-y-vistas.md#quitar-o-borrar).
 
@@ -175,8 +176,9 @@ on purpose.
 **Ctrl+V doesn't paste anything.**
 You first need to copy all-draw nodes with **Ctrl+C**. You cannot paste in a read-only workspace.
 
-**I pressed Del and a relation disappeared from every view.**
-You had an edge selected: **Del** deletes the relation from the model. Press **Ctrl+Z**.
+**I pressed Shift+Del and a relation disappeared from every view.**
+You had an edge selected: **Shift+Del** deletes the relation from the model. Press **Ctrl+Z**. **Del** would only
+have removed it from this view.
 
 **The arrow keys scroll the page instead of moving the node.**
 The canvas does not have the focus, or nothing is selected. Click the node to select it and try again.

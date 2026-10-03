@@ -12,10 +12,12 @@ written to be understood; if anything is unclear, write to us.
 
 ## Who is responsible {#responsable}
 
-- Controller: `TODO(titular): name or company name`
-- Tax ID (NIF): `TODO(titular): NIF`
-- Address: `TODO(titular): postal address`
-- Privacy contact: `TODO(titular): contact email`
+- Controller: the project's author, an individual who runs the service free of charge and is publicly
+  identified by the GitHub account [darwinva97](https://github.com/darwinva97).
+- Privacy contact: a private report on GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), visible only to the operator. For anything else, the project's public issues (https://github.com/darwinva97/all-draw/issues).
+- You can do almost everything yourself without writing to anyone: exporting and deleting your data are
+  in **Account → Your data**.
+- If the service becomes commercial, the operator's tax details will be published here.
 
 ## Summary {#resumen}
 
@@ -76,7 +78,9 @@ other people connected (presence). This is not stored.
   with your truncated IP address.
 - Our infrastructure providers (see [where](#donde)) process your IP address and the connection's
   technical data to deliver the website, and may keep logs under their own policies.
-  `TODO(titular): confirm the logging configuration in Cloudflare and in the proxy.`
+  The server's proxy (Caddy) keeps no access logs of its own; Cloudflare keeps its logs under its privacy
+  policy. In the Cloudflare Workers installation, application logs are kept by Cloudflare for a few days
+  to diagnose failures.
 
 ### Other people's data you enter {#datos-de-terceros}
 
@@ -99,11 +103,12 @@ about you. We do not sell or hand over data.
 ## Where your data is {#donde}
 
 - **Main server**: a virtual private server (VPS) in Europe, holding the database, workspaces,
-  snapshots and backups. `TODO(titular): VPS provider and country.`
+  snapshots and backups. The provider is Contabo GmbH and the server is in Germany (European Union).
 - **Cloudflare**: the website goes through Cloudflare, which acts as a content delivery network and
   proxy (it manages DNS and the connection's encryption and therefore sees the traffic).
   Cloudflare, Inc. is a US company; international transfers rely on
-  `TODO(titular): verify — EU-US Data Privacy Framework and/or standard contractual clauses`.
+  the EU-US Data Privacy Framework, which Cloudflare has joined, and the standard contractual clauses in
+  its data processing agreement.
 - **Cloudflare Workers installation**: there is also an installation of the service on Cloudflare
   Workers (a `*.workers.dev` address). If you use that address, your account data and workspaces
   are stored on Cloudflare's infrastructure, not on the VPS.
@@ -120,7 +125,7 @@ about you. We do not sell or hand over data.
 | Server backups | 30 days; then they are deleted automatically |
 | Attempt count per IP | Minutes, in memory only |
 | Final copy of workspaces deleted along with an account | 30 days, with the backups |
-| Request and error logs | `TODO(titular): retention period for server logs` |
+| Request and error logs | In the server's system log, which deletes them only by rotation when it fills up; they contain the truncated IP and never diagram content |
 
 Bear in mind that deleted data may remain for up to 30 days in backups, which are not modified;
 after that it is gone.
@@ -134,7 +139,8 @@ from the service itself.
 The only exception is for security: Cloudflare may add a small **bot detection** script to the page
 and set its own technical security cookies (for example `__cf_bm`) to tell people apart from
 automated attacks. They are not used for advertising or to follow you across other websites.
-`TODO(titular): confirm which Cloudflare features are enabled on the zone.`
+On the main domain, browser integrity check, email obfuscation and approximate IP geolocation (country only,
+for security) are enabled.
 
 ## Cookies and storage in your browser {#cookies}
 
@@ -188,9 +194,9 @@ You can ask at any time for:
   downloads a single workspace in an open format.
 - **Objection and restriction** of processing based on legitimate interest.
 
-Write to `TODO(titular): contact email` from your account's email address. We will reply within one
-month. If you are not satisfied, you can lodge a complaint with the **Spanish Data Protection
-Agency** (AEPD, https://www.aepd.es).
+Request it with a private report on GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), visible only to the operator, giving your account's email address. We will reply within one
+month. If you are not satisfied, you can lodge a complaint with the data protection
+authority of your country (in the European Union, that of your member state).
 
 ## How to delete your data {#borrar-datos}
 
@@ -203,7 +209,7 @@ Agency** (AEPD, https://www.aepd.es).
   sessions, API keys and access to other people's workspaces are deleted. Each workspace you own
   passes to its longest-standing member who **can edit**; those without one are deleted, and a final copy of them
   is kept that is removed automatically after 30 days, like the other backups. If you cannot sign
-  in, request it at `TODO(titular): contact email`.
+  in, request it with a private report on GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), visible only to the operator.
 
 ## Security {#seguridad}
 

@@ -8,10 +8,10 @@ para que se entiendan; léelas, son cortas.
 
 ## Quién presta el servicio {#quien}
 
-- Titular: `TODO(titular): nombre o razón social`
-- NIF: `TODO(titular): NIF`
-- Dirección: `TODO(titular): dirección postal`
-- Contacto: `TODO(titular): email de contacto`
+- Titular: el autor del proyecto, una persona física identificada por su cuenta de GitHub
+  [darwinva97](https://github.com/darwinva97), que ofrece el servicio de forma gratuita.
+- Contacto: las incidencias del proyecto (https://github.com/darwinva97/all-draw/issues) o, para asuntos privados, un aviso privado en GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular.
+- Si el servicio pasa a tener uso comercial, aquí se publicarán los datos fiscales del titular.
 
 ## Qué es el servicio {#el-servicio}
 
@@ -107,7 +107,7 @@ persona consumidora.
 ## Fin de tu cuenta {#fin-de-la-cuenta}
 
 - Puedes eliminar tu cuenta en cualquier momento en **Cuenta → Tus datos → Eliminar cuenta…** (o
-  pedirlo en `TODO(titular): email de contacto`). Antes, exporta lo que quieras conservar con
+  pedirlo con un aviso privado en GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular). Antes, exporta lo que quieras conservar con
   **Exportar mis datos**. Tus espacios pasan a su editor más antiguo o, si no tienen, se borran.
 - Podemos suspender o cerrar una cuenta que incumpla estas condiciones o que lleve mucho tiempo
   sin usarse, avisando antes cuando sea posible y dándote ocasión de exportar tus datos.
@@ -126,10 +126,10 @@ acuerdo, puedes dejar de usar el servicio y eliminar tu cuenta.
 
 ## Ley aplicable {#ley-aplicable}
 
-Estas condiciones se rigen por `TODO(titular): legislación aplicable (p. ej., la ley española)`.
-Para cualquier conflicto serán competentes `TODO(titular): juzgados competentes`, sin perjuicio del
+Estas condiciones se rigen por la legislación aplicable al titular.
+Para cualquier conflicto serán competentes los juzgados que correspondan según esa legislación, sin perjuicio del
 derecho de las personas consumidoras a acudir a los tribunales de su domicilio.
 
 ## Contacto {#contacto}
 
-Para cualquier duda sobre estas condiciones: `TODO(titular): email de contacto`.
+Para cualquier duda sobre estas condiciones: las incidencias del proyecto (https://github.com/darwinva97/all-draw/issues).

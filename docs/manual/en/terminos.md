@@ -8,10 +8,10 @@ understood; please read them, they are short.
 
 ## Who provides the service {#quien}
 
-- Provider: `TODO(titular): name or company name`
-- Tax ID (NIF): `TODO(titular): NIF`
-- Address: `TODO(titular): postal address`
-- Contact: `TODO(titular): contact email`
+- Provider: the project's author, an individual identified by the GitHub account
+  [darwinva97](https://github.com/darwinva97), who offers the service free of charge.
+- Contact: the project's issues (https://github.com/darwinva97/all-draw/issues) or, for private matters, a private report on GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), visible only to the operator.
+- If the service becomes commercial, the provider's tax details will be published here.
 
 ## What the service is {#el-servicio}
 
@@ -105,7 +105,7 @@ the access you gave them. Nothing above limits liability that the law does not a
 ## End of your account {#fin-de-la-cuenta}
 
 - You can delete your account at any time in **Account → Your data → Delete account…** (or request
-  it at `TODO(titular): contact email`). Beforehand, export what you want to keep with **Export my
+  it with a private report on GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), visible only to the operator). Beforehand, export what you want to keep with **Export my
   data**. Your workspaces pass to their longest-standing editor or, if they have none, are
   deleted.
 - We may suspend or close an account that breaches these terms or has been unused for a long time,
@@ -125,10 +125,10 @@ do not agree, you can stop using the service and delete your account.
 
 ## Governing law {#ley-aplicable}
 
-These terms are governed by `TODO(titular): applicable law (e.g. Spanish law)`. Any dispute will be
-heard by `TODO(titular): competent courts`, without prejudice to consumers' right to go to the courts
+These terms are governed by the law applicable to the provider. Any dispute will be heard by the
+courts that law designates, without prejudice to consumers' right to go to the courts
 of their place of residence.
 
 ## Contact {#contacto}
 
-For any question about these terms: `TODO(titular): contact email`.
+For any question about these terms: the project's issues (https://github.com/darwinva97/all-draw/issues).

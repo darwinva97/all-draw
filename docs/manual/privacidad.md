@@ -13,10 +13,13 @@ claro, escríbenos.
 
 ## Quién es el responsable {#responsable}
 
-- Responsable: `TODO(titular): nombre o razón social`
-- NIF: `TODO(titular): NIF`
-- Dirección: `TODO(titular): dirección postal`
-- Contacto para privacidad: `TODO(titular): email de contacto`
+- Responsable: el autor del proyecto, una persona física, que opera el servicio de forma gratuita
+  y lo identifica públicamente su cuenta de GitHub [darwinva97](https://github.com/darwinva97).
+- Contacto para privacidad: un aviso privado en GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular. Para lo demás, las incidencias públicas del proyecto
+  (https://github.com/darwinva97/all-draw/issues).
+- Casi todo lo puedes hacer tú mismo sin escribir a nadie: exportar y borrar tus datos están en
+  **Cuenta → Tus datos**.
+- Si el servicio pasa a tener uso comercial, aquí se publicarán los datos fiscales del titular.
 
 ## Resumen {#resumen}
 
@@ -76,7 +79,9 @@ se envían **en directo** a las demás personas conectadas (presencia). Eso no s
   lo registra con tu IP truncada.
 - Nuestros proveedores de infraestructura (ver [dónde](#donde)) procesan tu IP y los datos técnicos
   de la conexión para entregar la web, y pueden conservar registros según sus propias políticas.
-  `TODO(titular): confirmar la configuración de registros en Cloudflare y en el proxy.`
+  El proxy del servidor (Caddy) no guarda registros de acceso propios; Cloudflare conserva los suyos según
+  su política de privacidad. En la instalación de Cloudflare Workers, los registros de la aplicación se
+  guardan en Cloudflare unos días para diagnosticar fallos.
 
 ### Datos de otras personas que tú introduces {#datos-de-terceros}
 
@@ -100,11 +105,12 @@ sobre ti. No vendemos ni cedemos datos.
 
 - **Servidor principal**: un servidor virtual (VPS) en Europa, donde viven la base de datos, los
   espacios, las instantáneas y las copias de seguridad.
-  `TODO(titular): proveedor del VPS y país.`
+  El proveedor es Contabo GmbH y el servidor está en Alemania (Unión Europea).
 - **Cloudflare**: la web pasa por Cloudflare, que actúa como red de distribución y proxy (gestiona
   el DNS y el cifrado de la conexión y, por tanto, ve el tráfico). Cloudflare, Inc. es una empresa
   de EE. UU.; las transferencias internacionales se amparan en
-  `TODO(titular): verificar — Marco de Privacidad de Datos UE-EE. UU. y/o cláusulas contractuales tipo`.
+  el Marco de Privacidad de Datos UE-EE. UU., al que Cloudflare está adherido, y las cláusulas contractuales
+  tipo de su acuerdo de tratamiento de datos.
 - **Instalación en Cloudflare Workers**: existe además una instalación del servicio en Cloudflare
   Workers (dirección `*.workers.dev`). Si usas esa dirección, tus datos de cuenta y tus espacios se
   guardan en la infraestructura de Cloudflare, no en el VPS.
@@ -121,7 +127,7 @@ sobre ti. No vendemos ni cedemos datos.
 | Copias de seguridad del servidor | 30 días; después se borran solas |
 | Recuento de intentos por IP | Minutos, solo en memoria |
 | Copia final de los espacios borrados al eliminar una cuenta | 30 días, con las copias de seguridad |
-| Registros de peticiones y de errores | `TODO(titular): plazo de conservación de los registros del servidor` |
+| Registros de peticiones y de errores | En el registro del sistema del servidor, que los borra solo por rotación al llenarse; contienen la IP truncada y nunca el contenido de los diagramas |
 
 Ten en cuenta que un dato borrado puede seguir hasta 30 días en las copias de seguridad, que no se
 modifican; pasado ese plazo desaparece.
@@ -135,7 +141,8 @@ contenidos de la web solo permite cargar recursos del propio servicio.
 La única excepción es de seguridad: Cloudflare puede añadir a la página un pequeño script de
 **detección de bots** y fijar sus propias cookies técnicas de seguridad (por ejemplo `__cf_bm`),
 para distinguir personas de ataques automatizados. No se usan para publicidad ni para seguirte por
-otras webs. `TODO(titular): confirmar qué funciones de Cloudflare están activas en la zona.`
+otras webs. En el dominio principal están activas la comprobación del navegador, la protección del
+correo frente a robots y la geolocalización aproximada por IP (solo el país, para seguridad).
 
 ## Cookies y almacenamiento en tu navegador {#cookies}
 
@@ -192,9 +199,9 @@ Puedes pedir en cualquier momento:
   concreto en un formato abierto.
 - **Oposición y limitación** del tratamiento basado en interés legítimo.
 
-Escribe a `TODO(titular): email de contacto` desde el correo de tu cuenta. Responderemos en el plazo
-de un mes. Si no quedas conforme, puedes reclamar ante la **Agencia Española de Protección de
-Datos** (https://www.aepd.es).
+Pídelo con un aviso privado en GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular, indicando el correo de tu cuenta. Responderemos en el plazo
+de un mes. Si no quedas conforme, puedes reclamar ante la autoridad de protección de
+datos de tu país (en la Unión Europea, la de tu Estado miembro).
 
 ## Cómo borrar tus datos {#borrar-datos}
 
@@ -206,8 +213,8 @@ Datos** (https://www.aepd.es).
 - **Cuenta**: **Cuenta → Tus datos → Eliminar cuenta…**, con tu contraseña. Se borran tu cuenta, tus
   sesiones, tus claves API y tu acceso a espacios ajenos. Cada espacio tuyo pasa al miembro más antiguo
   que **puede editar**; los que no tienen ninguno se borran, y de ellos se guarda una copia final que se elimina
-  sola a los 30 días, como el resto de copias de seguridad. Si no puedes entrar, pídelo a
-  `TODO(titular): email de contacto`.
+  sola a los 30 días, como el resto de copias de seguridad. Si no puedes entrar, pídelo con
+  un aviso privado en GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular.
 
 ## Seguridad {#seguridad}
 

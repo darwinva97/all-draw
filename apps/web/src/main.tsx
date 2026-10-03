@@ -9,4 +9,10 @@ import { ErrorBoundary, installGlobalErrorHandlers } from './errors';
 // Errores no capturados → `POST /api/client-errors` (deduplicados y muestreados; nunca el contenido del diagrama).
 installGlobalErrorHandlers();
 
+// Direcciones limpias: /docs, /docs/<capítulo>, /bienvenida y /espacios llevan a su ruta (#/…) de la app.
+{
+  const m = /^\/(docs(?:\/[\w/-]*)?|bienvenida|espacios)\/?$/.exec(location.pathname);
+  if (m && !location.hash) history.replaceState(null, '', `/#/${m[1]}${location.search}`);
+}
+
 createRoot(document.getElementById('root')!).render(<StrictMode><ErrorBoundary><App /></ErrorBoundary></StrictMode>);

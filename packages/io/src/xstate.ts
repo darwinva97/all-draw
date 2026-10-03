@@ -14,6 +14,7 @@
  */
 import { parseWorkspace, type Workspace, type Element, type Relation, type ViewNode, type ViewEdge } from '@all-draw/core';
 import { emptyWs, makeEl, makeRel } from './archimate';
+import { tr } from './i18n';
 
 export type XStateActions = string | { type: string; [k: string]: unknown } | (string | { type: string; [k: string]: unknown })[];
 export interface XStateTransitionObject { target?: string | string[]; cond?: string | { type: string }; guard?: string | { type: string }; actions?: XStateActions; internal?: boolean; reenter?: boolean; description?: string }
@@ -49,7 +50,7 @@ export function importXState(input: string | XStateConfig): XStateImport {
   const warnings: string[] = [];
   const warn = (s: string) => { if (!warnings.includes(s)) warnings.push(s); };
   const cfg = (typeof input === 'string' ? JSON.parse(input) : input) as XStateConfig | null;
-  if (!cfg || typeof cfg !== 'object' || (!cfg.states && !cfg.initial && !cfg.id)) throw new Error('El JSON no parece una configuración de XState (faltan `states`/`initial`).');
+  if (!cfg || typeof cfg !== 'object' || (!cfg.states && !cfg.initial && !cfg.id)) throw new Error(tr('El JSON no parece una configuración de XState (faltan `states`/`initial`).'));
   const machineId = cfg.id || 'maquina';
   const ws = emptyWs(machineId);
 
@@ -85,7 +86,7 @@ export function importXState(input: string | XStateConfig): XStateImport {
     const targets = obj.target === undefined ? [undefined] : Array.isArray(obj.target) ? obj.target : [obj.target];
     for (const target of targets) {
       const to = target === undefined ? from : resolveTarget(from, target);
-      if (to === null || to === '') { warn(`Estado "${from}": el destino "${target}" del evento "${event}" no existe; se omite`); continue; }
+      if (to === null || to === '') { warn(tr('Estado "{from}": el destino "{target}" del evento "{event}" no existe; se omite', { from, target, event })); continue; }
       const id = `${from || machineId}--${event || extra.delay || 'always'}-->${to}`;
       const rel = makeRel(ws.relations[id] ? `${id}#${Object.keys(ws.relations).length}` : id, T.transition, { elementId: from }, { elementId: to });
       rel.name = event;
@@ -123,13 +124,13 @@ export function importXState(input: string | XStateConfig): XStateImport {
     for (const [k, child] of states) build(path ? `${path}.${k}` : k, child ?? {});
     if (node.initial !== undefined && states.length) {
       const target = path ? `${path}.${node.initial}` : node.initial;
-      if (!ws.elements[target]) { warn(`Estado "${path || machineId}": el estado inicial "${node.initial}" no existe`); return; }
+      if (!ws.elements[target]) { warn(tr('Estado "{state}": el estado inicial "{initial}" no existe', { state: path || machineId, initial: node.initial })); return; }
       const iid = initialId(path);
       ws.elements[iid] = makeEl(iid, T.initial, '');
       const rel = makeRel(`${iid}-->${target}`, T.transition, { elementId: iid }, { elementId: target });
       rel.fields = { event: '', guard: '', actions: [] };
       ws.relations[rel.id] = rel;
-    } else if (states.length && node.type !== 'parallel' && !path) warn('La máquina no declara `initial`');
+    } else if (states.length && node.type !== 'parallel' && !path) warn(tr('La máquina no declara `initial`'));
   };
   build('', cfg);
 
@@ -219,7 +220,7 @@ export function exportXState(ws: Workspace, viewId?: string): XStateExport {
     const on: Record<string, XStateTransitionObject[]> = {}, after: Record<string, XStateTransitionObject[]> = {}, always: XStateTransitionObject[] = [];
     for (const e of edges.filter(e => e.fromNodeId === n.id)) {
       const rel = ws.relations[e.relationId!]!, to = nodeById.get(e.toNodeId)!;
-      if (!isState(to)) { warn(`La transición ${rel.id} apunta a un pseudoestado ${elOf(to).typeId} que XState no representa; se omite`); continue; }
+      if (!isState(to)) { warn(tr('La transición {id} apunta a un pseudoestado {type} que XState no representa; se omite', { id: rel.id, type: elOf(to).typeId })); continue; }
       const t: XStateTransitionObject = {};
       if (!(rel.fields.internal && to.id === n.id)) t.target = targetExpr(n, to);
       if (rel.fields.guard) t.guard = String(rel.fields.guard);
@@ -237,7 +238,7 @@ export function exportXState(ws: Workspace, viewId?: string): XStateExport {
 
   const stateConfig = (n: ViewNode): XStateConfig | null => {
     const el = elOf(n);
-    if (!isState(n)) { if (el.typeId !== T.initial) warn(`El pseudoestado "${el.name || el.id}" (${el.typeId}) no tiene equivalente en XState; se omite`); return null; }
+    if (!isState(n)) { if (el.typeId !== T.initial) warn(tr('El pseudoestado "{name}" ({type}) no tiene equivalente en XState; se omite', { name: el.name || el.id, type: el.typeId })); return null; }
     const cfg: XStateConfig = {};
     if (needsId.has(n.id)) cfg.id = el.id;
     if (el.typeId === T.parallel) cfg.type = 'parallel';
@@ -262,14 +263,14 @@ export function exportXState(ws: Workspace, viewId?: string): XStateExport {
     for (const k of kids) {
       if (!isState(k)) continue;
       const name = nameOf(k);
-      if (states[name]) warn(`Dos estados hermanos se llaman "${name}"; XState exige nombres únicos`);
+      if (states[name]) warn(tr('Dos estados hermanos se llaman "{name}"; XState exige nombres únicos', { name }));
       const c = stateConfig(k); if (c) states[name] = c;
     }
     const init = kids.find(k => elOf(k).typeId === T.initial);
     if (init) {
       const e = edges.find(e => e.fromNodeId === init.id);
       const to = e ? nodeById.get(e.toNodeId) : undefined;
-      if (to && kids.includes(to)) cfg.initial = nameOf(to); else warn(`El pseudoestado inicial ${init.id} no apunta a un estado hermano`);
+      if (to && kids.includes(to)) cfg.initial = nameOf(to); else warn(tr('El pseudoestado inicial {id} no apunta a un estado hermano', { id: init.id }));
     }
     if (Object.keys(states).length) { cfg.states = states; if (!cfg.initial && cfg.type !== 'parallel') cfg.initial = Object.keys(states)[0]; }
   };

@@ -61,6 +61,7 @@ PORT=4002 HOST=127.0.0.1 DATA_DIR=~/.alldraw-data node src/server.mjs
 | `MAX_DOC_BYTES` | `20971520` (20 MB) | Tamaño máximo de un espacio (update Yjs completo); `0` = sin límite |
 | `REGISTER_MIN_MS` | `2000` | Tiempo mínimo entre `GET /api/auth/config` (da el `formToken`) y el registro; `0` lo desactiva |
 | `MAX_WS_PER_IP` / `MAX_WS_PER_WORKSPACE` | `30` / `100` | WebSockets simultáneos; al pasarse, cierre `4429` |
+| `TRUSTED_PROXIES` | `loopback,cloudflare` | de quién se creen `X-Forwarded-For` / `CF-Connecting-IP` para la IP real del cliente (IPs, CIDR, `loopback`, `private`, `cloudflare`; vacío = nadie). Ver `docs/07-seguridad.md` |
 | `BACKUP_DIR` | `~/.alldraw-backups` | Copias; el servidor deja aquí (`deleted/`) la copia final de los espacios borrados con su cuenta |
 
 Unidad systemd de usuario (`~/.config/systemd/user/alldraw.service`): sigue valiendo tal cual

@@ -15,7 +15,7 @@ import {
 } from '@all-draw/server-core';
 import { IMPORT_PATH, handleImport } from './admin-import';
 import { RESET_PATH, handleReset } from './admin-reset';
-import { LINK_HEADER, ROLE_HEADER, USER_HEADER, WorkspaceDO } from './do';
+import { KEY_HEADER, LINK_HEADER, ROLE_HEADER, SESSION_HEADER, USER_HEADER, WorkspaceDO } from './do';
 import { envInt, type Env } from './env';
 import { RegistryDO } from './registry';
 import { RemoteDocHost } from './remote-host';
@@ -42,6 +42,8 @@ function boot(env: Env): Runtime {
     },
     // Una línea JSON por evento en `console`: Workers Observability la indexa (`[observability] enabled`).
     logger: jsonLogger({ level: parseLogLevel(env.LOG_LEVEL) }),
+    // En Cloudflare la IP del cliente la pone el propio borde (`CF-Connecting-IP`); el cliente no puede falsearla.
+    clientIp: c => c.req.header('cf-connecting-ip') ?? 'unknown',
     build: { version: env.ALLDRAW_VERSION || '0.1.0', commit: env.ALLDRAW_COMMIT || null, runtime: 'cloudflare', db: env.DB ? 'd1' : 'durable-object' },
   });
   return (runtime = { api, store, hash, docs });
@@ -72,9 +74,12 @@ export default {
       const headers = new Headers(request.headers);
       headers.set(ROLE_HEADER, auth.role);
       // Identidad para poder cerrar la conexión al revocar el acceso; las que mande el cliente se descartan.
-      headers.delete(USER_HEADER); headers.delete(LINK_HEADER);
-      if (auth.identity.userId) headers.set(USER_HEADER, auth.identity.userId);
-      else if (auth.identity.linkToken) headers.set(LINK_HEADER, auth.identity.linkToken);
+      for (const h of [USER_HEADER, LINK_HEADER, SESSION_HEADER, KEY_HEADER]) headers.delete(h);
+      if (auth.identity.userId) {
+        headers.set(USER_HEADER, auth.identity.userId);
+        if (auth.identity.sessionId) headers.set(SESSION_HEADER, auth.identity.sessionId);
+        else if (auth.identity.keyId) headers.set(KEY_HEADER, auth.identity.keyId);
+      } else if (auth.identity.linkToken) headers.set(LINK_HEADER, auth.identity.linkToken);
       return stub.fetch(new Request('https://do/ws', { headers }));
     }
 

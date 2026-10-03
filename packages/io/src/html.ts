@@ -8,6 +8,7 @@
  */
 import { indexOf, threadsOfView, viewsOfElement, type CommentAnchor, type CommentThread, type NotationRegistry, type Store, type View } from '@all-draw/core';
 import { escapeXml, renderSvg, THEME_VARS, type SvgMarker, type SvgTheme } from './svg';
+import { ioLang, tr, trn } from './i18n';
 
 export interface HtmlOptions {
   title?: string;
@@ -20,6 +21,8 @@ export interface HtmlOptions {
   viewIds?: string[];
   /** Hilos de comentarios de cada vista (panel lateral y marcadores numerados). Por defecto, sí. */
   comments?: boolean;
+  /** Idioma del documento (`<html lang>` y fechas); por defecto el inyectado con `setIoTranslator` (`es`). Los textos usan el traductor inyectado. */
+  lang?: string;
 }
 
 const esc = escapeXml;
@@ -71,6 +74,7 @@ a:hover{text-decoration:underline}
 .ad-appears .ad-chip.is-detail{border-color:var(--ad-accent);color:var(--ad-accent)}
 .ad-crumbs{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ad-muted);margin-bottom:8px;min-height:18px}
 .ad-crumbs a{color:inherit}
+.ad-crumbs[hidden]{display:none}
 .ad-view__body{display:flex;gap:14px;align-items:flex-start}
 .ad-view__body>.ad-view__canvas{flex:1;min-width:0}
 .ad-comments{flex:none;width:300px;max-height:70vh;overflow:auto;border:1px solid var(--ad-border);border-radius:8px;background:var(--ad-panel);padding:8px}
@@ -102,27 +106,31 @@ const SCRIPT = `
 (function(){
   var views = Array.prototype.slice.call(document.querySelectorAll('.ad-view'));
   var items = Array.prototype.slice.call(document.querySelectorAll('.ad-index__item'));
-  var history = [];
-  function show(id, push){
+  function show(id){
     var found = false;
     views.forEach(function(v){ var on = v.getAttribute('data-view') === id; v.classList.toggle('is-current', on); if (on) found = true; });
     if (!found && views[0]) { id = views[0].getAttribute('data-view'); views[0].classList.add('is-current'); }
     items.forEach(function(i){ i.classList.toggle('is-current', i.getAttribute('data-view') === id); });
-    if (push !== false && history[history.length - 1] !== id) history.push(id);
-    if (history.length > 20) history.shift();
-    renderCrumbs();
+    renderCrumbs(id);
     document.title = (document.querySelector('.ad-view.is-current h2') || {}).textContent || document.title;
   }
-  function renderCrumbs(){
+  // Ruta de detalle: la vista actual y las vistas de las que es detalle (data-parent), de la raíz a la actual.
+  function renderCrumbs(id){
     var el = document.querySelector('.ad-crumbs'); if (!el) return;
-    el.innerHTML = history.slice(-5).map(function(id, i, arr){
+    var path = [], cur = id;
+    while (cur && path.indexOf(cur) < 0 && path.length < 10) {
+      var sec = document.querySelector('.ad-view[data-view="' + cur + '"]'); if (!sec) break;
+      path.unshift(cur); cur = sec.getAttribute('data-parent');
+    }
+    el.hidden = path.length < 2;
+    el.innerHTML = path.length < 2 ? '' : path.map(function(id, i, arr){
       var name = (document.querySelector('.ad-view[data-view="' + id + '"] h2') || {}).textContent || id;
-      return (i < arr.length - 1) ? '<a href="#view=' + encodeURIComponent(id) + '">' + name.replace(/</g, '&lt;') + '</a><span>\\u203a</span>' : '<strong>' + name.replace(/</g, '&lt;') + '</strong>';
+      return (i < arr.length - 1) ? '<a href="#view=' + encodeURIComponent(id) + '">' + name.replace(/</g, '&lt;') + '</a><span aria-hidden="true">\\u203a</span>' : '<strong aria-current="page">' + name.replace(/</g, '&lt;') + '</strong>';
     }).join('');
   }
   function fromHash(){
     var m = /view=([^&]+)/.exec(location.hash);
-    show(m ? decodeURIComponent(m[1]) : (document.body.getAttribute('data-initial-view') || ''), true);
+    show(m ? decodeURIComponent(m[1]) : (document.body.getAttribute('data-initial-view') || ''));
   }
   window.addEventListener('hashchange', fromHash);
   fromHash();
@@ -169,7 +177,8 @@ const SCRIPT = `
 
 export function renderStandaloneHtml(store: Store, reg: NotationRegistry, opts: HtmlOptions = {}): string {
   const meta = store.meta();
-  const title = opts.title ?? meta.name ?? 'Diagrama';
+  const title = opts.title ?? meta.name ?? tr('Diagrama');
+  const lang = opts.lang ?? ioLang();
   const theme = opts.theme ?? 'dual';
   const fontFamily = opts.fontFamily ?? 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
   const all = store.list('views');
@@ -179,13 +188,24 @@ export function renderStandaloneHtml(store: Store, reg: NotationRegistry, opts: 
   const packColor = (id: string) => reg.pack(id)?.color ?? '#64748b';
   const viewLink = (v: View, cls = '') => `<a href="#view=${encodeURIComponent(v.id)}"${cls ? ` class="${cls}"` : ''}>${esc(v.name || v.id)}</a>`;
   const inSet = new Set(views.map(v => v.id));
+  /** Nombre legible del tipo de vista (en el índice), sin el id interno; las vistas libres no llevan chip. */
+  const KIND_NAMES: Record<string, string> = { grid: 'Capas × etapas', sequence: 'Secuencia', tree: 'Árbol', matrix: 'Matriz' };
+  const kindName = (v: View) => (KIND_NAMES[v.kind] ? tr(KIND_NAMES[v.kind]!) : '');
+  const viewpointName = (v: View) => (v.viewpointId ? reg.pack(v.notationId)?.viewpoints.find(x => x.id === v.viewpointId)?.name ?? v.viewpointId : '');
+  // Vista "padre" de cada vista de detalle (para la ruta): la que tiene un nodo que entra en ella, o donde aparece su raíz.
+  const parentOf = new Map<string, string>();
+  for (const n of store.list('nodes')) if (n.detailViewId && inSet.has(n.detailViewId) && inSet.has(n.viewId) && n.viewId !== n.detailViewId && !parentOf.has(n.detailViewId)) parentOf.set(n.detailViewId, n.viewId);
+  for (const v of views) if (!parentOf.has(v.id) && v.rootElementId) {
+    const host = store.list('nodes').find(n => n.elementId === v.rootElementId && n.viewId !== v.id && inSet.has(n.viewId));
+    if (host) parentOf.set(v.id, host.viewId);
+  }
 
   // Índice agrupado por notación
   const byNotation = new Map<string, View[]>();
   for (const v of views) byNotation.set(v.notationId, [...(byNotation.get(v.notationId) ?? []), v]);
   const index = [...byNotation.entries()].map(([nid, list]) =>
     `<li class="ad-index__group">${esc(packName(nid))}</li>` +
-    list.map(v => `<li class="ad-index__item" data-view="${esc(v.id)}"><a href="#view=${encodeURIComponent(v.id)}">${esc(v.name || v.id)}${v.kind !== 'freeform' ? ` <span class="ad-index__notation" style="background:${esc(packColor(nid))}">${esc(v.kind)}</span>` : ''}</a></li>`).join(''),
+    list.map(v => `<li class="ad-index__item" data-view="${esc(v.id)}"><a href="#view=${encodeURIComponent(v.id)}">${esc(v.name || v.id)}${kindName(v) ? ` <span class="ad-index__notation" style="background:${esc(packColor(nid))}">${esc(kindName(v))}</span>` : ''}</a></li>`).join(''),
   ).join('');
 
   // Secciones
@@ -204,20 +224,21 @@ export function renderStandaloneHtml(store: Store, reg: NotationRegistry, opts: 
       const others = appearsIn.filter(o => o.id !== v.id && inSet.has(o.id));
       const dets = details.filter(d => inSet.has(d.id));
       const type = reg.elementType(el.typeId);
-      rows.push(`<tr data-element="${esc(el.id)}"><td>${esc(el.name || '(sin nombre)')}</td><td class="ad-muted">${esc(type?.name ?? el.typeId)}</td><td>${dets.map(d => viewLink(d, 'ad-chip is-detail')).join('')}${others.map(o => viewLink(o, 'ad-chip')).join('') || (dets.length ? '' : '<span class="ad-chip">solo aquí</span>')}</td></tr>`);
+      rows.push(`<tr data-element="${esc(el.id)}"><td>${esc(el.name || tr('(sin nombre)'))}</td><td class="ad-muted">${esc(type?.name ?? el.typeId)}</td><td>${dets.map(d => viewLink(d, 'ad-chip is-detail')).join('')}${others.map(o => viewLink(o, 'ad-chip')).join('') || (dets.length ? '' : `<span class="ad-chip">${esc(tr('solo aquí'))}</span>`)}</td></tr>`);
     }
     const root = v.rootElementId ? store.get('elements', v.rootElementId) : undefined;
-    return `<section class="ad-view" data-view="${esc(v.id)}" aria-labelledby="h-${esc(v.id)}">
-<div class="ad-view__head"><h2 id="h-${esc(v.id)}">${esc(v.name || v.id)}</h2><span class="ad-muted">${esc(packName(v.notationId))}${v.viewpointId ? ` · ${esc(v.viewpointId)}` : ''}${root ? ` · detalle de ${esc(root.name)}` : ''}</span></div>
+    const parent = parentOf.get(v.id);
+    return `<section class="ad-view" data-view="${esc(v.id)}"${parent ? ` data-parent="${esc(parent)}"` : ''} aria-labelledby="h-${esc(v.id)}">
+<div class="ad-view__head"><h2 id="h-${esc(v.id)}">${esc(v.name || v.id)}</h2><span class="ad-muted">${esc(packName(v.notationId))}${v.viewpointId ? ` · ${esc(viewpointName(v))}` : ''}${root ? ` · ${esc(tr('detalle de {name}', { name: root.name }))}` : ''}</span></div>
 ${v.doc ? `<p class="ad-view__doc">${esc(v.doc)}</p>` : ''}
 ${cm.panel ? `<div class="ad-view__body"><div class="ad-view__canvas">${svg}</div>${cm.panel}</div>` : `<div class="ad-view__canvas">${svg}</div>`}
-${rows.length ? `<div class="ad-appears"><h3>Aparece en</h3><table><thead><tr><th>Elemento</th><th>Tipo</th><th>Vistas</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>` : ''}
+${rows.length ? `<div class="ad-appears"><h3>${esc(tr('Aparece en'))}</h3><table><thead><tr><th>${esc(tr('Elemento'))}</th><th>${esc(tr('Tipo'))}</th><th>${esc(tr('Vistas'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>` : ''}
 </section>`;
   }).join('\n');
 
   const themeAttr = theme === 'dual' ? '' : ` data-theme="${theme}"`;
   return `<!DOCTYPE html>
-<html lang="es"${themeAttr}>
+<html lang="${esc(lang)}"${themeAttr}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -226,14 +247,14 @@ ${rows.length ? `<div class="ad-appears"><h3>Aparece en</h3><table><thead><tr><t
 <style>${css(fontFamily)}</style>
 </head>
 <body data-initial-view="${esc(initial)}">
-<nav class="ad-side" aria-label="Vistas">
-<div class="ad-side__head"><h1>${esc(title)}</h1><p>${esc(meta.description || `${views.length} vistas · ${store.list('elements').filter(e => !e.template).length} elementos`)}</p>
-<div class="ad-side__theme" role="group" aria-label="Tema"><button class="ad-btn" data-set-theme="auto" type="button">Auto</button><button class="ad-btn" data-set-theme="light" type="button">Claro</button><button class="ad-btn" data-set-theme="dark" type="button">Oscuro</button></div></div>
+<nav class="ad-side" aria-label="${esc(tr('Vistas'))}">
+<div class="ad-side__head"><h1>${esc(title)}</h1><p>${esc(meta.description || `${trn('{n} vista', '{n} vistas', views.length)} · ${trn('{n} elemento', '{n} elementos', store.list('elements').filter(e => !e.template).length)}`)}</p>
+<div class="ad-side__theme" role="group" aria-label="${esc(tr('Tema de color'))}"><button class="ad-btn" data-set-theme="auto" type="button">${esc(tr('Auto'))}</button><button class="ad-btn" data-set-theme="light" type="button">${esc(tr('Claro'))}</button><button class="ad-btn" data-set-theme="dark" type="button">${esc(tr('Oscuro'))}</button></div></div>
 <ul class="ad-index">${index}</ul>
 </nav>
 <main class="ad-main">
-<div class="ad-crumbs" aria-label="Recorrido"></div>
-${sections || '<p class="ad-muted">No hay vistas.</p>'}
+<nav class="ad-crumbs" aria-label="${esc(tr('Ruta de detalle'))}" hidden></nav>
+${sections || `<p class="ad-muted">${esc(tr('No hay vistas.'))}</p>`}
 </main>
 <script>${SCRIPT}</script>
 </body>
@@ -248,21 +269,21 @@ const escText = (s: string) => esc(s).replace(/\(/g, '&#40;');
 function fmtDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  try { return d.toLocaleString('es', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return d.toISOString().slice(0, 16).replace('T', ' '); }
+  try { return d.toLocaleString(ioLang(), { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return d.toISOString().slice(0, 16).replace('T', ' '); }
 }
 
 /** Qué se comenta, en palabras (para el panel y el texto emergente del marcador). */
 function anchorText(store: Store, a: CommentAnchor): string {
-  const elName = (id?: string) => { const e = id ? store.get('elements', id) : undefined; return e ? (e.name || '(sin nombre)') : undefined; };
-  const nodeName = (id?: string) => { const n = id ? store.get('nodes', id) : undefined; return n ? (elName(n.elementId) ?? n.text ?? 'Nota') : undefined; };
+  const elName = (id?: string) => { const e = id ? store.get('elements', id) : undefined; return e ? (e.name || tr('(sin nombre)')) : undefined; };
+  const nodeName = (id?: string) => { const n = id ? store.get('nodes', id) : undefined; return n ? (elName(n.elementId) ?? n.text ?? tr('Nota')) : undefined; };
   const relName = (id?: string) => { const r = id ? store.get('relations', id) : undefined; return r ? (r.name || `${elName(r.from.elementId) ?? '?'} → ${elName(r.to.elementId) ?? '?'}`) : undefined; };
   switch (a.kind) {
-    case 'element': return elName(a.id) ?? '(borrado)';
-    case 'node': return nodeName(a.id) ?? '(borrado)';
-    case 'relation': return relName(a.id) ?? '(borrada)';
-    case 'edge': { const e = a.id ? store.get('edges', a.id) : undefined; return e ? (e.label || relName(e.relationId) || `${nodeName(e.fromNodeId) ?? '?'} → ${nodeName(e.toNodeId) ?? '?'}`) : '(borrada)'; }
-    case 'view': return 'Toda la vista';
-    case 'point': return 'Punto del lienzo';
+    case 'element': return elName(a.id) ?? tr('(borrado)');
+    case 'node': return nodeName(a.id) ?? tr('(borrado)');
+    case 'relation': return relName(a.id) ?? tr('(borrada)');
+    case 'edge': { const e = a.id ? store.get('edges', a.id) : undefined; return e ? (e.label || relName(e.relationId) || `${nodeName(e.fromNodeId) ?? '?'} → ${nodeName(e.toNodeId) ?? '?'}`) : tr('(borrada)'); }
+    case 'view': return tr('Toda la vista');
+    case 'point': return tr('Punto del lienzo');
   }
 }
 
@@ -288,12 +309,12 @@ function viewComments(store: Store, viewId: string): { markers: SvgMarker[]; pan
     const n = String(i + 1);
     const what = anchorText(store, th.anchor);
     for (const at of markerSpots(store, th.anchor, viewId)) markers.push({ label: n, at, muted: th.resolved, id: th.id, title: `${n}. ${th.root.author.name}: ${th.root.text.slice(0, 80)}` });
-    const state = th.resolved ? `Resuelto${th.root.resolvedBy ? ` por ${esc(th.root.resolvedBy)}` : ''}` : 'Abierto';
-    const comments = th.comments.map(c => `<div class="ad-cm"><div class="ad-cm__meta"><b>${escText(c.author.name)}</b><time datetime="${esc(c.createdAt)}">${esc(fmtDate(c.createdAt))}</time>${c.editedAt ? '<span>(editado)</span>' : ''}</div><p>${escText(c.text)}</p></div>`).join('');
+    const state = esc(th.resolved ? (th.root.resolvedBy ? tr('Resuelto por {name}', { name: th.root.resolvedBy }) : tr('Resuelto')) : tr('Abierto'));
+    const comments = th.comments.map(c => `<div class="ad-cm"><div class="ad-cm__meta"><b>${escText(c.author.name)}</b><time datetime="${esc(c.createdAt)}">${esc(fmtDate(c.createdAt))}</time>${c.editedAt ? `<span>${esc(tr('(editado)'))}</span>` : ''}</div><p>${escText(c.text)}</p></div>`).join('');
     return `<li class="ad-thread${th.resolved ? ' is-resolved' : ''}" data-thread="${esc(th.id)}"><div class="ad-thread__head"><span class="ad-thread__n">${n}</span><span class="ad-thread__anchor" title="${escText(what)}">${escText(what)}</span><span class="ad-thread__state">${state}</span></div>${comments}</li>`;
   });
   const open = threads.filter(t => !t.resolved).length;
-  const panel = `<aside class="ad-comments" aria-label="Comentarios"><h3>Comentarios <small>${open} abiertos · ${threads.length - open} resueltos</small></h3><ol class="ad-threads">${items.join('')}</ol></aside>`;
+  const panel = `<aside class="ad-comments" aria-label="${esc(tr('Comentarios'))}"><h3>${esc(tr('Comentarios'))} <small>${esc(trn('{n} abierto', '{n} abiertos', open))} · ${esc(trn('{n} resuelto', '{n} resueltos', threads.length - open))}</small></h3><ol class="ad-threads">${items.join('')}</ol></aside>`;
   return { markers, panel };
 }
 

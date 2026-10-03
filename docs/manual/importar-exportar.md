@@ -287,7 +287,7 @@ Los avisos solo se muestran en pantalla al importar desde el editor. Si te inter
 importa desde el editor sobre un espacio vacío.
 
 **"No encuentro la opción de importar."**
-Estás en solo lectura (enlace de lectura o rol `viewer`): solo puedes exportar.
+Estás en solo lectura (enlace de lectura o rol **solo lectura**): solo puedes exportar.
 
 **"El SVG se ve oscuro en mi documento."**
 El SVG de tema claro y oscuro sigue el tema de quien lo mira. Si necesitas un aspecto fijo, exporta **PNG (2×)** con

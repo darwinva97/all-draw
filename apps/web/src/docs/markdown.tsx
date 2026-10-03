@@ -244,9 +244,11 @@ export function imageSrc(resolved: string): string {
 // ---------------------------------------------------------------- Resaltado
 const fold1 = (ch: string): string => {
   if (ch.length !== 1) return ch; // astrales: tal cual (mantiene la longitud UTF-16)
-  return ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()[0] ?? ch;
+  const lower = ch.toLowerCase();
+  if (lower === 'ñ') return lower; // la ñ es otra letra, no una n con tilde («año» no es «ano»)
+  return lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '')[0] ?? ch;
 };
-/** Minúsculas sin acentos, conservando la longitud por punto de código. */
+/** Minúsculas sin acentos (pero con ñ), conservando la longitud por punto de código. */
 export const fold = (s: string): string => Array.from(s, fold1).join('');
 
 /** Parte `text` en trozos marcando las apariciones de cualquiera de `terms` (ya plegados). */

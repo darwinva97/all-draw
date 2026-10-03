@@ -16,6 +16,7 @@
 /// <reference path="./bpmn-moddle.d.ts" />
 import { BpmnModdle, type ModdleElement } from 'bpmn-moddle';
 import { emptyWorkspace, newId, type Workspace, type Element, type Relation, type View, type ViewNode, type ViewEdge } from '@all-draw/core';
+import { tr } from './i18n';
 
 export interface BpmnImportResult { workspace: Workspace; warnings: string[] }
 
@@ -64,6 +65,7 @@ const isFlowNode = (t: string) => ACTIVITY_TYPES.has(t) || EVENT_TYPES.has(t) ||
 
 // ---------------------------------------------------------------- Utilidades moddle
 type Bo = ModdleElement;
+const DATA_LABEL_OUTSIDE = new Set(['bpmn:DataStore', 'bpmn:DataObject', 'bpmn:DataInput', 'bpmn:DataOutput']);
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 const list = (v: unknown): Bo[] => (Array.isArray(v) ? (v as Bo[]) : []);
 const bo = (v: unknown): Bo | undefined => (v && typeof v === 'object' && '$type' in (v as object) ? (v as Bo) : undefined);
@@ -201,13 +203,13 @@ class Importer {
       if (r.$type === 'bpmn:Choreography') this.importFlowElements(list(r.get('flowElements')), undefined);
     }
     for (const r of roots) if (!DEFINITION_TYPES[r.$type] && r.$type !== 'bpmn:Process' && !r.$instanceOf('bpmn:Collaboration') && r.$type !== 'bpmn:DataStore' && r.$type !== 'bpmn:Category')
-      this.warn(`Elemento raíz ignorado: ${r.$type}${r.id ? ` (${r.id})` : ''}`);
+      this.warn(tr('Elemento raíz ignorado: {type}{id}', { type: r.$type, id: r.id ? ` (${r.id})` : '' }));
     // 4. Relaciones.
     for (const p of this.pendingRelations) this.addRelation(p.bo, p.typeId, p.from, p.to, p.fields);
     // 5. Diagramas.
     const defsAttrs = JSON.stringify({ id: defs.id, targetNamespace: str(defs.get('targetNamespace')), attrs: defs.$attrs });
     for (const d of list(defs.get('diagrams'))) this.importDiagram(d, defsAttrs);
-    if (!list(defs.get('diagrams')).length) this.warn('El fichero no trae bpmndi:BPMNDiagram: se importa el modelo sin vistas.');
+    if (!list(defs.get('diagrams')).length) this.warn(tr('El fichero no trae bpmndi:BPMNDiagram: se importa el modelo sin vistas.'));
   }
 
   private docOf(el: Bo): string {
@@ -234,7 +236,7 @@ class Importer {
   private addRelation(el: Bo, typeId: string, from: string, to: string, fields: Record<string, unknown>) {
     const end = (id: string): Relation['from'] | undefined => (this.ws.elements[id] ? { elementId: id } : this.ws.relations[id] ? { relationId: id } : undefined);
     const f = end(from), t = end(to);
-    if (!f || !t) { this.warn(`${el.$type} ${el.id ?? ''} apunta a un elemento desconocido (${from} → ${to})`); return; }
+    if (!f || !t) { this.warn(tr('{type} {id} apunta a un elemento desconocido ({from} → {to})', { type: el.$type, id: el.id ?? '', from, to })); return; }
     const clean: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(fields)) if (v !== undefined && v !== '' && v !== null && v !== false) clean[k] = v;
     const feats: Record<string, unknown> = {};
@@ -268,18 +270,19 @@ class Importer {
 
   private importArtifacts(artifacts: Bo[], parent: string | undefined) {
     for (const a of artifacts) {
-      if (a.$type === 'bpmn:TextAnnotation') this.addElement(a, 'bpmn:TextAnnotation', { text: str(a.get('text')) }, parent);
-      else if (a.$type === 'bpmn:Group') this.addElement(a, 'bpmn:Group', { categoryValue: str(bo(a.get('categoryValueRef'))?.get('value')) }, parent);
+      // El texto de la anotación y la categoría del grupo son lo que se ve: van también al nombre (la etiqueta del nodo).
+      if (a.$type === 'bpmn:TextAnnotation') { const e = this.addElement(a, 'bpmn:TextAnnotation', { text: str(a.get('text')) }, parent); if (!e.name) e.name = str(a.get('text')) ?? ''; }
+      else if (a.$type === 'bpmn:Group') { const e = this.addElement(a, 'bpmn:Group', { categoryValue: str(bo(a.get('categoryValueRef'))?.get('value')) }, parent); if (!e.name) e.name = str(e.fields.categoryValue) ?? ''; }
       else if (a.$type === 'bpmn:Association') {
         const from = boId(a.get('sourceRef')), to = boId(a.get('targetRef'));
         if (from && to) this.pendingRelations.push({ bo: a, typeId: ASSOC, from, to, fields: { direction: str(a.get('associationDirection'))?.replace(/^None$/, '') } });
-      } else this.warn(`Artefacto no soportado: ${a.$type}`);
+      } else this.warn(tr('Artefacto no soportado: {type}', { type: a.$type }));
     }
   }
 
   private importConversations(nodes: Bo[], parent: string | undefined) {
     for (const n of nodes) {
-      if (!CONVERSATION_TYPES.has(n.$type)) { this.warn(`Nodo de conversación no soportado: ${n.$type}`); continue; }
+      if (!CONVERSATION_TYPES.has(n.$type)) { this.warn(tr('Nodo de conversación no soportado: {type}', { type: n.$type })); continue; }
       const fields: Record<string, unknown> = n.$type === 'bpmn:CallConversation' ? { calledCollaboration: boId(n.get('calledCollaborationRef')) } : {};
       const e = this.addElement(n, n.$type, fields, parent);
       if (n.$type === 'bpmn:SubConversation') this.importConversations(list(n.get('conversationNodes')), e.id);
@@ -371,7 +374,7 @@ class Importer {
       e = this.addElement(f, t, fields, parent);
       if (t === 'bpmn:SubChoreography') { this.importFlowElements(list(f.get('flowElements')), e.id); this.importArtifacts(list(f.get('artifacts')), e.id); }
     } else {
-      this.warn(`Elemento de flujo no soportado: ${t}${f.id ? ` (${f.id})` : ''}`);
+      this.warn(tr('Elemento de flujo no soportado: {type}{id}', { type: t, id: f.id ? ` (${f.id})` : '' }));
       return;
     }
     const def = bo(f.get('default'));
@@ -394,7 +397,7 @@ class Importer {
     const viewpointId = root?.$type === 'bpmn:Choreography' ? 'choreography' : root?.$instanceOf('bpmn:Collaboration') ? 'collaboration' : 'process';
     const view: View = {
       id: viewId, kind: 'freeform', notationId: 'bpmn', viewpointId,
-      name: str(d.get('name')) ?? str(root?.get('name')) ?? root?.id ?? 'BPMN',
+      name: str(d.get('name')) ?? str(root?.get('name')) ?? fallbackDiagramName(root) ?? 'BPMN',
       doc: '', style: {}, props: { bpmnDefinitions: defsAttrs, bpmnPlaneId: plane?.id ?? '' },
     };
     if (root?.$type === 'bpmn:Process' || (root && SUBPROCESS_TYPES.has(root.$type)) || root?.$type === 'bpmn:SubProcess') {
@@ -410,10 +413,10 @@ class Importer {
       if (s.$type !== 'bpmndi:BPMNShape') continue;
       const el = bo(s.get('bpmnElement'));
       const b = bo(s.get('bounds'));
-      if (!el?.id || !b) { this.warn(`BPMNShape ${s.id ?? ''} sin elemento o sin Bounds`); continue; }
+      if (!el?.id || !b) { this.warn(tr('BPMNShape {shape} sin elemento o sin Bounds', { shape: s.id ?? '' })); continue; }
       if (s.get('choreographyActivityShape')) continue; // bandas de participante: las dibuja el render
       const e = this.ws.elements[el.id];
-      if (!e) { if (!this.ws.relations[el.id]) this.warn(`BPNShape ${s.id ?? ''} apunta a un elemento no importado (${el.id})`); continue; }
+      if (!e) { if (!this.ws.relations[el.id]) this.warn(tr('BPMNShape {shape} apunta a un elemento no importado ({element})', { shape: s.id ?? '', element: el.id })); continue; }
       const r: Rect = { x: Number(b.get('x')) || 0, y: Number(b.get('y')) || 0, w: Number(b.get('width')) || 0, h: Number(b.get('height')) || 0 };
       abs.set(e.id, r);
       shapes.push({ s, el: e, r });
@@ -438,6 +441,8 @@ class Importer {
       if (s.get('isMarkerVisible') !== undefined) meta.isMarkerVisible = s.get('isMarkerVisible');
       const lb = bo(bo(s.get('label'))?.get('bounds'));
       if (lb) meta.label = { x: Number(lb.get('x')), y: Number(lb.get('y')), w: Number(lb.get('width')), h: Number(lb.get('height')) };
+      // Datos (almacén, objeto, entrada, salida): bpmn.io los dibuja de 36–50 px con la etiqueta fuera, debajo; dentro no cabe.
+      if (DATA_LABEL_OUTSIDE.has(el.typeId) && (!lb || Number(lb.get('y')) >= r.y + r.h - 4)) node.style.labelPosition = 'bottom';
       const stroke = str(s.get('bioc:stroke')) ?? str(s.get('color:border-color'));
       const fill = str(s.get('bioc:fill')) ?? str(s.get('color:background-color'));
       if (stroke) node.style.stroke = stroke;
@@ -451,10 +456,10 @@ class Importer {
       if (s.$type !== 'bpmndi:BPMNEdge') continue;
       const el = bo(s.get('bpmnElement'));
       const rel = el?.id ? this.ws.relations[el.id] : undefined;
-      if (!rel) { this.warn(`BPMNEdge ${s.id ?? ''} apunta a una relación no importada (${el?.id ?? '?'})`); continue; }
+      if (!rel) { this.warn(tr('BPMNEdge {shape} apunta a una relación no importada ({element})', { shape: s.id ?? '', element: el?.id ?? '?' })); continue; }
       const fromNode = rel.from.elementId ? nodes.get(rel.from.elementId) : undefined;
       const toNode = rel.to.elementId ? nodes.get(rel.to.elementId) : undefined;
-      if (!fromNode || !toNode) { this.warn(`BPMNEdge ${s.id ?? ''}: falta la figura de un extremo en el diagrama ${viewId}`); continue; }
+      if (!fromNode || !toNode) { this.warn(tr('BPMNEdge {shape}: falta la figura de un extremo en el diagrama {view}', { shape: s.id ?? '', view: viewId })); continue; }
       const wps = list(s.get('waypoint')).map(w => ({ x: Number(w.get('x')) || 0, y: Number(w.get('y')) || 0 }));
       const edgeId = s.id ?? `${viewId}__${rel.id}`;
       const edge: ViewEdge = { id: edgeId, viewId, relationId: rel.id, fromNodeId: fromNode, toNodeId: toNode, bendpoints: wps.slice(1, -1), style: {} };
@@ -487,15 +492,29 @@ class Importer {
   }
 }
 
+/**
+ * Nombre de un diagrama sin `name` cuyo elemento raíz tampoco lo tiene (bpmn.io deja `Collaboration_1`): el del proceso de
+ * la primera pool con proceso con nombre, o los nombres de las pools. `undefined` si no hay nada legible.
+ */
+function fallbackDiagramName(root: Bo | undefined): string | undefined {
+  if (!root?.$instanceOf('bpmn:Collaboration')) return undefined;
+  const parts = list(root.get('participants'));
+  for (const p of parts) { const n = str(bo(p.get('processRef'))?.get('name')); if (n) return n; }
+  const names = parts.map(p => str(p.get('name'))).filter((n): n is string => !!n);
+  return names.length ? names.slice(0, 3).join(' · ') : undefined;
+}
+
 export async function importBpmn(xml: string): Promise<BpmnImportResult> {
   const moddle = new BpmnModdle();
   const warnings: string[] = [];
   let parsed: Awaited<ReturnType<BpmnModdle['fromXML']>>;
   try { parsed = await moddle.fromXML(xml); }
-  catch (err) { throw new Error(`BPMN inválido: ${err instanceof Error ? err.message : String(err)}`); }
+  catch (err) { throw new Error(tr('BPMN inválido: {error}', { error: err instanceof Error ? err.message : String(err) })); }
   for (const w of parsed.warnings) warnings.push(w.message);
   const defs = parsed.rootElement;
-  const ws = emptyWorkspace(str(defs.get('name')) || 'BPMN');
+  // Nombre: el de `definitions` o, si no tiene, el del único proceso con nombre (si no, `importAny` pone el del fichero).
+  const named = list(defs.get('rootElements')).filter(r => r.$type === 'bpmn:Process' && str(r.get('name')));
+  const ws = emptyWorkspace(str(defs.get('name')) || (named.length === 1 ? str(named[0]!.get('name'))! : 'BPMN'));
   const imp = new Importer(ws, warnings);
   imp.run(defs);
   imp.linkDetailViews(defs);
@@ -533,7 +552,7 @@ class Exporter {
       };
       visit(viewId);
       this.views = all.filter(v => picked.has(v.id));
-      if (!this.views.length) throw new Error(`La vista ${viewId} no existe o no es BPMN`);
+      if (!this.views.length) throw new Error(tr('La vista {view} no existe o no es BPMN', { view: viewId }));
     } else this.views = all;
     const inViews = new Set(this.views.map(v => v.id));
     const onView = new Set(Object.values(ws.nodes).filter(n => inViews.has(n.viewId) && n.elementId).map(n => n.elementId!));
@@ -725,10 +744,10 @@ class Exporter {
       b = m.create(t, { id: e.id });
       if (f.isCollection) b.set('isCollection', true);
     } else if (t === 'bpmn:TextAnnotation') {
-      b = m.create(t, { id: e.id, text: str(f.text) ?? e.name });
+      b = m.create(t, { id: e.id, text: e.name || str(f.text) });
     } else if (t === 'bpmn:Group') {
       b = m.create(t, { id: e.id });
-      const value = str(f.categoryValue) ?? e.name;
+      const value = str(f.categoryValue) || e.name;
       if (value) {
         const cat = m.create('bpmn:Category', { id: `${e.id}_cat`, categoryValue: [m.create('bpmn:CategoryValue', { id: `${e.id}_cv`, value })] });
         this.rootElements.push(cat);

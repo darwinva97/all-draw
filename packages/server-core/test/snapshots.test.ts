@@ -1,5 +1,5 @@
 /** Historial de versiones: instantáneas por API (memoria) y automáticas en `LiveDoc`. */
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { exampleWorkspace, makeElement } from '@all-draw/core';
 import { LiveDoc, MAX_SNAPSHOTS, workspaceFromUpdate } from '../src/docs';
 import { MemoryWorkspaceStore } from '../src/store/memory';
@@ -35,7 +35,7 @@ describe('instantáneas por API', () => {
     await editor.api.post(`/api/workspaces/${id}/commands`, { commands: [{ type: 'set', collection: 'elements', id: el.id, value: el }, { type: 'meta', patch: { name: 'Renombrado' } }] });
     await wait(5);
     const s2 = await owner.api.post(`/api/workspaces/${id}/snapshots`, {});
-    expect(s2.body.label).toBeNull();
+    expect(s2.body.label).toBe(''); // manual sin etiqueta: no es «automática» (null)
     const list = await viewer.api.get(`/api/workspaces/${id}/snapshots`);
     expect(list.body.snapshots.map((s: { id: string }) => s.id)).toEqual([s2.body.id, s1.body.id]);
 
@@ -83,11 +83,12 @@ describe('instantáneas por API', () => {
     const labelled = (await u.api.post(`/api/workspaces/${id}/snapshots`, { label: 'fija' })).body.id as string;
     for (let i = 0; i < MAX_SNAPSHOTS + 5; i++) await api.store.createSnapshot({ workspaceId: id, authorId: null, label: null, data: new Uint8Array([i]) });
     expect((await api.store.listSnapshots(id)).length).toBe(MAX_SNAPSHOTS + 6);
-    await u.api.post(`/api/workspaces/${id}/snapshots`, {}); // dispara la poda
+    await u.api.post(`/api/workspaces/${id}/snapshots`, {}); // dispara la poda (manual sin etiqueta: tampoco se poda)
     const list = (await u.api.get(`/api/workspaces/${id}/snapshots`)).body.snapshots as { id: string; label: string | null }[];
     expect(list).toHaveLength(MAX_SNAPSHOTS);
     expect(list.some(s => s.id === labelled)).toBe(true); // la etiquetada sobrevive aunque sea la más antigua
-    expect(list.filter(s => s.label === null)).toHaveLength(MAX_SNAPSHOTS - 1);
+    expect(list.filter(s => s.label === '')).toHaveLength(1);
+    expect(list.filter(s => s.label === null)).toHaveLength(MAX_SNAPSHOTS - 2);
   });
 });
 
@@ -127,5 +128,52 @@ describe('LiveDoc: instantánea automática por actividad', () => {
     await wait(10);
     expect(await store.listSnapshots(w.id)).toHaveLength(2);
     await live.destroy(); await live2.destroy();
+  });
+});
+
+describe('LiveDoc: instantáneas automáticas cada 30 min de actividad aunque el doc se descargue (reloj falso)', () => {
+  afterEach(() => { vi.useRealTimers(); });
+  const MIN = 60_000;
+  it('la referencia es la última instantánea guardada, no la carga del doc', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const t0 = Date.parse('2026-10-03T09:00:00Z');
+    vi.setSystemTime(t0);
+    const store = new MemoryWorkspaceStore();
+    const w = await store.createWorkspace({ ownerId: 'u', name: 'A' });
+    /** Una sesión de trabajo: carga el doc, cambia algo, guarda y lo descarga (como hace `DocManager` a los 60 s sin conexiones). */
+    const session = async (at: number, name: string) => {
+      vi.setSystemTime(t0 + at * MIN);
+      const live = new LiveDoc(w.id, store, () => {}, 1);
+      await live.load();
+      const el = makeElement('freeform:box', name);
+      live.store.set('elements', el.id, el);
+      await wait(5);
+      await live.destroy();
+    };
+    await session(0, 'nuevo');            // espacio recién creado: aún no
+    expect(await store.listSnapshots(w.id)).toHaveLength(0);
+    await session(20, 'segunda');         // ya tiene contenido y ninguna instantánea: la primera
+    expect(await store.listSnapshots(w.id)).toHaveLength(1);
+    await session(40, 'tercera');         // 20 min desde la última: no
+    await session(49, 'cuarta');          // 29 min: no
+    expect(await store.listSnapshots(w.id)).toHaveLength(1);
+    await session(51, 'quinta');          // 31 min (con el doc descargado entre medias): sí
+    const list = await store.listSnapshots(w.id);
+    expect(list).toHaveLength(2);
+    expect(list[0]).toMatchObject({ label: null, authorId: null, createdAt: new Date(t0 + 51 * MIN).toISOString() });
+    const ws = workspaceFromUpdate((await store.getSnapshot(w.id, list[0]!.id))!.data);
+    expect(Object.values(ws.elements).map(e => e.name).sort()).toEqual(['cuarta', 'nuevo', 'quinta', 'segunda', 'tercera']);
+    // Dentro de una misma sesión larga: una cada 30 min de actividad
+    vi.setSystemTime(t0 + 60 * MIN);
+    const live = new LiveDoc(w.id, store, () => {}, 1);
+    await live.load();
+    for (const m of [60, 70, 80, 85, 95]) {
+      vi.setSystemTime(t0 + m * MIN);
+      const el = makeElement('freeform:box', `m${m}`);
+      live.store.set('elements', el.id, el);
+      await wait(2);
+    }
+    expect((await store.listSnapshots(w.id)).map(s => (Date.parse(s.createdAt) - t0) / MIN)).toEqual([85, 51, 20]);
+    await live.destroy();
   });
 });

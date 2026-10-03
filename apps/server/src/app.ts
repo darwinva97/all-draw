@@ -15,8 +15,8 @@ import { WebSocketServer } from 'ws';
 import { createApi } from './api';
 import { archiveWriter } from './archive';
 import {
-  SAFE_ID, SECURITY_TXT_PATH, authorizeConnection, credentialsFromRequest, isTrustedOrigin, jsonLogger, makeHasher, redactPath, requestHost, safeEqualString,
-  securityHeaders, securityTxt, truncateIp, type BuildInfo, type ConnIdentity, type Logger, type Principal,
+  SAFE_ID, SECURITY_TXT_PATH, authorizeConnection, credentialsFromRequest, isTrustedOrigin, jsonLogger, makeHasher, parseTrustedProxies, redactPath, requestHost,
+  resolveClientIp, safeEqualString, securityHeaders, securityTxt, truncateIp, type BuildInfo, type ConnIdentity, type Logger, type Principal,
 } from './auth';
 import { buildInfo } from './build';
 import type { Config } from './config';
@@ -60,6 +60,15 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
   const build = opts.build ?? buildInfo(dbKind);
 
   const hash = makeHasher(config.sessionSecret);
+  const trust = parseTrustedProxies(config.trustedProxies ?? undefined);
+  /**
+   * IP real del cliente: la del socket y, sólo si quien conecta es un proxy de confianza (`TRUSTED_PROXIES`: Caddy en
+   * 127.0.0.1 y Cloudflare por defecto), la que dicen `X-Forwarded-For` / `CF-Connecting-IP`. Ver `docs/07-seguridad.md`.
+   */
+  const ipOf = (req: http.IncomingMessage) => {
+    const h = (n: string) => { const v = req.headers[n]; return (Array.isArray(v) ? v.join(',') : v) ?? null; };
+    return resolveClientIp(trust, req.socket.remoteAddress, h('x-forwarded-for'), h('cf-connecting-ip'));
+  };
   const docs = new DocManager(store, { maxDocBytes: config.maxDocBytes });
   /** Identidad de cada petición (la resuelve la API) para el log de accesos. */
   const who = new WeakMap<http.IncomingMessage, string>();
@@ -67,6 +76,7 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
   const api = createApi({
     store, docs: new LocalDocHost(docs), hash, config, logger, build,
     archiveWorkspace: archiveWriter(config.backupDir),
+    clientIp: c => { const inc = (c.env as { incoming?: http.IncomingMessage } | undefined)?.incoming; return inc ? ipOf(inc) : 'unknown'; },
     onIdentity: (c, p) => { const inc = (c.env as { incoming?: http.IncomingMessage } | undefined)?.incoming; if (inc) who.set(inc, userLabel(p)); },
   });
   const apiListener = getRequestListener(api.fetch);
@@ -75,8 +85,6 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
   const headersOf = (req: http.IncomingMessage) => ({ get: (n: string) => { const v = req.headers[n.toLowerCase()]; return (Array.isArray(v) ? v[0] : v) ?? null; } });
   const hostOf = (req: http.IncomingMessage) => requestHost(headersOf(req), new URL(req.url ?? '/', 'http://x'));
   const secHeaders = (req: http.IncomingMessage) => securityHeaders({ https: isHttps(req), host: hostOf(req) });
-  /** IP del cliente: la primera de `x-forwarded-for` (Caddy la pone) o la del socket. */
-  const ipOf = (req: http.IncomingMessage) => headersOf(req).get('x-forwarded-for')?.split(',')[0]?.trim() || headersOf(req).get('x-real-ip') || req.socket.remoteAddress || 'unknown';
   /** Petición local de verdad: desde loopback y sin cabeceras de proxy (Caddy también conecta desde 127.0.0.1). */
   const isLocal = (req: http.IncomingMessage) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '') && !req.headers['x-forwarded-for'] && !req.headers['x-real-ip'];
   const publicBase = (req: http.IncomingMessage) => config.publicUrl ?? `${isHttps(req) ? 'https' : 'http'}://${hostOf(req)}`;

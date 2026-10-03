@@ -3,14 +3,18 @@
  * visual son las vistas reales del espacio de ejemplo, pintadas con `renderSvg` de la propia app al cargar.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Icon, type IconName } from '@all-draw/editor';
+import { Icon, toast, type IconName } from '@all-draw/editor';
+import type { Workspace } from '@all-draw/core';
 import { useLang, useT } from '@all-draw/i18n';
 import { demoWorkspace } from './demo';
 import { api, type User } from './api';
 import { AuthDialog } from './Auth';
 import { AppFooter, AppHeader, UserMenu } from './Chrome';
 import { PACKS, PACK_COLORS, localizePack } from './registry';
-import { createLocalWorkspace } from './spaces';
+import { IMPORT_ACCEPT, createLocalWorkspace, createServerWorkspace, importWorkspaceFile } from './spaces';
+import { TEMPLATES } from './templates';
+import { ioErrorText } from './io-text';
+import { useDocumentTitle } from './title';
 import { workspaceThumb } from './thumbs';
 import { useEffectiveTheme } from './theme';
 import { docHref } from './help';
@@ -42,15 +46,29 @@ export function Landing({ serverUp: serverUpProp, user: userProp, onAuthed }: { 
   useEffect(() => {
     if (serverUpProp !== undefined) return;
     let alive = true;
-    api.available().then(async up => { if (!alive) return; setServerUp(up); if (up) { const u = await api.me(); if (alive) setUser(u ?? null); } });
+    api.probe().then(r => { if (!alive) return; setServerUp(r.up); setUser(r.user); });
     return () => { alive = false; };
   }, [serverUpProp]);
-  useEffect(() => { document.title = t('all-draw · un modelo, muchas notaciones'); return () => { document.title = 'all-draw'; }; }, [t]);
+  useDocumentTitle(t('all-draw · un modelo, muchas notaciones'));
 
   const tryDemo = async () => {
     setBusy(true);
     try { location.hash = `#/w/${await createLocalWorkspace(demoWorkspace())}`; }
     catch (e) { setBusy(false); reportError(e, { title: t('No se pudo crear la demo') }); }
+  };
+  // Sin cuenta también se empieza en blanco, desde una plantilla o importando (fallo 15): se guarda en este navegador.
+  const file = useRef<HTMLInputElement>(null);
+  const create = async (ws: Workspace) => { location.hash = user ? `#/s/${await createServerWorkspace(ws)}` : `#/w/${await createLocalWorkspace(ws)}`; };
+  const startBlank = async () => {
+    const blank = TEMPLATES.find(x => x.id === 'blank');
+    if (!blank) return;
+    setBusy(true);
+    try { await create(blank.build(t)); } catch (e) { setBusy(false); reportError(e, { title: t('No se pudo crear el espacio') }); }
+  };
+  const onFile = async (f: File) => {
+    setBusy(true);
+    try { await create(await importWorkspaceFile(f, t)); }
+    catch (e) { setBusy(false); toast.error(t('No se pudo importar «{name}»', { name: f.name }), { description: ioErrorText(e) }); }
   };
   const closeAuth = async () => {
     setAuth(null);
@@ -76,7 +94,14 @@ export function Landing({ serverUp: serverUpProp, user: userProp, onAuthed }: { 
                 : serverUp && <button type="button" className="btn btn--lg" onClick={() => setAuth('register')}>{t('Crear cuenta')}</button>}
               <a className="lp-hero__doc" href={docHref('primeros-pasos')}><Icon name="book" />{t('Leer la documentación')}</a>
             </div>
-            <p className="lp-hero__note">{t('Sin registro: la demo se guarda en este navegador y funciona sin conexión.')}</p>
+            <div className="lp-start" role="group" aria-label={t('Otras formas de empezar')}>
+              <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void startBlank()} data-start="blank"><Icon name="plus" />{t('Espacio en blanco')}</button>
+              <a className="btn btn--ghost" href="#/espacios" data-start="templates"><Icon name="template" />{t('Desde una plantilla')}</a>
+              <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => file.current?.click()} data-start="import"
+                title={t('Formatos: .drawer (Drawer), .alldraw.json, .archimate (Archi), Open Exchange, BPMN 2.0 XML, Structurizr JSON, XState JSON, Mermaid, OpenAPI.')}><Icon name="fileImport" />{t('Importar un fichero…')}</button>
+              <input ref={file} type="file" aria-label={t('Fichero a importar')} accept={IMPORT_ACCEPT} hidden onChange={e => { const f = e.target.files?.[0]; if (f) void onFile(f); e.target.value = ''; }} />
+            </div>
+            <p className="lp-hero__note">{user ? t('Lo que crees aquí se guarda en el servidor, en tu cuenta.') : t('Sin registro: lo que crees se guarda en este navegador y funciona sin conexión.')}</p>
           </div>
           <DimensionViewer />
         </section>
@@ -137,7 +162,10 @@ function DimensionViewer() {
   const [imgs, setImgs] = useState<Record<string, string | null>>({});
   const [i, setI] = useState(0);
   const [auto, setAuto] = useState(true);
+  const reduced = useMemo(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches, []);
   const hover = useRef(false);
+  /** Con el foco dentro (teclado) tampoco rota: WCAG 2.2.2. */
+  const focused = useRef(false);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => {
@@ -146,10 +174,10 @@ function DimensionViewer() {
     return () => { alive = false; };
   }, [views, ws, lang, theme]);
   useEffect(() => {
-    if (!auto || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const id = setInterval(() => { if (!hover.current && !document.hidden) setI(x => (x + 1) % views.length); }, 4200);
+    if (!auto || reduced) return;
+    const id = setInterval(() => { if (!hover.current && !focused.current && !document.hidden) setI(x => (x + 1) % views.length); }, 4200);
     return () => clearInterval(id);
-  }, [auto, views.length]);
+  }, [auto, reduced, views.length]);
 
   const pick = (n: number, focus = false) => { setAuto(false); setI(n); if (focus) tabs.current[n]?.focus(); };
   const onKey = (e: React.KeyboardEvent) => {
@@ -160,7 +188,8 @@ function DimensionViewer() {
   };
   const cur = views[i]!;
   return (
-    <figure className="lp-viewer" onMouseEnter={() => { hover.current = true; }} onMouseLeave={() => { hover.current = false; }}>
+    <figure className="lp-viewer" onMouseEnter={() => { hover.current = true; }} onMouseLeave={() => { hover.current = false; }}
+      onFocus={() => { focused.current = true; }} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focused.current = false; }}>
       <div className="lp-viewer__bar">
         <div className="lp-viewer__tabs" role="tablist" aria-label={t('Dimensiones del espacio de ejemplo')} onKeyDown={onKey}>
           {views.map((v, n) => (
@@ -182,6 +211,9 @@ function DimensionViewer() {
       <figcaption className="lp-viewer__cap">
         <Icon name="diamond" size={14} />
         <span>{t('Cinco vistas de un mismo modelo. Comparten elementos y trazas: no son copias que haya que mantener a mano.')}</span>
+        {!reduced && <button type="button" className="btn btn--ghost btn--sm lp-viewer__pause" aria-pressed={!auto} onClick={() => setAuto(a => !a)}
+          aria-label={auto ? t('Pausar el pase de vistas') : t('Reanudar el pase de vistas')} title={auto ? t('Pausar el pase de vistas') : t('Reanudar el pase de vistas')}>
+          {auto ? t('Pausar') : t('Reanudar')}</button>}
       </figcaption>
     </figure>
   );

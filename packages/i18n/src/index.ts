@@ -71,3 +71,32 @@ export function missing(lang: Lang, keys: Iterable<string>): string[] {
   const d = dicts[lang];
   return [...keys].filter(k => !(k in d));
 }
+
+/**
+ * Plural: elige `singular` si `n` es 1 y `plural` en otro caso, y lo traduce con `{n}` y `vars`.
+ * Las dos claves son textos en español (`'{n} respuesta'`, `'{n} respuestas'`); el diccionario inglés tiene las dos.
+ * Español e inglés comparten la regla (1 → singular; 0 y el resto → plural).
+ */
+export function tn(singular: string, plural: string, n: number, vars?: Vars): string {
+  return t(n === 1 ? singular : plural, { n, ...vars });
+}
+
+/**
+ * Mensaje traducible con estructura (diagnósticos, sugerencias, avisos): `key` es el texto en español con `{var}`
+ * y cada variable puede ser otro mensaje, que se traduce antes de interpolarlo.
+ */
+export interface Msg { key: string; vars?: MsgVars }
+export type MsgVars = Record<string, string | number | Msg>;
+
+const isMsg = (v: unknown): v is Msg => typeof v === 'object' && v !== null && typeof (v as Msg).key === 'string';
+
+/** Traduce un mensaje estructurado (o una clave con variables, algunas de ellas mensajes) al idioma activo. */
+export function tMsg(m: Msg): string;
+export function tMsg(key: string, vars?: MsgVars): string;
+export function tMsg(a: Msg | string, b?: MsgVars): string {
+  const { key, vars } = typeof a === 'string' ? { key: a, vars: b } : a;
+  if (!vars) return t(key);
+  const flat: Vars = {};
+  for (const [k, v] of Object.entries(vars)) flat[k] = isMsg(v) ? tMsg(v) : v;
+  return t(key, flat);
+}

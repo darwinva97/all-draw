@@ -19,7 +19,7 @@ Primera implementación funcional de all-draw. Cubre las fases F0, F1 y F2 del p
 | `apps/web` | Vite + React 19, PWA, espacios locales en IndexedDB, demo "Alta de cliente" en 5 dimensiones, importar `.drawer`/JSON, exportar, compartir en línea (sala = id del espacio). | e2e sync |
 | `apps/server` | Node: sirve `apps/web/dist` y sincroniza Yjs por WebSocket en `/ws/<sala>` con persistencia en disco (`~/.alldraw-data`). Sin dependencias de despliegue: el mismo protocolo vale para Durable Objects. | e2e sync |
 
-Total: 412 tests unitarios en verde (más 22 del worker en workerd), `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
+Total: 650 tests unitarios en verde (más 45 del worker en workerd) y 15 conjuntos de pruebas de navegador, `tsc` limpio en todos los paquetes, dos pruebas e2e con el chromium del sistema (`e2e/smoke.mjs`, `e2e/sync.mjs`).
 
 ## Cómo ejecutarlo
 
@@ -108,3 +108,10 @@ pnpm gen:archimate              # regenera el pack desde _research/archi
 - **Comentarios**: hilos anclados a elementos, nodos, aristas, vistas o puntos, con respuestas, menciones y resolver; burbujas en el lienzo; se reanclan al borrar.
 - **Pata de gallo** (notación IE) y cardinalidades en ER y UML, en el editor, SVG, draw.io y Mermaid (`erDiagram`).
 - **Cambio de vista**: 60 nodos de 176 a 124 ms y 300 nodos de 717 a 384 ms en producción.
+
+## Octava tanda: listo para producción (3 de octubre de 2026)
+
+- **Documentación dentro de la app** (`#/docs`), en español e inglés: 29 capítulos, conceptos, glosario, FAQ, privacidad, términos, novedades, referencia de notaciones generada de los packs y visor de la API. Búsqueda, índice, impresión.
+- **Portada, galería de 12 plantillas, recorrido guiado, ayuda contextual**, iconos propios, avisos y diálogos propios, estados de carga/error/sin conexión, aviso de versión nueva.
+- **Producción**: exportar y borrar la cuenta, cambiar nombre/correo, logs JSON, `/api/status`, `/metrics`, errores de cliente, `security.txt`, cierre ordenado, límites anti-abuso (formulario, espacios por cuenta, tamaño de documento, conexiones), IP real tras proxies de confianza, mantenimiento y simulacro de restauración semanales.
+- **QA**: informe exploratorio de 82 fallos (`docs/qa/2026-10-03-informe.md`), todos tratados en cinco frentes (lienzo, paneles y accesibilidad, idioma, importar/exportar, servidor y cuenta). Destacan: conectar soltando sobre el nodo, compartimentos UML/ER, menús dentro de pantalla y con teclado, importar se puede deshacer, secuencia en SVG, Mermaid de estados/secuencia/clases, sesiones cerradas que cortan la edición, errores traducidos por código, campos y opciones legibles en ambos idiomas.

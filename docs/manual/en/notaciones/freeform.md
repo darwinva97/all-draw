@@ -4,11 +4,11 @@
 
 The **freeform** canvas is a whiteboard with no rules: boxes, ellipses, diamonds, cylinders, notes and
 arrows, and everything connects to everything. It imposes no meaning; you give it one with names and
-colours.
+colors.
 
 Use it for quick sketches, drawings that don't fit any notation, simple network diagrams or any diagram
 type in the [catalog](../notaciones.md#catalogo) that doesn't have its own notation yet (UML use cases,
-Gantt charts…). It is also the importers' fallback type: when a file brings a shape they don't recognise,
+Gantt charts…). It is also the importers' fallback type: when a file brings a shape they don't recognize,
 they turn it into a freeform shape.
 
 ## Key elements {#elementos-clave}
@@ -40,7 +40,7 @@ they turn it into a freeform shape.
 3. Join them by dragging from the bottom edge of one to another and choose the connector in the picker
    (**Arrow** comes first). You can change it later in the inspector.
 4. To group, drag a **Group** and put the nodes inside it.
-5. Change colours and borders in the inspector's **Style** tab, or create rules that paint according to
+5. Change colors and borders in the inspector's **Style** tab, or create rules that paint according to
    the data (see [Libraries, rules and people](../librerias-reglas-personas.md)).
 
 > [!TIP]

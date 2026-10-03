@@ -114,7 +114,7 @@ right-click → **Open in another dimension**. See [model and views](modelo-y-vi
 
 ### Why can't I edit anything? {#solo-lectura}
 
-You are in **read-only** mode: you have the *viewer* role or came in through a read-only link. Ask
+You are in **read-only** mode: you have the **read-only** role or came in through a read-only link. Ask
 the owner for an edit link. See [sharing and collaborating](compartir-y-colaborar.md).
 
 ### How do I leave comments for my colleagues? {#comentar}
@@ -179,7 +179,7 @@ also import them. See [BPMN](importar-exportar.md#bpmn).
 
 From the **home screen**, importing creates a **new** workspace. From the editor's **Import /
 Export** menu, importing **replaces** the content of the open workspace (you are asked to confirm).
-Before doing so, export an `.alldraw.json` or, in a server workspace, create a labelled snapshot in
+Before doing so, export an `.alldraw.json` or, in a server workspace, create a labeled snapshot in
 **History**, in case you want to go back.
 
 ## Account and security {#cuenta-y-seguridad}
@@ -192,9 +192,12 @@ Change password**.
 
 ### How do I change my password or sign out of all my devices? {#cambiar-contrasena}
 
-In **Account** (the "API keys" link next to your name on the home screen): **Change password** also
+In **Account** (menu under your name, top right → **Account and API keys**): **Change password** also
 signs out your other sessions; **Sign out everywhere** closes all of them, including the current
-one. A session you don't use for 30 days expires on its own.
+one. In both cases the workspaces open in those browsers are disconnected right away and, if you
+leave the **Also revoke API keys** checkbox ticked, your keys stop working. To leave only this
+browser, use **Sign out** in the menu under your name. A session you don't use for 30 days expires
+on its own. See [what happens when sessions are closed](compartir-y-colaborar.md#cerrar-sesiones).
 
 ### How do I change my name or email? {#cambiar-nombre}
 
@@ -221,5 +224,5 @@ can read and edit your workspaces. See [agents and API](agentes-y-api.md).
 
 ### Can I install all-draw on my own server? {#autoalojar}
 
-Yes: the code is open source (MIT licence) and can be hosted on your own server or on Cloudflare.
+Yes: the code is open source (MIT license) and can be hosted on your own server or on Cloudflare.
 See [self-hosting](agentes-y-api.md#autoalojar).

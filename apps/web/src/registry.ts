@@ -1,4 +1,4 @@
-import { NotationRegistry, CORE_PACK, type Store, type NotationPack } from '@all-draw/core';
+import { NotationRegistry, CORE_PACK, type FieldDef, type Store, type NotationPack } from '@all-draw/core';
 import { tIn, getLang, type Lang } from '@all-draw/i18n';
 import { ARCHIMATE_PACK } from '@all-draw/notation-archimate';
 import { BPMN_PACK } from '@all-draw/notation-bpmn';
@@ -23,11 +23,16 @@ export function localizePack(p: NotationPack, lang: Lang): NotationPack {
   const tr = (s: string) => tIn(lang, s);
   /** Las descripciones (`doc`) se traducen con el diccionario `en-docs` (mismo mecanismo: clave = texto español). */
   const doc = (s: string | undefined) => (s ? tr(s) : s);
+  /** Etiquetas de campo (diccionario `en-fields`), rótulos de `keyvalue` ("Atributo|Tipo") y ayuda. Las opciones `select` las traduce el inspector con `optionLabels`. */
+  const fields = (fs: FieldDef[]): FieldDef[] => fs.map(f => ({
+    ...f, label: tr(f.label), doc: doc(f.doc),
+    ...(f.kind === 'keyvalue' && f.options ? { options: f.options.split('|').map(tr).join('|') } : {}),
+  }));
   return {
     ...p, name: tr(p.name), doc: doc(p.doc),
     categories: p.categories.map(c => ({ ...c, name: tr(c.name) })),
-    elementTypes: p.elementTypes.map(e => ({ ...e, name: tr(e.name), category: e.category ? tr(e.category) : e.category, doc: doc(e.doc) })),
-    relationTypes: p.relationTypes.map(r => ({ ...r, name: tr(r.name), category: r.category ? tr(r.category) : r.category, doc: doc(r.doc) })),
+    elementTypes: p.elementTypes.map(e => ({ ...e, name: tr(e.name), category: e.category ? tr(e.category) : e.category, doc: doc(e.doc), fields: fields(e.fields ?? []) })),
+    relationTypes: p.relationTypes.map(r => ({ ...r, name: tr(r.name), category: r.category ? tr(r.category) : r.category, doc: doc(r.doc), fields: fields(r.fields ?? []) })),
     portTypes: p.portTypes.map(x => ({ ...x, name: tr(x.name) })),
     viewpoints: p.viewpoints.map(v => ({ ...v, name: tr(v.name), doc: doc(v.doc) })),
   };

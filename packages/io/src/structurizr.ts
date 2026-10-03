@@ -17,6 +17,7 @@
  */
 import { parseWorkspace, type Workspace, type Element, type View, type ViewNode, type ViewEdge } from '@all-draw/core';
 import { emptyWs, makeEl, makeRel } from './archimate';
+import { tr } from './i18n';
 
 // ---------------------------------------------------------------- Formato de origen (subconjunto)
 export interface SzRelationship { id: string | number; sourceId: string | number; destinationId: string | number; description?: string; technology?: string; tags?: string; linkedRelationshipId?: string | number; properties?: Record<string, string> }
@@ -49,7 +50,7 @@ export function importStructurizr(input: string | StructurizrWorkspace): Structu
   const warnings: string[] = [];
   const warn = (s: string) => { if (!warnings.includes(s)) warnings.push(s); };
   const src = (typeof input === 'string' ? JSON.parse(input) : input) as StructurizrWorkspace | null;
-  if (!src || typeof src !== 'object' || (!src.model && !src.views)) throw new Error('El fichero no parece un workspace de Structurizr (faltan `model` y `views`).');
+  if (!src || typeof src !== 'object' || (!src.model && !src.views)) throw new Error(tr('El fichero no parece un workspace de Structurizr (faltan `model` y `views`).'));
 
   const ws = emptyWs(src.name || 'Workspace Structurizr');
   ws.meta.description = src.description ?? '';
@@ -59,8 +60,8 @@ export function importStructurizr(input: string | StructurizrWorkspace): Structu
 
   const add = (raw: SzElement, typeId: string, parent?: string, extra: Partial<Element> = {}): string | null => {
     const id = sid(raw.id);
-    if (!id) { warn(`Elemento "${raw.name}" sin id; se omite`); return null; }
-    if (ws.elements[id]) { warn(`Elemento ${id} duplicado; se conserva el primero`); return id; }
+    if (!id) { warn(tr('Elemento "{name}" sin id; se omite', { name: raw.name })); return null; }
+    if (ws.elements[id]) { warn(tr('Elemento {id} duplicado; se conserva el primero', { id })); return id; }
     const el = makeEl(id, typeId, raw.name ?? '');
     el.doc = raw.description ?? '';
     el.tags = splitTags(raw.tags).filter(t => !['Element', 'Person', 'Software System', 'Container', 'Component', 'Deployment Node', 'Infrastructure Node', 'External', 'Container Instance', 'Software System Instance'].includes(t));
@@ -109,8 +110,8 @@ export function importStructurizr(input: string | StructurizrWorkspace): Structu
     if (!id) continue;
     if (r.linkedRelationshipId !== undefined) { relAlias.set(id, sid(r.linkedRelationshipId)); continue; }
     const from = resolve(sid(r.sourceId)), to = resolve(sid(r.destinationId));
-    if (!ws.elements[from] || !ws.elements[to]) { warn(`La relación ${id} une elementos inexistentes (${r.sourceId} → ${r.destinationId}); se omite`); continue; }
-    if (ws.relations[id]) { warn(`Relación ${id} duplicada; se conserva la primera`); continue; }
+    if (!ws.elements[from] || !ws.elements[to]) { warn(tr('La relación {id} une elementos inexistentes ({from} → {to}); se omite', { id, from: r.sourceId, to: r.destinationId })); continue; }
+    if (ws.relations[id]) { warn(tr('Relación {id} duplicada; se conserva la primera', { id })); continue; }
     const rel = makeRel(id, REL, { elementId: from }, { elementId: to });
     rel.name = r.description ?? '';
     rel.fields = { description: r.description ?? '', technology: r.technology ?? '' };
@@ -119,15 +120,15 @@ export function importStructurizr(input: string | StructurizrWorkspace): Structu
     if (tags.length) rel.props.tags = tags.join(', ');
     ws.relations[id] = rel;
   }
-  for (const [alias, target] of relAlias) if (!ws.relations[target]) warn(`La relación ${alias} enlaza con la relación inexistente ${target}`);
+  for (const [alias, target] of relAlias) if (!ws.relations[target]) warn(tr('La relación {alias} enlaza con la relación inexistente {target}', { alias, target }));
 
   // ---- vistas
   const kinds: ['systemLandscapeViews' | 'systemContextViews' | 'containerViews' | 'componentViews' | 'deploymentViews', string][] = [['systemLandscapeViews', 'context'], ['systemContextViews', 'context'], ['containerViews', 'container'], ['componentViews', 'component'], ['deploymentViews', 'deployment']];
-  for (const key of ['dynamicViews', 'filteredViews'] as const) for (const v of src.views?.[key] ?? []) warn(`La vista "${v.key}" es ${key === 'dynamicViews' ? 'dinámica' : 'filtrada'} y no se importa`);
+  for (const key of ['dynamicViews', 'filteredViews'] as const) for (const v of src.views?.[key] ?? []) warn(tr('La vista "{view}" es {kind} y no se importa', { view: v.key, kind: tr(key === 'dynamicViews' ? 'dinámica' : 'filtrada') }));
   for (const [key, viewpointId] of kinds) {
     for (const v of src.views?.[key] ?? []) {
       if (!v?.key) continue;
-      if (ws.views[v.key]) { warn(`Vista "${v.key}" duplicada; se ignora la segunda`); continue; }
+      if (ws.views[v.key]) { warn(tr('Vista "{view}" duplicada; se ignora la segunda', { view: v.key })); continue; }
       const view: View = { id: v.key, kind: 'freeform', notationId: C4, viewpointId, name: v.title || v.key, doc: v.description ?? '', style: {}, props: { ...v.properties } };
       if (key === 'systemLandscapeViews') view.props.landscape = 'true';
       const root = sid(key === 'componentViews' ? v.containerId : v.softwareSystemId);
@@ -140,7 +141,7 @@ export function importStructurizr(input: string | StructurizrWorkspace): Structu
       const nodeOf = new Map<string, ViewNode>();    // id de Structurizr (elemento o instancia) → nodo
       for (const [id, e] of present) {
         const elId = instanceOf.get(id) ?? id;
-        if (!ws.elements[elId]) { warn(`Vista "${v.key}": el elemento ${id} no existe en el modelo; se omite`); continue; }
+        if (!ws.elements[elId]) { warn(tr('Vista "{view}": el elemento {id} no existe en el modelo; se omite', { view: v.key, id })); continue; }
         const nid = `${v.key}:${id}`;
         const n: ViewNode = { id: nid, viewId: v.key, elementId: elId, x: e.x ?? 0, y: e.y ?? 0, w: NODE_W, h: NODE_H, style: {} };
         if (instanceOf.has(id)) n.meta = { instanceId: id };
@@ -175,9 +176,9 @@ export function importStructurizr(input: string | StructurizrWorkspace): Structu
       for (const vr of edgesWanted) {
         const rid = relAlias.get(sid(vr.id)) ?? sid(vr.id);
         const rel = ws.relations[rid];
-        if (!rel) { warn(`Vista "${v.key}": la relación ${vr.id} no existe en el modelo; se omite`); continue; }
+        if (!rel) { warn(tr('Vista "{view}": la relación {relation} no existe en el modelo; se omite', { view: v.key, relation: vr.id })); continue; }
         const a = [...nodeOf.values()].find(n => n.elementId === rel.from.elementId), b = [...nodeOf.values()].find(n => n.elementId === rel.to.elementId);
-        if (!a || !b) { warn(`Vista "${v.key}": la relación ${vr.id} une elementos que no están en la vista; se omite`); continue; }
+        if (!a || !b) { warn(tr('Vista "{view}": la relación {relation} une elementos que no están en la vista; se omite', { view: v.key, relation: vr.id })); continue; }
         const eid = `${v.key}:${vr.id}`;
         const edge: ViewEdge = { id: eid, viewId: v.key, relationId: rid, fromNodeId: a.id, toNodeId: b.id, bendpoints: (vr.vertices ?? []).map(p => ({ x: p.x, y: p.y })), style: {} };
         if (vr.routing === 'Orthogonal') edge.style.router = 'orthogonal';
@@ -198,8 +199,8 @@ export function exportStructurizr(ws: Workspace): StructurizrExport {
   const warnings: string[] = [];
   const warn = (s: string) => { if (!warnings.includes(s)) warnings.push(s); };
   const els = Object.values(ws.elements).filter(e => {
-    if (!e.typeId.startsWith(`${C4}:`)) { warn(`El elemento "${e.name}" (${e.id}) no es C4 (${e.typeId}); se omite`); return false; }
-    if (e.typeId === T.boundary || e.typeId === T.code) { warn(`El elemento "${e.name}" es un ${e.typeId === T.code ? 'código' : 'límite'} y Structurizr no lo modela; se omite`); return false; }
+    if (!e.typeId.startsWith(`${C4}:`)) { warn(tr('El elemento "{name}" ({id}) no es C4 ({type}); se omite', { name: e.name, id: e.id, type: e.typeId })); return false; }
+    if (e.typeId === T.boundary || e.typeId === T.code) { warn(tr('El elemento "{name}" es un {kind} y Structurizr no lo modela; se omite', { name: e.name, kind: tr(e.typeId === T.code ? 'código' : 'límite') })); return false; }
     return true;
   });
   const byType = (t: string) => els.filter(e => e.typeId === t);
@@ -226,7 +227,7 @@ export function exportStructurizr(ws: Workspace): StructurizrExport {
   for (const r of Object.values(ws.relations)) {
     if (!r.typeId.startsWith(`${C4}:`)) continue;
     const from = r.from.elementId, to = r.to.elementId;
-    if (!from || !to || !elIds.has(from) || !elIds.has(to)) { warn(`La relación ${r.id} une elementos no exportados; se omite`); continue; }
+    if (!from || !to || !elIds.has(from) || !elIds.has(to)) { warn(tr('La relación {id} une elementos no exportados; se omite', { id: r.id })); continue; }
     const sz: SzRelationship = { id: r.id, sourceId: from, destinationId: to, description: r.name || String(r.fields.description ?? '') };
     if (r.fields.technology) sz.technology = String(r.fields.technology);
     if (r.props.tags) sz.tags = r.props.tags;
@@ -248,14 +249,14 @@ export function exportStructurizr(ws: Workspace): StructurizrExport {
     if (e.fields.kind && !e.tags.some(t => t.toLowerCase() === String(e.fields.kind))) c.tags = [c.tags, String(e.fields.kind)].filter(Boolean).join(',');
     const sys = parentOf(e.id, T.system);
     const owner = sys ? systems.find(s => s.id === sys) : undefined;
-    if (!owner) warn(`El contenedor "${e.name}" no está anidado en ningún sistema; va a "Sin sistema"`);
+    if (!owner) warn(tr('El contenedor "{name}" no está anidado en ningún sistema; va a "Sin sistema"', { name: e.name }));
     (owner ?? synthetic()).containers!.push(c);
     containers.set(e.id, c);
   }
   for (const e of byType(T.component)) {
     const cont = parentOf(e.id, T.container);
     const owner = cont ? containers.get(cont) : undefined;
-    if (!owner) { warn(`El componente "${e.name}" no está anidado en ningún contenedor; se omite`); continue; }
+    if (!owner) { warn(tr('El componente "{name}" no está anidado en ningún contenedor; se omite', { name: e.name })); continue; }
     owner.components!.push(withRels(e, withTech(e)));
   }
   // nodos de despliegue: árbol por anidamiento; las instancias salen de contenedores/sistemas anidados en un nodo
@@ -280,8 +281,8 @@ export function exportStructurizr(ws: Workspace): StructurizrExport {
   // ---- vistas
   const views: SzViews = { systemLandscapeViews: [], systemContextViews: [], containerViews: [], componentViews: [], deploymentViews: [] };
   for (const v of Object.values(ws.views)) {
-    if (v.notationId !== C4) { warn(`La vista "${v.name}" no es C4; se omite`); continue; }
-    if (v.viewpointId === 'code') { warn(`La vista "${v.name}" es de código y Structurizr no la tiene; se omite`); continue; }
+    if (v.notationId !== C4) { warn(tr('La vista "{view}" no es C4; se omite', { view: v.name })); continue; }
+    if (v.viewpointId === 'code') { warn(tr('La vista "{view}" es de código y Structurizr no la tiene; se omite', { view: v.name })); continue; }
     const vnodes = nodes.filter(n => n.viewId === v.id);
     const abs = new Map<string, { x: number; y: number }>();
     const absOf = (n: ViewNode): { x: number; y: number } => {
@@ -293,9 +294,9 @@ export function exportStructurizr(ws: Workspace): StructurizrExport {
     const elements: SzViewElement[] = [];
     const seen = new Set<string>();
     for (const n of vnodes) {
-      if (!n.elementId || !elIds.has(n.elementId)) { if (n.elementId) warn(`Vista "${v.name}": el nodo ${n.id} apunta a un elemento no exportado; se omite`); continue; }
+      if (!n.elementId || !elIds.has(n.elementId)) { if (n.elementId) warn(tr('Vista "{view}": el nodo {node} apunta a un elemento no exportado; se omite', { view: v.name, node: n.id })); continue; }
       const id = instanceIds.get(n.id) ?? n.elementId;
-      if (seen.has(id)) { warn(`Vista "${v.name}": el elemento ${id} aparece dos veces; Structurizr solo admite una`); continue; }
+      if (seen.has(id)) { warn(tr('Vista "{view}": el elemento {id} aparece dos veces; Structurizr solo admite una', { view: v.name, id })); continue; }
       seen.add(id);
       const a = absOf(n);
       elements.push({ id, x: Math.round(a.x), y: Math.round(a.y) });

@@ -6,6 +6,9 @@
  * ese id. Así los tipos se llaman `uml:Class`, `uml:Interface`… y otros diagramas UML futuros
  * pueden compartir el prefijo.
  *
+ * Compartimentos (`meta.compartments`): el lienzo y el SVG pintan nombre (con «estereotipo», en cursiva si es
+ * abstracta), atributos y operaciones; cada atributo es un pin alineado con su fila.
+ *
  * Matriz: Generalization solo entre tipos del mismo kind (Class→Class, Interface→Interface);
  * Realization solo Class→Interface; Package solo participa en Dependency.
  */
@@ -39,18 +42,19 @@ export const UML_CLASS_ELEMENT_TYPES: ElementType[] = [
       { key: 'attributes', label: 'Atributos', kind: 'list', doc: 'Una por línea: "- nombre: String".' },
       operations,
     ],
+    meta: { compartments: { sections: ['attributes', 'operations'], stereotype: 'stereotype', abstract: 'abstract' } },
   }),
   el('Interface', 'Interfaz', {
     shape: 'rect', color: '#E1F5FE', icon: 'I',
     doc: 'Interfaz («interface»): solo operaciones. Las clases la realizan.',
     fields: [stereotype, operations],
-    meta: { stereotypeDefault: 'interface' },
+    meta: { stereotypeDefault: 'interface', compartments: { sections: ['operations'], stereotype: 'stereotype' } },
   }),
   el('Enum', 'Enumeración', {
     shape: 'rect', color: '#E8F5E9', icon: 'E',
     doc: 'Enumeración («enumeration») con sus literales.',
     fields: [{ key: 'values', label: 'Valores', kind: 'list', port: false }],
-    meta: { stereotypeDefault: 'enumeration' },
+    meta: { stereotypeDefault: 'enumeration', compartments: { sections: ['values'] } },
   }),
   el('Package', 'Paquete', {
     shape: 'group', container: true, color: '#F5F5F5', icon: '▱',
@@ -65,7 +69,7 @@ const endFields: FieldDef[] = [
   { key: 'sourceRole', label: 'Rol origen', kind: 'text', doc: 'Nombre del extremo origen (se rotula al otro lado de la línea).' },
   { key: 'targetCard', label: 'Multiplicidad destino', kind: 'text', doc: '"1", "0..1", "*", "1..*", "0..*" (se rotula junto al extremo destino).' },
   { key: 'targetRole', label: 'Rol destino', kind: 'text' },
-  { key: 'navigable', label: 'Navegable', kind: 'select', options: 'target,source,both,none' },
+  { key: 'navigable', label: 'Navegable', kind: 'select', options: 'target,source,both,none', optionLabels: { target: 'Hacia el destino', source: 'Hacia el origen', both: 'En ambos sentidos', none: 'Ninguno' } },
 ];
 
 export const UML_CLASS_RELATION_TYPES: RelationType[] = [

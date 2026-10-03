@@ -10,7 +10,7 @@ import {
   anchorViewIds, commentThreads, indexOf, makeComment, openThreadCount, threadsOf, threadsOfView,
   type Command, type Comment, type CommentAnchor, type CommentAuthor, type CommentThread, type Person,
 } from '@all-draw/core';
-import { useLang, useT } from '@all-draw/i18n';
+import { tn, useLang, useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { useAnyChange, useCollection } from '../hooks';
 import { initials, colorFor } from '../presence';
@@ -347,7 +347,7 @@ export function CommentsSection({ anchors, newAnchor }: { anchors: CommentAnchor
       {threads.slice(0, 5).map(th => (
         <button key={th.id} className={`ad-link ad-cm-mini ${th.resolved ? 'is-resolved' : ''}`} onClick={() => openComments({ threadId: th.id })}>
           <b>{th.root.author.name}</b> <span className="ad-cm-mini__text">{th.root.text}</span>
-          <small>{th.resolved ? <Icon name="check" size={12} /> : null}{th.comments.length > 1 ? ` ${t('{n} respuestas', { n: th.comments.length - 1 })}` : ''}</small>
+          <small>{th.resolved ? <Icon name="check" size={12} /> : null}{th.comments.length > 1 ? ` ${tn('{n} respuesta', '{n} respuestas', th.comments.length - 1)}` : ''}</small>
         </button>
       ))}
       {threads.length > 5 && <button className="ad-link" onClick={() => openComments()}>{t('Ver todos ({n})', { n: threads.length })}</button>}

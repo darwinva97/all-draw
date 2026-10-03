@@ -1,0 +1,462 @@
+{
+  "app": "diagramador",
+  "version": 1,
+  "exportedAt": "2026-09-01T10:00:00.000Z",
+  "libraries": [
+    {
+      "id": "lib-sis",
+      "name": "Sistemas",
+      "types": [
+        {
+          "id": "t-svc",
+          "name": "Microservicio",
+          "color": "#2563eb",
+          "icon": "⚙️",
+          "fields": [
+            {
+              "key": "lenguaje",
+              "label": "Lenguaje",
+              "kind": "select",
+              "options": "Java, Go, Node"
+            },
+            {
+              "key": "response_body",
+              "label": "Response body (JSON)",
+              "kind": "json"
+            },
+            {
+              "key": "entornos",
+              "label": "Entornos",
+              "kind": "keyvalue",
+              "options": "Entorno|URL"
+            },
+            {
+              "key": "raro",
+              "label": "Raro",
+              "kind": "color"
+            }
+          ]
+        }
+      ],
+      "components": [
+        {
+          "id": "c-crm",
+          "name": "CRM",
+          "typeId": "t-svc",
+          "description": "Clientes",
+          "fields": {
+            "lenguaje": "Java",
+            "response_body": "{\"cliente\":{\"id\":1,\"email\":\"a@b.c\"}}",
+            "entornos": [
+              {
+                "key": "dev",
+                "value": "http://dev"
+              }
+            ]
+          }
+        },
+        {
+          "id": "c-bff",
+          "name": "BFF Web",
+          "typeId": "t-svc",
+          "description": "",
+          "fields": {
+            "response_body": "{\"cliente\":{\"id\":\"x\"}}"
+          }
+        },
+        {
+          "id": "c-legacy",
+          "name": "Legacy",
+          "typeId": null,
+          "description": "Sin tipo",
+          "fields": {}
+        },
+        {
+          "id": "c-huerfano",
+          "name": "Huérfano",
+          "typeId": "t-no-existe",
+          "description": "",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "id": "lib-proc",
+      "name": "Procesos",
+      "types": [
+        {
+          "id": "t-proc",
+          "name": "Proceso",
+          "color": "#059669",
+          "icon": "📋",
+          "fields": [
+            {
+              "key": "owner",
+              "label": "Owner",
+              "kind": "text"
+            }
+          ]
+        }
+      ],
+      "components": [
+        {
+          "id": "c-alta",
+          "name": "Alta de cliente",
+          "typeId": "t-proc",
+          "description": "",
+          "fields": {
+            "owner": "Ventas"
+          }
+        },
+        {
+          "id": "c-kyc",
+          "name": "Verificación KYC",
+          "typeId": "t-proc",
+          "description": "",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "id": "lib-apis",
+      "name": "APIs (catálogo)",
+      "types": [],
+      "components": [
+        {
+          "id": "api-A1",
+          "name": "API Clientes",
+          "typeId": null,
+          "description": "Catálogo de clientes",
+          "fields": {
+            "api": "API Clientes",
+            "repo": "https://git/x",
+            "version": "v2"
+          },
+          "apiId": "A1"
+        }
+      ]
+    }
+  ],
+  "apis": [
+    {
+      "id": "A1",
+      "name": "API Clientes",
+      "description": "Catálogo de clientes",
+      "repoUrl": "https://git/x",
+      "docsUrl": "https://docs/x",
+      "version": "v2",
+      "auth": "Bearer JWT",
+      "baseUrls": [
+        {
+          "key": "dev",
+          "value": "https://dev.api"
+        },
+        {
+          "key": "prod",
+          "value": "https://api"
+        }
+      ],
+      "color": "#2563eb",
+      "icon": "🔌",
+      "tags": "core, clientes",
+      "operations": [
+        {
+          "id": "o1",
+          "name": "Obtener cliente",
+          "method": "GET",
+          "path": "/clientes/{id}",
+          "summary": "Devuelve un cliente",
+          "headers": [],
+          "pathParams": [
+            {
+              "key": "id",
+              "value": "string"
+            }
+          ],
+          "queryParams": [],
+          "requestBody": "",
+          "responseBody": "{\"cliente\":{\"id\":1,\"nombre\":\"Ana\"}}",
+          "codes": [
+            {
+              "key": "200",
+              "value": "OK"
+            }
+          ],
+          "notes": ""
+        },
+        {
+          "id": "o2",
+          "name": "Crear cliente",
+          "method": "POST",
+          "path": "/clientes",
+          "summary": "",
+          "deprecated": true,
+          "headers": [],
+          "pathParams": [],
+          "queryParams": [],
+          "requestBody": "{\"nombre\":\"Ana\"}",
+          "responseBody": "",
+          "codes": [],
+          "notes": ""
+        }
+      ]
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "d1",
+      "name": "Alta",
+      "description": "Flujo de alta",
+      "public": true,
+      "layers": [
+        {
+          "id": "L1",
+          "name": "Negocio",
+          "color": "#fef3c7",
+          "height": 200
+        },
+        {
+          "id": "L2",
+          "name": "Aplicación",
+          "color": "#ede9fe"
+        }
+      ],
+      "stages": [
+        {
+          "id": "S1",
+          "name": "Captura",
+          "groupId": "G1"
+        },
+        {
+          "id": "S2",
+          "name": "Validación",
+          "width": 300,
+          "groupId": "G1"
+        },
+        {
+          "id": "S3",
+          "name": "Persistencia",
+          "groupId": "G-roto"
+        }
+      ],
+      "stageGroups": [
+        {
+          "id": "G1",
+          "name": "Front",
+          "color": "#dbeafe"
+        }
+      ],
+      "placements": [
+        {
+          "id": "p-alta",
+          "componentId": "c-alta",
+          "layerId": "L1",
+          "stageId": "S1",
+          "x": 8,
+          "y": 8
+        },
+        {
+          "id": "p-kyc",
+          "componentId": "c-kyc",
+          "layerId": "L1",
+          "stageId": "S1",
+          "x": 16,
+          "y": 40,
+          "parentId": "p-alta"
+        },
+        {
+          "id": "p-crm",
+          "componentId": "c-crm",
+          "layerId": "L2",
+          "stageId": "S2",
+          "x": 8,
+          "y": 8
+        },
+        {
+          "id": "p-api",
+          "componentId": "api-A1",
+          "layerId": "L2",
+          "stageId": "S3",
+          "x": 8,
+          "y": 8,
+          "operationId": "o1",
+          "note": "lectura"
+        },
+        {
+          "id": "p-fantasma",
+          "componentId": "c-no-existe",
+          "layerId": "L2",
+          "stageId": "S3",
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "relations": [
+        {
+          "id": "r1",
+          "from": "p-crm",
+          "to": "p-api",
+          "fromField": "response_body.cliente.id",
+          "toField": "response_body.cliente.id",
+          "style": "solid",
+          "dir": "fwd",
+          "color": "#475569",
+          "width": 2,
+          "label": "sincroniza"
+        },
+        {
+          "id": "r2",
+          "from": "p-alta",
+          "to": "p-crm",
+          "style": "dashed",
+          "dir": "both",
+          "color": "#dc2626",
+          "width": 3,
+          "label": "usa"
+        },
+        {
+          "id": "r3",
+          "from": "p-alta",
+          "to": "p-fantasma",
+          "style": "solid",
+          "dir": "none",
+          "color": "#000",
+          "width": 1,
+          "label": ""
+        },
+        {
+          "id": "r4",
+          "from": "p-kyc",
+          "to": "p-crm",
+          "fromField": "owner",
+          "style": "dotted",
+          "dir": "fwd",
+          "color": "#000",
+          "width": 1,
+          "label": ""
+        }
+      ]
+    },
+    {
+      "id": "d2",
+      "name": "Resumen",
+      "description": "",
+      "layers": [
+        {
+          "id": "L1",
+          "name": "Todo",
+          "color": "#fff"
+        }
+      ],
+      "stages": [
+        {
+          "id": "S1",
+          "name": "Única"
+        }
+      ],
+      "placements": [
+        {
+          "id": "q-alta",
+          "componentId": "c-alta",
+          "layerId": "L1",
+          "stageId": "S1",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "q-crm",
+          "componentId": "c-crm",
+          "layerId": "L1",
+          "stageId": "S1",
+          "x": 200,
+          "y": 0
+        }
+      ],
+      "relations": [
+        {
+          "id": "r5",
+          "from": "q-alta",
+          "to": "q-crm",
+          "style": "dashed",
+          "dir": "both",
+          "color": "#dc2626",
+          "width": 3,
+          "label": "usa"
+        }
+      ]
+    }
+  ],
+  "people": [
+    {
+      "id": "per-1",
+      "name": "Ana",
+      "email": "ana@x.com",
+      "title": "Arquitecta",
+      "team": "Plataforma",
+      "color": "#2563eb",
+      "assignments": [
+        {
+          "id": "as-1",
+          "role": "Owner",
+          "kind": "component",
+          "targetId": "c-crm"
+        },
+        {
+          "id": "as-2",
+          "role": "Stakeholder",
+          "kind": "diagram",
+          "targetId": "d1",
+          "notes": "revisa"
+        },
+        {
+          "id": "as-3",
+          "role": "QA",
+          "kind": "type",
+          "targetId": "t-svc"
+        },
+        {
+          "id": "as-4",
+          "role": "Owner",
+          "kind": "component",
+          "targetId": "c-no-existe"
+        }
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "rule-1",
+      "name": "Java en azul",
+      "enabled": true,
+      "priority": 1,
+      "match": "all",
+      "conditions": [
+        {
+          "source": "field",
+          "key": "lenguaje",
+          "op": "eq",
+          "value": "Java"
+        },
+        {
+          "source": "description",
+          "op": "notEmpty"
+        }
+      ],
+      "style": {
+        "bg": "#dbeafe"
+      },
+      "diagramId": "d1"
+    },
+    {
+      "id": "rule-2",
+      "name": "Fuera",
+      "enabled": false,
+      "priority": 0,
+      "match": "any",
+      "conditions": [],
+      "style": {},
+      "diagramId": "d-no-existe"
+    }
+  ],
+  "currentDiagramId": "d1"
+}

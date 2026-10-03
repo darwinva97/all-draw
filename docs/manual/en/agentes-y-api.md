@@ -1,7 +1,7 @@
 # Agents and API
 
 Everything you do in the editor (adding an element, connecting, moving, renaming) is stored as a
-**command**: a small, serialisable instruction such as `addElementToView` or `connect`. The REST API and
+**command**: a small, serializable instruction such as `addElementToView` or `connect`. The REST API and
 the MCP server send those very same commands to the same document. That is why whatever a script or an
 AI assistant does shows up **instantly** in the browser of anyone who has the workspace open, and can be
 undone like any other change.
@@ -13,9 +13,10 @@ it also explains how to install your own server.
 
 For a program to act on your behalf it needs an **API key**. You create it from the app, while signed in:
 
-![API keys screen after creating a key](../img/12-claves-api.png)
+![API keys screen after creating a key (Spanish interface)](../img/12-claves-api.png)
 
-1. On the home screen, click **API keys**. The **Account** screen opens (`#/keys`).
+1. Click your name (top right) and, in the menu, **Account and API keys**. The **Account** screen opens
+   (`#/keys`).
 2. Under **API keys**, type a name that tells you what it is for (for example `claude-agent`) and click
    **Create**.
 3. Copy the `adk_…` key **right away**: it is never shown again. The list only keeps the name, the prefix,
@@ -25,10 +26,14 @@ For a program to act on your behalf it needs an **API key**. You create it from 
 
 What a key can do:
 
-- It has **exactly your permissions**: in each workspace, the role you have (`owner`, `editor` or
-  `viewer`). Changing a workspace requires `editor` or `owner`.
+- It has **exactly your permissions**: in each workspace, the role you have: **owner** (`owner`), **can
+  edit** (`editor`) or **read-only** (`viewer`). Changing a workspace requires `editor` or `owner`.
 - It is sent in the header `Authorization: Bearer adk_…`.
 - Keys can only be created from a browser session; a key cannot create other keys.
+- A key cannot **close sessions** or **change the password** either: that is only possible with a signed-in
+  browser session. The other way round does work: **Change password** and **Sign out everywhere** (and a reset by
+  an administrator) also revoke your keys if you leave the **Also revoke API keys** checkbox ticked, which it is
+  by default. See [what happens when sessions are closed](compartir-y-colaborar.md#cerrar-sesiones).
 - A **shared link** (`lnk_…`, see [Sharing and collaborating](compartir-y-colaborar.md)) also works as a
   `Bearer`, but limited to its workspace and its role.
 
@@ -79,7 +84,7 @@ Errors always come as `{"error": "…", "issues"?: [...]}`:
 |---|---|
 | `400` | Malformed request or command (`issues` tells you which field) |
 | `401` | The key is missing or invalid |
-| `403` | You don't have permission: for example, your role in that workspace is `viewer` |
+| `403` | You don't have permission: for example, your role in that workspace is **read-only** (`viewer`) |
 | `404` | The workspace or view doesn't exist |
 | `413` | Body too large (1 MB for commands, 5 MB for a complete Workspace JSON) |
 | `422` | A command in the batch could not be applied (for example, `patch` on an id that doesn't exist). **Nothing in the batch was applied** |

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.archimatetool.com/archimate" name="Banca Ñandú 🚀 — Arquitectura" id="id-model-1" version="5.0.0">
+  <purpose>Modelo de pruebas con acentos (canción, pingüino, año) y emoji 🏦✨.</purpose>
+  <folder name="Strategy" id="f-strat" type="strategy">
+    <element xsi:type="archimate:Capability" name="Gestión de préstamos" id="e-cap1">
+      <documentation>Capacidad núcleo — «crédito al consumo» 💶</documentation>
+    </element>
+  </folder>
+  <folder name="Business" id="f-bus" type="business">
+    <folder name="Clientes y canales" id="f-bus-cli">
+      <element xsi:type="archimate:BusinessActor" name="Cliente particular" id="e-act1">
+        <documentation>Persona física; puede tener varios productos. Línea 2: ¿está claro? ¡Sí! 😀</documentation>
+        <property key="Propietario" value="Área Comercial"/>
+        <property key="Criticidad" value="Alta"/>
+      </element>
+      <element xsi:type="archimate:BusinessRole" name="Titular de cuenta" id="e-role1"/>
+    </folder>
+    <element xsi:type="archimate:BusinessProcess" name="Solicitar préstamo" id="e-proc1">
+      <documentation>Proceso end-to-end &lt;con&gt; caracteres &amp; especiales</documentation>
+    </element>
+    <element xsi:type="archimate:BusinessService" name="Servicio de préstamos" id="e-bsvc1"/>
+    <element xsi:type="archimate:BusinessObject" name="Contrato" id="e-bobj1"/>
+    <element xsi:type="archimate:BusinessEvent" name="Solicitud recibida" id="e-bev1"/>
+  </folder>
+  <folder name="Application" id="f-app" type="application">
+    <element xsi:type="archimate:ApplicationComponent" name="Core bancario" id="e-app1">
+      <property key="Proveedor" value="Temenos"/>
+    </element>
+    <element xsi:type="archimate:ApplicationComponent" name="Motor de scoring" id="e-app2"/>
+    <element xsi:type="archimate:ApplicationService" name="Evaluación de riesgo" id="e-asvc1"/>
+    <element xsi:type="archimate:ApplicationInterface" name="API REST préstamos" id="e-aif1"/>
+    <element xsi:type="archimate:DataObject" name="Expediente" id="e-data1"/>
+  </folder>
+  <folder name="Technology &amp; Physical" id="f-tech" type="technology">
+    <element xsi:type="archimate:Node" name="Clúster Kubernetes" id="e-node1"/>
+    <element xsi:type="archimate:SystemSoftware" name="PostgreSQL 16" id="e-sw1"/>
+    <element xsi:type="archimate:Device" name="Cajero automático" id="e-dev1"/>
+  </folder>
+  <folder name="Motivation" id="f-mot" type="motivation">
+    <element xsi:type="archimate:Goal" name="Reducir morosidad un 20 %" id="e-goal1"/>
+    <element xsi:type="archimate:Requirement" name="Decisión en &lt; 5 min" id="e-req1"/>
+  </folder>
+  <folder name="Implementation &amp; Migration" id="f-impl" type="implementation_migration">
+    <element xsi:type="archimate:WorkPackage" name="Migración a la nube" id="e-wp1"/>
+  </folder>
+  <folder na

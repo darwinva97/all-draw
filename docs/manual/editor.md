@@ -27,7 +27,7 @@ Con una ventana ancha (1100 px o más) ves todo a la vez:
    - **Deshacer** y **Rehacer**.
    - **Estado de guardado**: `guardado en este navegador` en un espacio local; `● en línea`, `◌ conectando…` u
      `○ sin conexión (se sincroniza al volver)` en uno del servidor, seguido de tu rol.
-   - **Importar / Exportar**, **Historial** (espacios del servidor), **Compartir** (si eres el dueño) o **Subir al
+   - **Importar / Exportar**, **Historial** (espacios del servidor), **Compartir** (si eres el propietario) o **Subir al
      servidor** (si el espacio es local), y el selector de idioma.
 2. **Columna izquierda**: arriba el panel **Vistas** (agrupadas por notación, con las **Dimensiones** y un resumen
    del **Modelo**) y debajo la **Paleta**.
@@ -54,12 +54,13 @@ abajo:
 | Botón | Qué contiene |
 |---|---|
 | **Vistas** | La lista de vistas y dimensiones. |
-| **Añadir** | La paleta. **Toca** un elemento para añadirlo en el centro del lienzo (en el móvil no se arrastra). |
+| **Añadir** | La paleta. **Toca** un elemento para añadirlo en un hueco libre cerca del centro del lienzo (en el móvil no se arrastra). |
 | **Inspector** | Los datos de lo seleccionado. |
 | **Más** | La ruta de vistas, **Espacio**, buscar, rejilla, tema, atajos, **Ajustar a la vista**, **Layout automático** y las acciones de la aplicación (importar/exportar, compartir, idioma…). |
 
 Para cerrar una hoja, toca fuera de ella, pulsa el botón de cerrar o arrástrala hacia abajo desde el asa. En pantallas táctiles,
-**mantén pulsado** medio segundo sobre un nodo para abrir su menú (el equivalente al botón derecho).
+**mantén pulsado** medio segundo sobre un nodo para abrir su menú (el equivalente al botón derecho), que sube desde abajo como
+una hoja.
 
 ## La paleta {#paleta}
 
@@ -80,7 +81,8 @@ cuatro pestañas:
 ## Añadir nodos {#anadir}
 
 1. En la paleta, busca el tipo que quieres (por ejemplo, *Business Process* en ArchiMate o *Tarea* en BPMN).
-2. **Arrástralo** al lienzo y suéltalo donde quieras. En el móvil, abre **Añadir** y tócalo.
+2. **Arrástralo** al lienzo y suéltalo donde quieras. Con un **clic** (o **Intro** con el teclado) se añade en un hueco
+   libre cerca del centro del lienzo. En el móvil, abre **Añadir** y tócalo.
 3. El nodo nace con el nombre del tipo. Pulsa **F2** (o haz doble clic sobre el nombre) y escribe el nombre real.
    **Enter** confirma, **Esc** cancela.
 4. Rellena el resto de datos en el **Inspector** (documentación, campos, etiquetas).
@@ -356,7 +358,8 @@ La lista completa está en [Atajos de teclado](atajos.md).
   **Esc**, devolviendo el foco al botón que los abrió.
 - Los mensajes de estado (conexión, enlace copiado, recálculo de problemas) se anuncian a los lectores de pantalla.
 - El lienzo es gráfico; la alternativa por teclado es la búsqueda (**Ctrl+K**) junto con el inspector, que muestra
-  todos los datos de lo seleccionado en campos etiquetados. Las flechas mueven los nodos seleccionados.
+  todos los datos de lo seleccionado en campos etiquetados. Las flechas mueven los nodos seleccionados y **Shift+F10**
+  (o la tecla **Menú**) abre su menú contextual, que se recorre con las flechas.
 - El texto tiene un contraste de al menos 4,5:1 en tema claro y oscuro, y si tu sistema pide reducir el movimiento,
   se desactivan las transiciones.
 - En pantallas táctiles los botones tienen un área de toque de al menos 44 px.
@@ -368,7 +371,7 @@ La relación no está permitida entre esos tipos (o en ese sentido). Mira [Por q
 conexión](#conexion-rechazada).
 
 **"No veo la paleta ni el inspector editable."**
-Estás en modo **solo lectura** (enlace de lectura o rol `viewer`). Pide al dueño un enlace de edición; ver
+Estás en modo **solo lectura** (enlace de lectura o rol **solo lectura**). Pide al propietario un enlace de edición; ver
 [Compartir y colaborar](compartir-y-colaborar.md#roles). En tableta, comprueba también que no hayas ocultado los
 paneles con los botones de los extremos de la barra.
 

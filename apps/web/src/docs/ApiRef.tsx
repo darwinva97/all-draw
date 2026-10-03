@@ -58,7 +58,11 @@ export function ApiRef() {
     </div>
   );
   const q = filter.trim().toLowerCase();
-  const groups = state.groups.map(g => ({ ...g, ops: g.ops.filter(o => !q || `${o.method} ${o.path} ${o.summary} ${o.tag}`.toLowerCase().includes(q)) })).filter(g => g.ops.length);
+  // El servidor describe su API en español: resúmenes y etiquetas se traducen aquí (diccionario `en-api`); el filtro busca en lo que se ve.
+  const groups = state.groups
+    .map(g => ({ ...g, label: t(g.tag), description: g.description && t(g.description), ops: g.ops.map(o => ({ ...o, summary: o.summary && t(o.summary) })) }))
+    .map(g => ({ ...g, ops: g.ops.filter(o => !q || `${o.method} ${o.path} ${o.summary} ${g.label}`.toLowerCase().includes(q)) }))
+    .filter(g => g.ops.length);
   const total = state.groups.reduce((n, g) => n + g.ops.length, 0);
   return (
     <div className="docs-api">
@@ -71,8 +75,8 @@ export function ApiRef() {
       </div>
       {groups.length === 0 && <p className="docs-api__state">{t('Ningún endpoint coincide con «{q}».', { q: filter })}</p>}
       {groups.map(g => (
-        <section key={g.tag} className="docs-api__group" aria-label={g.tag}>
-          <h4 className="docs-api__tag">{g.tag}{g.description && <small>{g.description}</small>}</h4>
+        <section key={g.tag} className="docs-api__group" aria-label={g.label}>
+          <h4 className="docs-api__tag">{g.label}{g.description && <small>{g.description}</small>}</h4>
           <ul>
             {g.ops.map(o => (
               <li key={`${o.method} ${o.path}`} className={o.deprecated ? 'is-deprecated' : undefined}>

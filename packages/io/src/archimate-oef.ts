@@ -16,6 +16,7 @@ import { parseWorkspace, type Workspace, type Relation, type View, type ViewNode
 import { VIEWPOINTS } from '@all-draw/notation-archimate';
 import { parseXml, buildXml, attr, attrNum, children, child, attrs, textOf, hexToRgb, rgbToHex, type XmlNode } from './xml';
 import { ARCHIMATE_NS, ARCHIMATE_ELEMENT_IDS, ARCHIMATE_RELATION_IDS, localName, emptyWs, makeEl, makeRel, slug, pruneRelations, type ArchimateImport, type TextExport } from './archimate';
+import { tr } from './i18n';
 
 export const OEF_XMLNS = 'http://www.opengroup.org/xsd/archimate/3.0/';
 const XSI = 'http://www.w3.org/2001/XMLSchema-instance';
@@ -46,7 +47,7 @@ export function importOpenExchange(xml: string): ArchimateImport {
   const warn = (s: string) => { if (!warnings.includes(s)) warnings.push(s); };
   const doc = parseXml(xml, { removeNSPrefix: true, arrayTags: ['element', 'relationship', 'view', 'node', 'connection', 'bendpoint', 'property', 'propertyDefinition', 'name', 'documentation', 'label', 'item', 'value'] });
   const root = child(doc, 'model');
-  if (!root || !/xmlns\s*=\s*"http:\/\/www\.opengroup\.org\/xsd\/archimate/.test(xml)) throw new Error('El fichero no parece un ArchiMate Open Exchange (falta `model` con el espacio de nombres de The Open Group).');
+  if (!root || !/xmlns\s*=\s*"http:\/\/www\.opengroup\.org\/xsd\/archimate/.test(xml)) throw new Error(tr('El fichero no parece un ArchiMate Open Exchange (falta `model` con el espacio de nombres de The Open Group).'));
 
   const ws = emptyWs(pickText(root, 'name') || 'Modelo ArchiMate');
   ws.meta.description = pickText(root, 'documentation');
@@ -60,8 +61,8 @@ export function importOpenExchange(xml: string): ArchimateImport {
     for (const p of children(child(n, 'properties'), 'property')) {
       const ref = attr(p, 'propertyDefinitionRef') ?? '';
       const key = propDefs.get(ref);
-      if (!key) { warn(`Propiedad con definición inexistente (${ref}) en ${where}; se omite`); continue; }
-      if (key in out) warn(`Propiedad "${key}" repetida en ${where}; se conserva la última`);
+      if (!key) { warn(tr('Propiedad con definición inexistente ({ref}) en {where}; se omite', { ref, where })); continue; }
+      if (key in out) warn(tr('Propiedad "{key}" repetida en {where}; se conserva la última', { key, where }));
       out[key] = pickText(p, 'value');
     }
     return out;
@@ -80,11 +81,11 @@ export function importOpenExchange(xml: string): ArchimateImport {
   // ---- elementos
   for (const e of children(child(root, 'elements'), 'element')) {
     const id = attr(e, 'identifier'), type = attr(e, 'type') ?? '';
-    if (!id) { warn('Elemento sin identifier; se omite'); continue; }
+    if (!id) { warn(tr('Elemento sin identifier; se omite')); continue; }
     const junction = type === 'AndJunction' || type === 'OrJunction' || type === 'Junction';
     const typeId = `${ARCHIMATE_NS}:${junction ? 'Junction' : type}`;
-    if (!ARCHIMATE_ELEMENT_IDS.has(typeId)) { warn(`Tipo ArchiMate desconocido "${type}" (elemento ${id}); se omite`); continue; }
-    if (ws.elements[id]) { warn(`Elemento ${id} duplicado; se conserva el primero`); continue; }
+    if (!ARCHIMATE_ELEMENT_IDS.has(typeId)) { warn(tr('Tipo ArchiMate desconocido "{type}" (elemento {id}); se omite', { type, id })); continue; }
+    if (ws.elements[id]) { warn(tr('Elemento {id} duplicado; se conserva el primero', { id })); continue; }
     const name = pickText(e, 'name');
     // el XSD obliga a un nombre: al exportar los junctions sin nombre llevan el del tipo
     const el = makeEl(id, typeId, junction && ['Junction', 'AndJunction', 'OrJunction'].includes(name) ? '' : name);
@@ -101,11 +102,11 @@ export function importOpenExchange(xml: string): ArchimateImport {
   const endOf = (id: string | undefined): Relation['from'] | null => (!id ? null : ws.elements[id] ? { elementId: id } : relIds.has(id) ? { relationId: id } : null);
   for (const r of rawRels) {
     const id = attr(r, 'identifier'), type = attr(r, 'type') ?? '';
-    if (!id) { warn('Relación sin identifier; se omite'); continue; }
+    if (!id) { warn(tr('Relación sin identifier; se omite')); continue; }
     const typeId = `${ARCHIMATE_NS}:${type}`;
-    if (!ARCHIMATE_RELATION_IDS.has(typeId)) { warn(`Relación ArchiMate desconocida "${type}" (${id}); se omite`); continue; }
+    if (!ARCHIMATE_RELATION_IDS.has(typeId)) { warn(tr('Relación ArchiMate desconocida "{type}" ({id}); se omite', { type, id })); continue; }
     const from = endOf(attr(r, 'source')), to = endOf(attr(r, 'target'));
-    if (!from || !to) { warn(`La relación ${id} (${type}) apunta a conceptos inexistentes (${attr(r, 'source')} → ${attr(r, 'target')}); se omite`); continue; }
+    if (!from || !to) { warn(tr('La relación {id} ({type}) apunta a conceptos inexistentes ({from} → {to}); se omite', { id, type, from: attr(r, 'source'), to: attr(r, 'target') })); continue; }
     const rel = makeRel(id, typeId, from, to);
     rel.name = pickText(r, 'name');
     rel.doc = pickText(r, 'documentation');
@@ -117,7 +118,7 @@ export function importOpenExchange(xml: string): ArchimateImport {
     ws.relations[id] = rel;
   }
   for (const rel of Object.values(ws.relations)) {
-    for (const end of [rel.from, rel.to]) if (end.relationId && !ws.relations[end.relationId]) { warn(`La relación ${rel.id} apunta a la relación omitida ${end.relationId}; se omite`); delete ws.relations[rel.id]; }
+    for (const end of [rel.from, rel.to]) if (end.relationId && !ws.relations[end.relationId]) { warn(tr('La relación {id} apunta a la relación omitida {relation}; se omite', { id: rel.id, relation: end.relationId })); delete ws.relations[rel.id]; }
   }
 
   // ---- vistas
@@ -128,14 +129,14 @@ export function importOpenExchange(xml: string): ArchimateImport {
     if (!id) continue;
     const view: View = { id, kind: 'freeform', notationId: ARCHIMATE_NS, name: pickText(v, 'name') || 'Vista', doc: pickText(v, 'documentation'), style: {}, props: readProps(v, `vista "${pickText(v, 'name')}"`) };
     const vp = attr(v, 'viewpoint');
-    if (vp) { const vid = VIEWPOINT_IDS[vp.toLowerCase()] ?? (VIEWPOINTS.some(x => x.id === vp) ? vp : undefined); if (vid) view.viewpointId = vid; else warn(`Vista "${view.name}": viewpoint desconocido "${vp}"`); }
+    if (vp) { const vid = VIEWPOINT_IDS[vp.toLowerCase()] ?? (VIEWPOINTS.some(x => x.id === vp) ? vp : undefined); if (vid) view.viewpointId = vid; else warn(tr('Vista "{view}": viewpoint desconocido "{viewpoint}"', { view: view.name, viewpoint: vp })); }
     const folder = folderOf.get(id); if (folder) view.props.archiFolder = folder;
     ws.views[id] = view;
 
     const visit = (n: XmlNode, parent: ViewNode | undefined, px: number, py: number) => {
       const nid = attr(n, 'identifier');
-      if (!nid) { warn(`Vista "${view.name}": nodo sin identifier; se omite`); return; }
-      if (ws.nodes[nid]) { warn(`Vista "${view.name}": nodo ${nid} duplicado; se omite`); return; }
+      if (!nid) { warn(tr('Vista "{view}": nodo sin identifier; se omite', { view: view.name })); return; }
+      if (ws.nodes[nid]) { warn(tr('Vista "{view}": nodo {node} duplicado; se omite', { view: view.name, node: nid })); return; }
       const ax = attrNum(n, 'x'), ay = attrNum(n, 'y');
       const w = attrNum(n, 'w', DEFAULT_W), h = attrNum(n, 'h', DEFAULT_H);
       const vn: ViewNode = { id: nid, viewId: id, x: ax - px, y: ay - py, w: w > 0 ? w : DEFAULT_W, h: h > 0 ? h : DEFAULT_H, style: readStyle(child(n, 'style')) };
@@ -143,7 +144,7 @@ export function importOpenExchange(xml: string): ArchimateImport {
       const type = attr(n, 'type') ?? (attr(n, 'elementRef') ? 'Element' : 'Label');
       if (type === 'Element') {
         const ref = attr(n, 'elementRef');
-        if (!ref || !ws.elements[ref]) { warn(`Vista "${view.name}": el nodo ${nid} apunta al elemento inexistente ${ref}; se omite`); return; }
+        if (!ref || !ws.elements[ref]) { warn(tr('Vista "{view}": el nodo {node} apunta al elemento inexistente {ref}; se omite', { view: view.name, node: nid, ref })); return; }
         vn.elementId = ref;
       } else if (type === 'Container') {
         vn.visualType = 'core:group'; vn.text = pickText(n, 'label');
@@ -153,22 +154,25 @@ export function importOpenExchange(xml: string): ArchimateImport {
         if (ref) {
           vn.visualType = 'core:label';
           if (viewNames.has(ref)) { vn.detailViewId = ref; vn.text = pickText(n, 'label') || viewNames.get(ref) || ''; }
-          else { warn(`Vista "${view.name}": la referencia ${nid} apunta a la vista inexistente ${ref}`); vn.text = pickText(n, 'label'); }
+          else { warn(tr('Vista "{view}": la referencia {node} apunta a la vista inexistente {ref}', { view: view.name, node: nid, ref })); vn.text = pickText(n, 'label'); }
         } else { vn.visualType = 'core:note'; vn.text = pickText(n, 'label'); }
       }
       const props = readProps(n, `nodo ${nid}`);
       if (Object.keys(props).length) vn.meta = { props };
       ws.nodes[nid] = vn;
-      for (const c of children(n, 'node')) visit(c, vn, ax, ay);
+      const kids = children(n, 'node');
+      for (const c of kids) visit(c, vn, ax, ay);
+      // Con hijos, el nombre va arriba (como lo dibuja Archi): centrado quedaría tapado por ellos.
+      if (kids.length && vn.elementId) vn.style.labelPosition = 'top';
     };
     for (const n of children(v, 'node')) visit(n, undefined, 0, 0);
 
     for (const c of children(v, 'connection')) {
       const eid = attr(c, 'identifier'), src = attr(c, 'source'), tgt = attr(c, 'target');
       if (!eid) continue;
-      if (!src || !tgt || !ws.nodes[src] || !ws.nodes[tgt]) { warn(`Vista "${view.name}": la conexión ${eid} une nodos inexistentes o conexiones (${src} → ${tgt}); se omite`); continue; }
+      if (!src || !tgt || !ws.nodes[src] || !ws.nodes[tgt]) { warn(tr('Vista "{view}": la conexión {id} une nodos inexistentes o conexiones ({from} → {to}); se omite', { view: view.name, id: eid, from: src, to: tgt })); continue; }
       const relId = attr(c, 'relationshipRef');
-      if (relId && !ws.relations[relId]) { warn(`Vista "${view.name}": la conexión ${eid} apunta a la relación inexistente ${relId}; se omite`); continue; }
+      if (relId && !ws.relations[relId]) { warn(tr('Vista "{view}": la conexión {id} apunta a la relación inexistente {relation}; se omite', { view: view.name, id: eid, relation: relId })); continue; }
       const edge: ViewEdge = { id: eid, viewId: id, fromNodeId: src, toNodeId: tgt, bendpoints: children(c, 'bendpoint').map(b => ({ x: attrNum(b, 'x'), y: attrNum(b, 'y') })), style: {} };
       if (relId) edge.relationId = relId;
       const st = child(c, 'style');
@@ -191,19 +195,19 @@ export function exportOpenExchange(ws: Workspace): TextExport {
   const lang = (text: string): XmlNode => ({ '#text': text, '@_xml:lang': LANG });
 
   const elements = Object.values(ws.elements).filter(e => {
-    if (!e.typeId.startsWith(`${ARCHIMATE_NS}:`) || !ARCHIMATE_ELEMENT_IDS.has(e.typeId)) { warn(`El elemento "${e.name}" (${e.id}) no es ArchiMate (${e.typeId}); se omite`); return false; }
+    if (!e.typeId.startsWith(`${ARCHIMATE_NS}:`) || !ARCHIMATE_ELEMENT_IDS.has(e.typeId)) { warn(tr('El elemento "{name}" ({id}) no es ArchiMate ({type}); se omite', { name: e.name, id: e.id, type: e.typeId })); return false; }
     return true;
   });
   const elIds = new Set(elements.map(e => e.id));
   const relations = Object.values(ws.relations).filter(r => {
-    if (!r.typeId.startsWith(`${ARCHIMATE_NS}:`) || !ARCHIMATE_RELATION_IDS.has(r.typeId)) { warn(`La relación ${r.id} (${r.typeId}) no es ArchiMate; se omite`); return false; }
+    if (!r.typeId.startsWith(`${ARCHIMATE_NS}:`) || !ARCHIMATE_RELATION_IDS.has(r.typeId)) { warn(tr('La relación {id} ({type}) no es ArchiMate; se omite', { id: r.id, type: r.typeId })); return false; }
     return true;
   });
   const relIds = new Set(relations.map(r => r.id));
   const okEnd = (e: Relation['from']) => (e.elementId ? elIds.has(e.elementId) : e.relationId ? relIds.has(e.relationId) : false);
   pruneRelations(relations, relIds, okEnd, warn);
   const views = Object.values(ws.views).filter(v => {
-    if (v.notationId !== ARCHIMATE_NS || v.kind === 'grid') { warn(`La vista "${v.name}" no es una vista ArchiMate; se omite`); return false; }
+    if (v.notationId !== ARCHIMATE_NS || v.kind === 'grid') { warn(tr('La vista "{view}" no es una vista ArchiMate; se omite', { view: v.name })); return false; }
     return true;
   });
   const viewIds = new Set(views.map(v => v.id));
@@ -286,7 +290,7 @@ export function exportOpenExchange(ws: Workspace): TextExport {
     const ox = -minX, oy = -minY;
 
     const build = (n: ViewNode): XmlNode | null => {
-      if (!okNode(n)) { warn(`Vista "${v.name}": el nodo ${n.id} apunta a un elemento no exportado; se omite con sus hijos`); return null; }
+      if (!okNode(n)) { warn(tr('Vista "{view}": el nodo {node} apunta a un elemento no exportado; se omite con sus hijos', { view: v.name, node: n.id })); return null; }
       const a = abs.get(n.id)!;
       const x: XmlNode = attrs({ identifier: ncname(n.id) });
       if (n.elementId) { x['@_elementRef'] = ncname(n.elementId); x['@_xsi:type'] = 'Element'; }
@@ -307,8 +311,8 @@ export function exportOpenExchange(ws: Workspace): TextExport {
     const p = propsXml(vprops); if (p) vx.properties = p;
     vx.node = nodes.filter(n => !n.parentNodeId || !nodeById.has(n.parentNodeId)).map(build).filter((c): c is XmlNode => !!c);
     vx.connection = edges.flatMap(e => {
-      if (!abs.has(e.fromNodeId) || !abs.has(e.toNodeId)) { warn(`Vista "${v.name}": la arista ${e.id} une nodos no exportados; se omite`); return []; }
-      if (e.relationId && !relIds.has(e.relationId)) { warn(`Vista "${v.name}": la arista ${e.id} usa una relación no exportada; se omite`); return []; }
+      if (!abs.has(e.fromNodeId) || !abs.has(e.toNodeId)) { warn(tr('Vista "{view}": la arista {id} une nodos no exportados; se omite', { view: v.name, id: e.id })); return []; }
+      if (e.relationId && !relIds.has(e.relationId)) { warn(tr('Vista "{view}": la arista {id} usa una relación no exportada; se omite', { view: v.name, id: e.id })); return []; }
       const c: XmlNode = attrs({ identifier: ncname(e.id), 'xsi:type': e.relationId ? 'Relationship' : 'Line', relationshipRef: e.relationId ? ncname(e.relationId) : undefined, source: ncname(e.fromNodeId), target: ncname(e.toNodeId) });
       if (!e.relationId && e.label) textNode(c, 'label', e.label);
       const st: XmlNode = {};

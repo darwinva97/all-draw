@@ -57,7 +57,7 @@ application your browser makes ordinary requests to the website (see
   them (see [history](historial.md)).
 - **Comments**: text, date and the name they were signed with.
 
-While you edit a shared workspace, your name, colour, cursor and selection are sent **live** to the
+While you edit a shared workspace, your name, color, cursor and selection are sent **live** to the
 other people connected (presence). This is not stored.
 
 ### Technical data {#datos-tecnicos}
@@ -201,7 +201,7 @@ Agency** (AEPD, https://www.aepd.es).
 - **API keys and sessions**: **Account** → **Revoke** and **Sign out everywhere**.
 - **Account**: **Account → Your data → Delete account…**, with your password. Your account,
   sessions, API keys and access to other people's workspaces are deleted. Each workspace you own
-  passes to its longest-standing editor; those without editors are deleted, and a final copy of them
+  passes to its longest-standing member who **can edit**; those without one are deleted, and a final copy of them
   is kept that is removed automatically after 30 days, like the other backups. If you cannot sign
   in, request it at `TODO(titular): contact email`.
 

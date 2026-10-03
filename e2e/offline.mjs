@@ -56,7 +56,7 @@ const nodesOffline = await a.locator('.react-flow__node').count();
 check(nodesOffline === nodesOnline, `sin red se abre la copia local (${nodesOffline}/${nodesOnline} nodos)`);
 check(/sin conexión — los cambios se sincronizarán/.test(await status()), `estado sin conexión: «${await status()}»`);
 check(await a.locator('.ad-pal').count() > 0 || !(await a.locator('.app-name').isDisabled()), 'editable con el rol guardado (owner)');
-check(await a.getByRole('button', { name: 'Compartir' }).count() === 0, 'sin red no se ofrece Compartir');
+check(await a.getByRole('button', { name: 'Compartir', exact: true }).count() === 0, 'sin red no se ofrece Compartir');
 // Edición sin red
 const renamed = `Renombrado sin red ${Date.now() % 10000}`;
 await a.locator('.app-name').fill(renamed);
@@ -66,7 +66,7 @@ await a.waitForTimeout(600);
 await ctx.setOffline(false);
 await waitStatus(/en línea/, 25000);
 check(/en línea/.test(await status()), `al volver la red: «${await status()}»`);
-check(await a.getByRole('button', { name: 'Compartir' }).count() === 1, 'con red vuelve Compartir');
+check(await a.getByRole('button', { name: 'Compartir', exact: true }).count() === 1, 'con red vuelve Compartir');
 let serverName = null;
 for (let i = 0; i < 30 && serverName !== renamed; i++) {
   serverName = await a.evaluate(async id => (await (await fetch(`/api/workspaces/${id}/snapshot`)).json()).meta?.name, wsId);

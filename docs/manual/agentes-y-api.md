@@ -16,7 +16,8 @@ sesión iniciada:
 
 ![Pantalla de claves API tras crear una clave](img/12-claves-api.png)
 
-1. En el inicio, pulsa **claves API**. Se abre la pantalla **Cuenta** (`#/keys`).
+1. Pulsa tu nombre (arriba a la derecha) y, en el menú, **Cuenta y claves API**. Se abre la pantalla
+   **Cuenta** (`#/keys`).
 2. En **Claves API**, escribe un nombre que te diga para qué es (por ejemplo `agente-claude`) y pulsa
    **Crear**.
 3. Copia la clave `adk_…` **en ese momento**: no se vuelve a mostrar. La lista solo guarda el nombre, el
@@ -26,10 +27,16 @@ sesión iniciada:
 
 Qué puede hacer una clave:
 
-- Tiene **exactamente tus permisos**: en cada espacio, el rol que tú tengas (`owner`, `editor` o
-  `viewer`). Para modificar un espacio hace falta `editor` u `owner`.
+- Tiene **exactamente tus permisos**: en cada espacio, el rol que tú tengas: **propietario** (`owner`),
+  **puede editar** (`editor`) o **solo lectura** (`viewer`). Para modificar un espacio hace falta
+  `editor` u `owner`.
 - Se envía en la cabecera `Authorization: Bearer adk_…`.
 - Las claves solo se crean desde una sesión del navegador; una clave no puede crear otras claves.
+- Una clave tampoco puede **cerrar sesiones** ni **cambiar la contraseña**: eso solo se hace con la sesión
+  iniciada en el navegador. Al revés sí: **Cambiar contraseña** y **Cerrar todas las sesiones** (y el
+  restablecimiento por un administrador) revocan también tus claves si dejas marcada la casilla **Revocar
+  también las claves API**, que lo está por defecto. Ver
+  [qué pasa al cerrar sesiones](compartir-y-colaborar.md#cerrar-sesiones).
 - Un **enlace compartido** (`lnk_…`, ver [Compartir y colaborar](compartir-y-colaborar.md)) también vale
   como `Bearer`, pero limitado a su espacio y a su rol.
 
@@ -80,7 +87,7 @@ Los errores llegan siempre como `{"error": "…", "issues"?: [...]}`:
 |---|---|
 | `400` | Petición o comando mal formado (`issues` dice qué campo) |
 | `401` | Falta la clave o no es válida |
-| `403` | No tienes permiso: por ejemplo, tu rol en ese espacio es `viewer` |
+| `403` | No tienes permiso: por ejemplo, tu rol en ese espacio es **solo lectura** (`viewer`) |
 | `404` | El espacio o la vista no existen |
 | `413` | Cuerpo demasiado grande (1 MB para comandos, 5 MB para un Workspace JSON completo) |
 | `422` | Un comando del lote no se pudo aplicar (por ejemplo, `patch` sobre un id que no existe). **No se aplicó nada del lote** |

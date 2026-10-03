@@ -35,16 +35,17 @@ When you open the app you see a short introduction, three buttons and, below the
 | **Open the demo** | Creates a copy of the sample workspace "Alta de cliente" (see [the demo](primeros-pasos.md#demo)). Feel free to change it: it is yours. |
 | **Import…** | Creates a workspace from a file: `.drawer`, `.alldraw.json`, `.archimate` (Archi), Open Exchange, BPMN 2.0 XML, Structurizr, XState, Mermaid or OpenAPI. See [Import and export](importar-exportar.md). |
 
-On the same row, to the right, **Sign in / register** appears if the account server is available. The
-**language selector** is at the top of the screen.
+On the same row, to the right, **Sign in / register** appears if the account server is available. The first
+time, while you have no workspace and are not signed in, you see the all-draw landing page instead of the home
+screen; there the button to sign in is called **Sign in**. The **language selector** is at the top of the screen.
 
 A **workspace** is the unit of work: it holds the model, all its views, the libraries, the style rules and
 the people. Each workspace opens at its own web address, so you can bookmark it.
 
 The list of workspaces has two sections:
 
-- **On the server**: only shown when you are signed in. Lists each workspace with your role (`owner`,
-  `editor` or `viewer`) and the date of the last change. The owner sees a **Delete** button.
+- **On the server**: only shown when you are signed in. Lists each workspace with your role (**owner**,
+  **can edit** or **read-only**) and the date of the last change. The owner sees a **Delete** button.
 - **In this browser**: local workspaces. Each one has **Delete** and, when you are signed in,
   **Upload to server**.
 
@@ -81,7 +82,7 @@ More details in [Concepts → Workspaces](conceptos.md#espacios).
 You need an account to keep workspaces on the server, share them, see their history and create keys for
 agents.
 
-1. On the home screen, press **Sign in / register** (top right).
+1. On the home screen, press **Sign in / register** (top right; on the landing page it is called **Sign in**).
 2. In the dialog, press **I don't have an account**. The title changes to **Create account**.
 3. Fill in **Email**, **Name** and **Password** (at least 8 characters).
 4. If the server asks for an **Invite code**, type it in (the server administrator gives it to you).
@@ -97,9 +98,10 @@ Once signed in:
 - The first button becomes **New workspace on the server** and **Open the demo** creates the demo on the
   server.
 - The **On the server** section appears.
-- In the top-right corner you see your name, the **API keys** link and **sign out**.
+- In the top-right corner you see your name. Clicking it opens the account menu, with **Account and API keys** and
+  **Sign out**.
 
-The **API keys** link opens the **Account** screen, where you can create keys for agents (see
+**Account and API keys** opens the **Account** screen, where you can create keys for agents (see
 [Agents and API](agentes-y-api.md)), **Change password** and **Sign out everywhere**. If you are an
 administrator, the **Server users** list is there too.
 
@@ -154,7 +156,7 @@ same model in **six dimensions**. Its content is in Spanish ("Alta de cliente" m
 | Alta de cliente · Secuencia | Sequence diagram | Customer, portal, API and database exchanging messages |
 | Mapa capas × etapas | Layers × stages | The same elements in a Business/Application/Technology × Acquisition/Onboarding/Operation grid, with two microservices from a library connected through **pins** |
 
-It also includes two style rules ("Externos en gris", external ones in grey, and "Servicios sin repo",
+It also includes two style rules ("Externos en gris", external ones in gray, and "Servicios sin repo",
 services without a repository), a "Sistemas" library with the *Microservicio* type, and several **traces**
 between notations (for example, the BPMN task "Verificar identidad" is traced to the ArchiMate service
 "Verificación KYC").
@@ -183,8 +185,8 @@ server, sent as soon as there is a connection. The indicator in the editor toolb
 | `◌ connecting…` | Trying to reach the server. You can keep working. |
 | `○ offline (syncs when back)` | No connection. Your changes are kept locally and sent when the network returns. |
 
-In server workspaces your role (`owner`, `editor` or `viewer`) is shown next to the indicator. As a `viewer`
-you can look but not edit.
+In server workspaces your role (**owner**, **can edit** or **read-only**) is shown next to the indicator. With
+**read-only** you can look but not edit.
 
 Server workspaces also keep automatic **snapshots** that you can restore from the **History** button (see
 [History](historial.md)).
@@ -217,7 +219,7 @@ editor toolbar (on a phone, inside the **More** sheet). The change is immediate 
 
 ## Common problems {#problemas-frecuentes}
 
-**I can't see the "Sign in / register" button.**
+**I can't see the "Sign in / register" button (or "Sign in" on the landing page).**
 It only appears when the account server responds. Check your connection and reload the page. Meanwhile you
 can work with local workspaces.
 
@@ -238,7 +240,7 @@ Your changes are not lost: they are still in the browser. They are sent automati
 comes back. If it takes too long, reload the page.
 
 **I can't edit anything in a shared workspace.**
-Check your role next to the indicator: as a `viewer` (or with a read-only link) you can only look. Ask the
+Check your role next to the indicator: with **read-only** (or with a read-only link) you can only look. Ask the
 owner for an edit link (see [Sharing and collaborating](compartir-y-colaborar.md)).
 
 ## Next steps {#siguientes-pasos}

@@ -12,12 +12,12 @@ how. A pack contains:
 
 | Part | What it decides | Example |
 |---|---|---|
-| **Element types** | What shows up in the palette, with its shape, colour, icon and fields | *Task*, *Start event* and *Pool* in BPMN |
+| **Element types** | What shows up in the palette, with its shape, color, icon and fields | *Task*, *Start event* and *Pool* in BPMN |
 | **Relation types** | The lines you can draw and their fields | *Sequence flow* with its condition |
 | **Validity matrix** | Which relation is allowed between which pair of types | In ArchiMate, *Serving* from an application service to a business process |
 | **Nesting** | What can go inside what, and whether nesting creates a relation | A task inside a lane; in ArchiMate, *Composition* when nesting |
 | **Viewpoints** | Subsets of types for a specific purpose | *Context* and *Container* in C4 |
-| **Colours and categories** | How the palette is grouped and how each type is painted | ArchiMate layers in yellow, blue and green |
+| **Colors and categories** | How the palette is grouped and how each type is painted | ArchiMate layers in yellow, blue and green |
 
 Each type has an identifier `pack:Type` (`bpmn:Task`, `archimate:BusinessProcess`, `c4:Container`). You
 don't need it to draw, but it is the name used by the [API](agentes-y-api.md), the importers and the

@@ -27,6 +27,7 @@ do not fire. That way **Del** deletes letters, not nodes.
 | **Ctrl+K** or **Ctrl+F** | Opens (or closes) search: elements, views and actions |
 | **?** | Opens (or closes) the shortcuts panel |
 | **Esc** | Closes menus, panels and dialogs; cancels renaming |
+| **Shift+F10** or the **Menu** key | Opens the context menu of the selection on the canvas (or the canvas menu, with nothing selected) |
 | **Ctrl+Z** | Undo |
 | **Ctrl+Y** or **Ctrl+Shift+Z** | Redo |
 
@@ -115,6 +116,16 @@ In dialogs (sign in, share, search, shortcuts, Workspace…):
 | **Tab** / **Shift+Tab** | Moves to the next / previous control (focus stays inside the dialog) |
 | **Esc** | Closes the dialog and returns focus to the button that opened it |
 
+## Menus, palette and panels {#menus-y-paneles}
+
+| Key | Where | What it does |
+|---|---|---|
+| **↑** / **↓**, **Home** / **End** | Context menu | Moves through the options; **Enter** picks one; **Esc** or **Tab** close it and focus returns to the canvas |
+| **Tab**, then **↑** / **↓** | Palette and view list | Enters the list (a single **Tab** stop) and moves through it |
+| **Enter** or **Space** | A palette type | Adds it in a free spot near the center of the visible canvas (same as a click) |
+| **Enter** / **Del** | A view in the list | Opens it / deletes it (asks for confirmation) |
+| **←** / **→** | Tabs (palette, inspector, Workspace) | Switches tab |
+
 ## Mouse {#raton}
 
 | Gesture | Where | What it does |
@@ -123,6 +134,7 @@ In dialogs (sign in, share, search, shortcuts, Workspace…):
 | Wheel | Canvas | Zooms in or out |
 | Double-click | Canvas background | Zooms in |
 | Drag | From the palette onto the canvas | Creates a node (or an appearance, from the **Model** tab) |
+| Click | A palette type | Adds it in a free spot near the center of the canvas |
 | Drag | A node | Moves it; dropping it inside a container nests it |
 | Drag | Corners of a selected node | Resizes it |
 | Drag | From a node's bottom edge to another node | Creates a relation (the **Relationship type** menu appears) |
@@ -155,7 +167,7 @@ all-draw adapts to the screen size:
 | Pinch | Zooms in or out |
 | Drag a node | Moves it |
 | **Press and hold** a node (half a second, without moving your finger) | Opens the node menu, like right-click |
-| Tap a type in the **Add** sheet | Adds it in the centre of the canvas |
+| Tap a type in the **Add** sheet | Adds it in a free spot near the center of the canvas |
 | Tap outside the sheet, drag its handle down or press its **×** | Closes the sheet |
 
 The **More** sheet holds the view path, **Workspace**, search, snap to grid, theme, shortcuts, **Fit to view**,

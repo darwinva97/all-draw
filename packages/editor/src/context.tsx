@@ -78,6 +78,8 @@ export interface EditorCtx {
   setShortcutsOpen(open: boolean): void;
   /** Enlace a la documentación de la app (`#/docs/<slug>`); null si la app no la ofrece (los enlaces "¿Cómo funciona?" se ocultan). */
   docsHref: ((slug: string, anchor?: string) => string) | null;
+  /** Abre el "Compartir" de la app (enlaces de solo lectura); null si la app no lo ofrece. */
+  share: (() => void) | null;
 }
 
 const Ctx = createContext<EditorCtx | null>(null);
@@ -109,6 +111,8 @@ export interface EditorProviderProps {
   theme?: Theme;
   /** Enlaces a la documentación (p. ej. `slug => '#/docs/' + slug`). Sin él no se muestran los enlaces de ayuda. */
   docsHref?: (slug: string, anchor?: string) => string;
+  /** Acción "Compartir" de la app (p. ej. abrir su diálogo de enlaces). Sin ella, el inspector remite al botón Compartir. */
+  onShare?: () => void;
   children: ReactNode;
 }
 
@@ -125,6 +129,7 @@ export function EditorProvider(props: EditorProviderProps) {
   const [comments, setComments] = useState<CommentsState>({ open: false, threadId: null, draft: null, reveal: 0 });
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const docsHref = props.docsHref ?? null;
+  const share = props.onShare ?? null;
 
   useEffect(() => { if (props.theme) setThemeState(props.theme); }, [props.theme]);
   useEffect(() => {
@@ -167,8 +172,8 @@ export function EditorProvider(props: EditorProviderProps) {
     store: props.store, history: props.history, registry: props.registry, viewId, openView, back, trail,
     selection, select: setSelection, run, readOnly: !!props.readOnly, validators: props.validators ?? [],
     presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, setRenaming, canvas, workspaceTab, openWorkspacePanel, closeWorkspacePanel,
-    comments, openComments, closeComments, shortcutsOpen, setShortcutsOpen, docsHref,
-  }), [docsHref, shortcutsOpen, props.store, props.history, props.registry, viewId, openView, back, trail, selection, run, props.readOnly, props.validators, presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel, comments, openComments, closeComments]);
+    comments, openComments, closeComments, shortcutsOpen, setShortcutsOpen, docsHref, share,
+  }), [docsHref, share, shortcutsOpen, props.store, props.history, props.registry, viewId, openView, back, trail, selection, run, props.readOnly, props.validators, presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel, comments, openComments, closeComments]);
 
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>;
 }

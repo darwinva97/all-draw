@@ -3,7 +3,7 @@ import { kit, type Tr } from './kit';
 /** Proceso BPMN: un pedido con dos carriles, una decisión y dos finales. */
 export function bpmnTemplate(t: Tr) {
   const k = kit(t('Proceso de pedido'));
-  const v = k.view(t('Proceso de pedido'), { notationId: 'bpmn', viewpointId: 'process' });
+  const v = k.view(t('Proceso de pedido'), { notationId: 'bpmn', viewpointId: 'collaboration' });
   const pool = k.node(v, k.el('bpmn:Pool', t('Tienda online')), 20, 20, 940, 340);
   const laneA = k.node(v, k.el('bpmn:Lane', t('Ventas')), 30, 0, 910, 170, { parentNodeId: pool.id });
   const laneB = k.node(v, k.el('bpmn:Lane', t('Almacén')), 30, 170, 910, 170, { parentNodeId: pool.id });

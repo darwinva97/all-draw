@@ -1,9 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { useLang, useT, LANGS, type Lang } from '@all-draw/i18n';
+import { getLang, t as translate, useLang, useT, LANGS, type Lang } from '@all-draw/i18n';
 import { Home } from './Home';
 import { WorkspaceScreen } from './WorkspaceScreen';
 import { KeysScreen } from './Keys';
 import { Landing } from './Landing';
+
+// Avisos de importar/exportar, HTML exportado y `<desc>` de los SVG en el idioma de la interfaz. Se deja el traductor en
+// `Symbol.for(IO_TRANSLATOR_KEY)` sin importar `@all-draw/io` (se carga bajo demanda y no debe entrar en el paquete inicial).
+(globalThis as Record<symbol, unknown>)[Symbol.for('all-draw.io.translator')] = { t: translate, lang: getLang };
 
 /** Centro de documentación (`#/docs…`): trozo perezoso, no entra en el paquete inicial. Enlaces: `./docs/links`. */
 const DocsScreen = lazy(() => import('./docs/DocsScreen'));
@@ -36,5 +40,7 @@ export function App() {
   if (hash.startsWith('#/keys')) return <KeysScreen />;
   // Portada siempre accesible; en `#/` el inicio muestra la portada a quien llega sin sesión ni espacios locales.
   if (hash.startsWith('#/bienvenida')) return <Landing />;
+  // `#/espacios`: el inicio (plantillas, importar, espacios) también sin sesión ni espacios locales; lo enlaza la portada.
+  if (hash.startsWith('#/espacios')) return <Home key="espacios" forceHome />;
   return <Home />;
 }

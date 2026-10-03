@@ -22,10 +22,11 @@ export const MSG_SYNC = 0, MSG_AWARENESS = 1, MSG_AUTH = 2;
  * - 4401: sin permiso o **acceso revocado** (enlace revocado, miembro quitado, cuenta borrada). No reconecta.
  * - 4403: origen no permitido. No reconecta.
  * - 4404 / 4410: el espacio no existe / se acaba de borrar. No reconecta.
+ * - 4402: **se cerró la sesión** con la que se abrió (cerrar sesión, cerrar todas, cambiar o restablecer la contraseña). No reconecta.
  * - 4205: **cambió el rol** (p. ej. editor → viewer; «reset content»). Fuera del rango 44xx a propósito: el cliente
  *   reconecta solo y el servidor vuelve a autorizar con el rol nuevo (o cierra con 4401 si ya no tiene acceso).
  */
-export const WS_REVOKED = 4401, WS_FORBIDDEN_ORIGIN = 4403, WS_NOT_FOUND = 4404, WS_ROLE_CHANGED = 4205, WS_DELETED = 4410;
+export const WS_REVOKED = 4401, WS_SESSION_CLOSED = 4402, WS_FORBIDDEN_ORIGIN = 4403, WS_NOT_FOUND = 4404, WS_ROLE_CHANGED = 4205, WS_DELETED = 4410;
 export const READ_ONLY_REASON = JSON.stringify({ error: 'read-only' });
 /** Razón del `permissionDenied` cuando un update se descarta porque el espacio llegó a `MAX_DOC_BYTES`. */
 export const quotaReason = (limit: number) => JSON.stringify({ error: 'doc_too_large', limit });

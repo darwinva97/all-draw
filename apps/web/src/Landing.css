@@ -16,13 +16,18 @@
 .lp-hero__doc { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; color: var(--text); font-weight: 550; text-decoration: none; padding: 8px 4px; border-radius: var(--r-sm); }
 .lp-hero__doc:hover { color: var(--accent); }
 .lp-hero__doc .ad-icon { color: var(--muted); }
-.lp-hero__note { margin: 14px 0 0; font-size: 13px; color: var(--faint); }
+.lp-hero__note { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
+/* Otras formas de empezar sin cuenta: en blanco, plantilla, importar */
+.lp-start { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; margin-left: -10px; }
+.lp-start .btn { color: var(--text); }
+.lp-start .btn .ad-icon { color: var(--muted); }
 
 /* Visor de dimensiones */
 .lp-viewer { margin: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-lg); overflow: hidden; }
 .lp-viewer__bar { display: flex; align-items: center; gap: 12px; padding: 8px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 60%, var(--sunk)); overflow-x: auto; scrollbar-width: none; }
 .lp-viewer__bar::-webkit-scrollbar { display: none; }
 .lp-viewer__tabs { display: flex; gap: 2px; }
+.lp-viewer__pause { margin: -4px -8px -4px auto; flex: none; }
 .lp-viewer__tab { display: inline-flex; align-items: center; gap: 7px; border: 1px solid transparent; background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 550; padding: 5px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease; }
 .lp-viewer__tab:hover { color: var(--text); }
 .lp-viewer__tab.is-on { background: var(--surface); color: var(--text); border-color: var(--line); box-shadow: var(--shadow-sm); }
@@ -61,6 +66,8 @@
   .lp-hero__cta { margin-top: 22px; }
   .lp-hero__cta .btn { flex: 1 1 100%; }
   .lp-hero__doc { margin-left: 0; }
+  .lp-start { margin-left: 0; }
+  .lp-start .btn { flex: 1 1 100%; justify-content: flex-start; }
   .lp-viewer__stage { height: 240px; }
   .lp-viewer__stage img { inset: 10px; width: calc(100% - 20px); height: calc(100% - 20px); }
   .lp-viewer__skel { inset: 40px 30px; }

@@ -143,9 +143,9 @@ importar un fichero que sustituye el espacio). El texto sigue ahí; puedes resol
 | Dónde | Puede leer | Puede escribir, responder y resolver |
 |---|---|---|
 | Espacio local (en tu navegador) | Tú | Tú |
-| Espacio del servidor, rol **owner** (dueño) | Sí | Sí |
-| Espacio del servidor, rol **editor** (o enlace de edición) | Sí | Sí |
-| Espacio del servidor, rol **viewer** (o enlace de lectura) | Sí | No |
+| Espacio del servidor, rol **propietario** | Sí | Sí |
+| Espacio del servidor, rol **puede editar** (o enlace de edición) | Sí | Sí |
+| Espacio del servidor, rol **solo lectura** (o enlace de lectura) | Sí | No |
 
 Los roles se explican en [compartir y colaborar](compartir-y-colaborar.md).
 
@@ -162,8 +162,8 @@ Los roles se explican en [compartir y colaborar](compartir-y-colaborar.md).
 
 - **"No veo el comentario que acabo de escribir."** Mira los filtros: puede que estés en
   **Resueltos**, o que el hilo sea de otra vista y tengas activado **Solo esta vista**.
-- **"No me sale la opción Comentar."** Estás en modo de solo lectura (rol viewer o enlace de
-  lectura). Pide a la persona dueña un enlace de edición.
+- **"No me sale la opción Comentar."** Estás en modo de solo lectura (rol **solo lectura** o enlace
+  de lectura). Pide al propietario un enlace de edición.
 - **"Comento un elemento y el comentario aparece en otras vistas."** Es lo esperado si comentaste
   desde el inspector: el hilo va con el elemento. Para que sea solo de esta vista, usa botón
   derecho → **Comentar** sobre el nodo.

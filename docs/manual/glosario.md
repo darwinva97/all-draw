@@ -286,8 +286,9 @@ cuenta. Se puede revocar en cualquier momento. Ver [invitar](compartir-y-colabor
 
 ### Rol {#rol}
 
-Lo que puedes hacer en un espacio del servidor: **owner** (dueño: todo, incluido compartir y
-borrar), **editor** (editar) o **viewer** (solo ver). Ver
+Lo que puedes hacer en un espacio del servidor: **propietario** (todo, incluido compartir y
+borrar), **puede editar** o **solo lectura** (solo ver). En la API se llaman `owner`, `editor` y
+`viewer`. Ver
 [compartir y colaborar](compartir-y-colaborar.md).
 
 ### Presencia {#presencia}

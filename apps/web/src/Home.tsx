@@ -7,10 +7,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { generateLargeWorkspace, type Workspace } from '@all-draw/core';
 import { listLocalWorkspaces, openLocalWorkspace, deleteLocalWorkspace, type LocalWorkspaceEntry } from '@all-draw/sync';
 import { Icon, confirmDialog, noticeDialog, toast } from '@all-draw/editor';
-import { useLang, useT, type Lang } from '@all-draw/i18n';
-import { api, type User, type WorkspaceInfo } from './api';
+import { tn, useLang, useT, type Lang } from '@all-draw/i18n';
+import { api, cachedAccount, type User, type WorkspaceInfo } from './api';
 import { AuthDialog } from './Auth';
-import { AppFooter, AppHeader, UserMenu, roleLabel } from './Chrome';
+import { AppFooter, AppHeader, UserMenu, initialsOf, roleLabel } from './Chrome';
 import { Landing } from './Landing';
 import { createRegistry, PACKS, PACK_COLORS, localizePack } from './registry';
 import { TEMPLATES, type Template } from './templates';
@@ -18,6 +18,7 @@ import { createLocalWorkspace, createServerWorkspace } from './spaces';
 import { localThumb, workspaceThumb, type ThumbTheme } from './thumbs';
 import { useEffectiveTheme } from './theme';
 import { reportError } from './notify';
+import { ioErrorText } from './io-text';
 import './pwa';
 
 const IMPORT_ACCEPT = '.drawer,.json,.archimate,.xml,.bpmn,.mmd,.yaml,.yml';
@@ -37,7 +38,8 @@ export function fmtWhen(iso: string, lang: Lang, now = Date.now()): string {
   return d.toLocaleDateString(lang, { day: 'numeric', month: 'short', year: d.getFullYear() === new Date(now).getFullYear() ? undefined : 'numeric' });
 }
 
-export function Home() {
+/** `forceHome`: sin sesión ni espacios locales, el inicio en vez de la portada (`#/espacios`, enlazado desde la portada). */
+export function Home({ forceHome = false }: { forceHome?: boolean } = {}) {
   const t = useT();
   const [lang] = useLang();
   const [local, setLocal] = useState<LocalWorkspaceEntry[]>([]);
@@ -45,6 +47,8 @@ export function Home() {
   const [remote, setRemote] = useState<WorkspaceInfo[] | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [serverUp, setServerUp] = useState(false);
+  /** Sin conexión con el servidor (no «sin servidor»): con una sesión previa no se muestra la portada (fallo 56). */
+  const [offline, setOffline] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [auth, setAuth] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -57,13 +61,19 @@ export function Home() {
     const all = await listLocalWorkspaces();
     setLocal(all.filter(w => !w.id.startsWith('srv_')));
     setCached(new Set(all.filter(w => w.id.startsWith('srv_')).map(w => w.id.slice(4))));
-    const up = await api.available(); setServerUp(up);
-    if (up) {
-      const u = await api.me(); setUser(u ?? null);
+    // Una sola petición dice si hay servidor y quién soy (200 también sin sesión: sin 401 en la consola, fallo 65).
+    const probe = await api.probe();
+    setServerUp(probe.up); setOffline(probe.offline);
+    if (probe.up) {
+      const u = probe.user; setUser(u);
       if (u) {
         try { setRemote(await api.workspaces()); }
         catch (e) { setRemote([]); reportError(e, { title: t('No se pudieron cargar tus espacios del servidor'), retry: () => void refresh() }); }
       } else setRemote(null);
+    } else if (probe.offline && cachedAccount()) {
+      // Sin red y con sesión la última vez: los espacios del servidor que se abrieron aquí siguen a mano (copia local).
+      setUser(null);
+      setRemote(all.filter(w => w.id.startsWith('srv_') && w.role).map(w => ({ id: w.id.slice(4), name: w.name, ownerId: '', createdAt: w.updatedAt, updatedAt: w.updatedAt, role: w.role! })));
     } else { setUser(null); setRemote(null); }
     setLoaded(true);
   }, [t]);
@@ -81,17 +91,18 @@ export function Home() {
   const onFile = async (f: File) => {
     setBusy('import');
     try {
-      const { importAny } = await import('@all-draw/io');
-      const { workspace, warnings, format } = await importAny(await f.text(), f.name);
+      const { importAny, formatLabel } = await import('@all-draw/io');
+      const { workspace, warnings, format: fmt } = await importAny(await f.text(), f.name);
+      const format = t(formatLabel(fmt));
       if (warnings.length) {
-        toast.warning(t('Importado desde {format} con {n} avisos', { format, n: warnings.length }), {
+        toast.warning(tn('Importado desde {format} con {n} aviso', 'Importado desde {format} con {n} avisos', warnings.length, { format }), {
           description: f.name, action: { label: t('Ver avisos'), onClick: () => void noticeDialog({ title: t('Avisos de la importación'), message: t('El fichero se importó, pero algunas partes no tienen equivalente exacto.'), items: warnings }) },
         });
       } else toast.success(t('Importado desde {format}', { format }), { description: f.name });
       await createFrom(workspace, 'import');
     } catch (e) {
       setBusy(null);
-      toast.error(t('No se pudo importar «{name}»', { name: f.name }), { description: (e as Error).message });
+      toast.error(t('No se pudo importar «{name}»', { name: f.name }), { description: ioErrorText(e) });
     }
   };
 
@@ -140,7 +151,8 @@ export function Home() {
   const total = local.length + (remote?.length ?? 0);
 
   if (!loaded) return <div className="page" aria-busy="true" />;
-  if (!user && local.length === 0) return <Landing serverUp={serverUp} user={null} onAuthed={() => void refresh()} />;
+  const offlineAccount = offline && !user ? cachedAccount() : null;
+  if (!user && !offlineAccount && local.length === 0 && !forceHome && !bench) return <Landing serverUp={serverUp} user={null} onAuthed={() => void refresh()} />;
 
   const headerRight = user
     ? <UserMenu user={user} onLogout={logout} />
@@ -153,6 +165,7 @@ export function Home() {
           <div>
             <h1>{t('Tus espacios')}</h1>
             <p>{user ? t('Los espacios del servidor se sincronizan y se comparten; los de este navegador funcionan sin cuenta.') : t('Se guardan en este navegador y funcionan sin conexión. Con una cuenta, además, se sincronizan y se comparten.')}</p>
+            {offlineAccount && <p className="home__offline" role="status"><Icon name="cloudOff" size={14} />{t('Sin conexión con el servidor. Los espacios del servidor que abriste en este navegador siguen disponibles; los cambios se sincronizan al volver la red.')}</p>}
           </div>
           <div className="home__title-actions">
             <button type="button" className="btn" disabled={!!busy} onClick={() => file.current?.click()} title={t('Formatos: .drawer (Drawer), .alldraw.json, .archimate (Archi), Open Exchange, BPMN 2.0 XML, Structurizr JSON, XState JSON, Mermaid, OpenAPI.')}>
@@ -178,7 +191,7 @@ export function Home() {
               <WsCard key={w.id} href={`#/s/${w.id}`} name={w.name} updatedAt={w.updatedAt} lang={lang}
                 thumb={cached.has(w.id) ? (th) => localThumb(`srv_${w.id}`, w.updatedAt, lang, th) : null}
                 badge={roleLabel(t, w.role)}
-                actions={w.role === 'owner' && <button type="button" className="btn btn--ghost" aria-label={t('Borrar {name} del servidor', { name: w.name || t('espacio sin nombre') })} title={t('Borrar del servidor')} onClick={() => void removeRemote(w)}><Icon name="trash" /></button>} />
+                actions={w.role === 'owner' && !offlineAccount && <button type="button" className="btn btn--ghost" aria-label={t('Borrar {name} del servidor', { name: w.name || t('espacio sin nombre') })} title={t('Borrar del servidor')} onClick={() => void removeRemote(w)}><Icon name="trash" /></button>} />
             ))}</div>}
         </section>}
 
@@ -264,7 +277,7 @@ function WsCard({ href, name, updatedAt, lang, thumb, badge, actions }: { href: 
   return (
     <article className="ws">
       <div className="ws__thumb" ref={ref} aria-hidden="true">
-        {url ? <img src={url} alt="" draggable={false} /> : url === undefined ? <span className="skel" /> : <span className="ws__mono">{label.trim().slice(0, 2)}</span>}
+        {url ? <img src={url} alt="" draggable={false} /> : url === undefined ? <span className="skel" /> : name.trim() ? <span className="ws__mono">{initialsOf(name)}</span> : <span className="ws__mono"><Icon name="template" size={28} /></span>}
       </div>
       <div className="ws__body">
         <div className="ws__info">

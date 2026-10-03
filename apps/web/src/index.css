@@ -90,6 +90,10 @@ p { text-wrap: pretty; }
 .err { color: var(--danger); font-size: 13px; margin: 6px 0; }
 .err:empty { display: none; }
 .ok { color: var(--ok); font-size: 13px; }
+/* Casilla con su texto (p. ej. «Revocar también las claves API») y nota bajo un formulario. */
+.check { display: inline-flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 13.5px; cursor: pointer; }
+.check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.hint { margin: 0 0 6px; font-size: 12.5px; color: var(--muted); max-width: 60ch; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 7px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 12px; color: var(--muted); white-space: nowrap; text-decoration: none; }
 .chip__dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 .app-status { font-size: 12px; color: var(--ad-muted, var(--muted)); padding: 0 6px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -158,6 +162,7 @@ p { text-wrap: pretty; }
 .home__title { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .home__title h1 { font-size: 28px; line-height: 1.15; margin: 0; letter-spacing: -.025em; font-weight: 700; }
 .home__title p { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+.home__offline { display: flex; align-items: center; gap: 6px; color: var(--text) !important; }
 .home__title-actions { display: flex; gap: 8px; }
 .sect { margin-top: 36px; }
 .sect__head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -200,7 +205,9 @@ p { text-wrap: pretty; }
 .ws__link { color: var(--text); text-decoration: none; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws__link::after { content: ''; position: absolute; inset: 0; z-index: 0; }
 .ws__link:focus-visible { outline: none; }
-.ws__meta { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; margin-top: 1px; white-space: nowrap; overflow: hidden; }
+/* «Editado hace N minutos» entero: si no cabe junto al rol, baja de línea (no se corta, fallo 78). */
+.ws__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; color: var(--muted); font-size: 12px; margin-top: 1px; min-width: 0; }
+.ws__meta time { white-space: nowrap; }
 .ws__role { font-size: 11px; font-weight: 600; color: var(--muted); background: var(--sunk); border-radius: 999px; padding: 0 7px; }
 .ws__actions { position: relative; z-index: 1; display: flex; gap: 2px; opacity: 0; transition: opacity 120ms ease; }
 .ws:hover .ws__actions, .ws:focus-within .ws__actions { opacity: 1; }
@@ -278,7 +285,8 @@ p { text-wrap: pretty; }
 .tour__pop h2 { margin: 0 0 6px; font-size: 16px; letter-spacing: -.01em; padding-right: 24px; }
 .tour__pop p { margin: 0; color: var(--muted); font-size: 13.5px; }
 .tour__pop p kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; font-size: 11.5px; color: var(--text); }
-.tour__actions { display: flex; align-items: center; gap: 6px; margin-top: 14px; }
+/* En pantallas estrechas los botones bajan de línea en vez de salirse de la tarjeta (fallo 42). */
+.tour__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 14px; }
 .tour__actions .spacer { flex: 1; }
 .tour__close { position: absolute; top: 8px; right: 8px; }
 
@@ -315,6 +323,12 @@ p { text-wrap: pretty; }
   .menu button, .menu a { padding: 11px 12px; }
   .ad-toolbar--compact .app-name { min-width: 0; width: auto; flex: 1 1 auto; }
   .tour__pop { left: 12px !important; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); top: auto !important; width: auto; }
+  /* El ancla está abajo (barra de pestañas): la tarjeta arriba, para no taparla. */
+  .tour__pop--top { top: calc(12px + env(safe-area-inset-top)) !important; bottom: auto; }
+  /* Anterior y Siguiente en una fila a lo ancho; «Saltar el recorrido» debajo. */
+  .tour__actions .spacer { display: none; }
+  .tour__actions > .btn { flex: 1 1 0; justify-content: center; }
+  .tour__actions > .btn--ghost:first-child { order: 2; flex-basis: 100%; }
 }
 @keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } }
 @media (pointer: coarse) {

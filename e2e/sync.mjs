@@ -17,7 +17,7 @@ await a.waitForSelector('#h-remote', { timeout: 20000 });
 await a.getByRole('button', { name: /^Abrir la demo/ }).first().click();
 await a.waitForURL(/#\/s\//, { waitUntil: 'commit' }); await a.waitForSelector('.react-flow__node', { timeout: 20000 }); await a.waitForTimeout(1500);
 console.log('A status:', await a.locator('.app-status').first().innerText());
-await a.getByRole('button', { name: 'Compartir' }).click();
+await a.getByRole('button', { name: 'Compartir', exact: true }).click();
 await a.getByRole('button', { name: 'Nuevo enlace de edición' }).click();
 await a.waitForSelector('text=edición', { timeout: 10000 }); await a.waitForTimeout(500);
 // Sacamos la URL del enlace por la API (la cookie de A la tiene su contexto)

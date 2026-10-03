@@ -179,3 +179,34 @@ describe('revocar acceso con el WebSocket abierto', () => {
     expect((await a.closed).code).toBe(4401);
   });
 });
+
+describe('sesiones cerradas cortan el WebSocket (QA 8 y 9)', () => {
+  const closeCode = (url: string) => {
+    const w = new WebSocket(url);
+    const opened = new Promise<void>((r, j) => { w.on('open', () => r()); w.on('error', j); });
+    const closed = new Promise<number>(r => w.on('close', (c: number) => r(c)));
+    w.on('error', () => {});
+    return { w, opened, closed };
+  };
+  it('cerrar sesión corta ese navegador (4402); cerrar todas, el resto; la API key sólo con revokeKeys', async () => {
+    const a = await register(s.url, `sesiones-${Date.now()}@example.com`);
+    const id = (await a.api.post('/api/workspaces', { name: 'Sesiones' })).body.id as string;
+    const login = async () => (await fetch(`${s.url}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: a.user.email, password: 'contraseña-larga' }) }).then(r => r.json()) as { token: string }).token;
+    const t2 = await login(), t3 = await login();
+    const key = (await a.api.post('/api/keys', { name: 'agente' })).body.key as string;
+    const c1 = closeCode(`${s.wsUrl}/${id}?token=${a.token}`), c2 = closeCode(`${s.wsUrl}/${id}?token=${t2}`), ck = closeCode(`${s.wsUrl}/${id}?token=${key}`);
+    await Promise.all([c1.opened, c2.opened, ck.opened]);
+    expect((await a.api.post('/api/auth/logout')).status).toBe(204);
+    expect(await c1.closed).toBe(4402);
+    // Cerrar todas (desde la tercera sesión) sin la casilla: cae la segunda, la clave sigue
+    expect((await fetch(`${s.url}/api/auth/sessions`, { method: 'DELETE', headers: { authorization: `Bearer ${t3}` } })).status).toBe(204);
+    expect(await c2.closed).toBe(4402);
+    await wait(50);
+    expect(ck.w.readyState).toBe(WebSocket.OPEN);
+    // Con la casilla, también la clave
+    const t4 = await login();
+    expect((await fetch(`${s.url}/api/auth/sessions?revokeKeys=true`, { method: 'DELETE', headers: { authorization: `Bearer ${t4}` } })).status).toBe(204);
+    expect(await ck.closed).toBe(4402);
+    expect(await closeCode(`${s.wsUrl}/${id}?token=${key}`).closed).toBe(4401);
+  });
+});

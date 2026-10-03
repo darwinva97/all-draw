@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MemoryStore, NotationRegistry, CORE_PACK, makeElement, makeView, makeNode, makeRelation, execute,
-  suggestTraces, traceMatrix, traceGaps, traceCoverage, relationFromSuggestion, normalizeName, significantWords, TYPE_AFFINITIES,
+  suggestTraces, traceMatrix, traceGaps, traceCoverage, relationFromSuggestion, normalizeName, significantWords, TYPE_AFFINITIES, formatMsg, validate,
   type NotationPack, type Element,
 } from '../src';
 
@@ -186,5 +186,30 @@ describe('traceGaps y traceCoverage', () => {
     const rel = store.list('relations').find(x => x.from.elementId === bpmnTask.id && x.to.elementId === archiProcess.id);
     expect(rel?.typeId).toBe('core:realizes');
     expect(traceCoverage.run({ store, reg: reg() }).some(x => x.subject.id === bpmnTask.id)).toBe(false);
+  });
+});
+
+describe('mensajes traducibles (fallo 11)', () => {
+  it('las sugerencias y el diagnóstico trace-missing llevan clave + variables además del texto en español', () => {
+    const { store, bpmnTask } = workspace();
+    const s = suggestTraces(store, reg(), bpmnTask.id)[0]!;
+    expect(s.reasonMsg.key).toBeTruthy();
+    expect(formatMsg(s.reasonMsg.key, s.reasonMsg.vars)).toBe(s.reason);
+    const d = traceCoverage.run({ store, reg: reg() }).find(x => x.subject.id === 'uml_cliente')!;
+    expect(d.messageKey).toBe('"{name}" ({type}) no tiene traza a otra notación; {reason}');
+    expect(formatMsg(d.messageKey!, d.vars)).toBe(d.message);
+    expect(d.supportedFixes[0]).toMatchObject({ labelKey: 'Trazar con "{name}" ({relation})' });
+    expect(formatMsg(d.supportedFixes[0]!.labelKey!, d.supportedFixes[0]!.vars)).toBe(d.supportedFixes[0]!.label);
+  });
+
+  it('los validadores del núcleo dan message en español y messageKey/vars coherentes', () => {
+    const { store } = workspace();
+    const r = makeRelation('core:trace', { elementId: 'am_alta' }, { elementId: 'bp_alta' });
+    store.set('relations', r.id, r);
+    const diags = validate(store, reg());
+    const unused = diags.find(d => d.code === 'relation-unused')!;
+    expect(unused).toMatchObject({ message: 'Relación no dibujada en ninguna vista', messageKey: 'Relación no dibujada en ninguna vista' });
+    expect(unused.supportedFixes[0]).toMatchObject({ label: 'Borrar relación', labelKey: 'Borrar relación' });
+    for (const d of diags) if (d.messageKey) expect(formatMsg(d.messageKey, d.vars)).toBe(d.message);
   });
 });

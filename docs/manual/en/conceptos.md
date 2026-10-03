@@ -47,7 +47,7 @@ with its own routing and bend points.
 entity-relationship, UML classes, mind map, flowchart, data flow (DFD), layers × stages and freeform. In
 all-draw each notation comes as a **pack** that defines:
 
-- the **element types** (in BPMN: task, start event, gateway…), with their shape, colour and icon;
+- the **element types** (in BPMN: task, start event, gateway…), with their shape, color and icon;
 - the **relationship types** (sequence flow, message flow…);
 - which relations are valid between which types (the [validity matrix](conceptos.md#validez));
 - the notation's [viewpoints](conceptos.md#viewpoints);

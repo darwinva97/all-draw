@@ -128,7 +128,7 @@ describe('renderSvg', () => {
     const svg = renderSvg(store, reg(), 'vw_1');
     await assertWellFormed(svg);
     expect(svg).toContain('<title id="ad-vw_1-title">Mapa</title>');
-    expect(svg).toContain('<desc id="ad-vw_1-desc">Vista &quot;Mapa&quot; (freeform) con 2 elementos y 1 relaciones.');
+    expect(svg).toContain('<desc id="ad-vw_1-desc">Vista &quot;Mapa&quot; (Libre) con 2 elementos y 1 relación.');
     expect(svg).toContain('role="img"');
     expect(svg).toContain('aria-labelledby="ad-vw_1-title ad-vw_1-desc"');
     expect(svg).toContain('Proceso de alta');
@@ -179,7 +179,8 @@ describe('renderSvg', () => {
     for (const s of ['pool', 'lane', 'circle', 'double-circle', 'diamond', 'hexagon', 'parallelogram', 'bar', 'cylinder', 'actor', 'ellipse', 'note', 'group', 'rounded', 'rect']) expect(svg).toContain(`ad-shape-${s}`);
     expect(svg).toContain('rotate(-90');                                       // etiqueta vertical de pool/lane
     expect(svg).toContain('polygon points="50,1 99,50 50,99 1,50"');          // rombo
-    expect(svg).toContain('<circle cx="50" cy="50" r="38"');                   // doble círculo
+    // Círculo doble negro = estado final: diana (anillo vacío y punto lleno con la tinta del tema)
+    expect(svg).toContain('<circle cx="50" cy="50" r="30" fill="var(--ad-ink)"');                   // doble círculo
     expect(svg).toContain('M2,15 v70 a48,12 0 0 0 96,0 v-70');                // cilindro
     // Contenedores anidados: posiciones absolutas (start = pool 0 + lane 30 + 20)
     expect(svg).toMatch(/translate\(50,110\) scale\(0\.36,0\.36\)/);

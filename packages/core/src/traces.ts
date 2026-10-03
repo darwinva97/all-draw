@@ -12,7 +12,7 @@
 import type { Element, Relation } from './model';
 import type { NotationRegistry } from './notation';
 import type { Store } from './store';
-import type { Diagnostic, Validator } from './diagnostics';
+import { fix, formatMsg, say, type Diagnostic, type Msg, type Validator } from './diagnostics';
 import { makeRelation } from './commands';
 
 export const BRIDGE_RELATIONS = ['core:trace', 'core:realizes', 'core:refines'] as const;
@@ -21,13 +21,16 @@ export type BridgeRelation = (typeof BRIDGE_RELATIONS)[number];
 export interface TraceSuggestion {
   target: Element;
   relationTypeId: string;
+  /** Motivo en español. */
   reason: string;
+  /** Motivo traducible (`tMsg` en la interfaz); `reason` es su texto en español. */
+  reasonMsg: Msg;
   score: number;
   /** `out` = origen → destino (por defecto); `in` = el destino es el origen de la relación propuesta. */
   direction: 'out' | 'in';
 }
 
-/** Afinidad de tipos entre notaciones. `relationTypeId` se propone en el sentido a → b. */
+/** Afinidad de tipos entre notaciones. `relationTypeId` se propone en el sentido a → b. `reason` es texto en español y clave de traducción. */
 export interface TypeAffinity { a: string; b: string; relationTypeId: BridgeRelation; reason: string }
 
 const pairs = (as: string[], bs: string[], relationTypeId: BridgeRelation, reason: string): TypeAffinity[] =>
@@ -122,16 +125,17 @@ export function suggestTraces(store: Store, reg: NotationRegistry, elementId: st
     if (target.id === elementId || target.template || already.has(target.id)) continue;
     if (reg.notationOf(target.typeId) === srcNotation) continue;
 
-    let best: { score: number; reason: string; relationTypeId: string; direction: 'out' | 'in' } | null = null;
-    const consider = (score: number, reason: string, relationTypeId: string, direction: 'out' | 'in' = 'out') => {
-      if (!best || score > best.score) best = { score, reason, relationTypeId, direction };
+    type Best = { score: number; reasonMsg: Msg; relationTypeId: string; direction: 'out' | 'in' };
+    let best: Best | null = null;
+    const consider = (score: number, reasonMsg: Msg, relationTypeId: string, direction: 'out' | 'in' = 'out') => {
+      if (!best || score > best.score) best = { score, reasonMsg, relationTypeId, direction };
     };
 
-    if (srcName && srcName === normalizeName(target.name)) consider(1, `mismo nombre "${target.name}"`, 'core:trace');
-    if (rootsOfSrc.has(target.id)) consider(0.8, `aparece en el detalle de "${target.name}"`, 'core:refines');
-    if (detailedBySrc.has(target.id)) consider(0.8, `"${target.name}" aparece en el detalle de "${src.name}"`, 'core:refines', 'in');
+    if (srcName && srcName === normalizeName(target.name)) consider(1, { key: 'mismo nombre "{name}"', vars: { name: target.name } }, 'core:trace');
+    if (rootsOfSrc.has(target.id)) consider(0.8, { key: 'aparece en el detalle de "{name}"', vars: { name: target.name } }, 'core:refines');
+    if (detailedBySrc.has(target.id)) consider(0.8, { key: '"{name}" aparece en el detalle de "{source}"', vars: { name: target.name, source: src.name } }, 'core:refines', 'in');
     const shared = [...significantWords(target.name)].filter(w => srcWords.has(w));
-    if (shared.length >= 2) consider(0.5, `comparten "${shared.join('", "')}"`, 'core:trace');
+    if (shared.length >= 2) consider(0.5, { key: 'comparten "{words}"', vars: { words: shared.join('", "') } }, 'core:trace');
 
     const aff = TYPE_AFFINITIES.find(t => t.a === src.typeId && t.b === target.typeId);
     const affIn = aff ? undefined : TYPE_AFFINITIES.find(t => t.a === target.typeId && t.b === src.typeId);
@@ -139,15 +143,15 @@ export function suggestTraces(store: Store, reg: NotationRegistry, elementId: st
     if (affinity) {
       const direction: 'out' | 'in' = aff ? 'out' : 'in';
       if (best) {
-        const b: { score: number; reason: string; relationTypeId: string; direction: 'out' | 'in' } = best;
-        best = { ...b, score: Math.min(1, b.score + 0.1), reason: `${b.reason}; ${affinity.reason}` };
+        const b: Best = best;
+        best = { ...b, score: Math.min(1, b.score + 0.1), reasonMsg: { key: '{a}; {b}', vars: { a: b.reasonMsg, b: { key: affinity.reason } } } };
         if (b.relationTypeId === 'core:trace') best = { ...best, relationTypeId: affinity.relationTypeId, direction };
-      } else consider(0.3, affinity.reason, affinity.relationTypeId, direction);
+      } else consider(0.3, { key: affinity.reason }, affinity.relationTypeId, direction);
     }
 
     if (best) {
-      const b: { score: number; reason: string; relationTypeId: string; direction: 'out' | 'in' } = best;
-      out.push({ target, ...b });
+      const b: Best = best;
+      out.push({ target, ...b, reason: formatMsg(b.reasonMsg.key, b.reasonMsg.vars) });
     }
   }
   return out.sort((x, y) => y.score - x.score || x.target.name.localeCompare(y.target.name));
@@ -242,13 +246,13 @@ export const traceCoverage: Validator = {
       const fixes: Diagnostic['supportedFixes'] = [];
       if (top) {
         const rel = relationFromSuggestion(gap.element.id, top);
-        fixes.push({ label: `Trazar con "${top.target.name}" (${reg.relationType(top.relationTypeId)?.name ?? top.relationTypeId})`, command: { type: 'set', collection: 'relations', id: rel.id, value: rel } });
+        fixes.push(fix('Trazar con "{name}" ({relation})', { type: 'set', collection: 'relations', id: rel.id, value: rel }, { name: top.target.name, relation: reg.relationType(top.relationTypeId)?.name ?? top.relationTypeId }));
       }
       out.push({
         code: 'trace-missing', severity: 'info', subject: { collection: 'elements', id: gap.element.id },
-        message: top
-          ? `"${gap.element.name}" (${typeName}) no tiene traza a otra notación; ${top.reason}`
-          : `"${gap.element.name}" (${typeName}) no tiene traza a otra notación`,
+        ...(top
+          ? say('"{name}" ({type}) no tiene traza a otra notación; {reason}', { name: gap.element.name, type: typeName, reason: top.reasonMsg })
+          : say('"{name}" ({type}) no tiene traza a otra notación', { name: gap.element.name, type: typeName })),
         evidence: { notationId: gap.notationId, suggestions: gap.suggestions.slice(0, 5).map(s => ({ targetId: s.target.id, relationTypeId: s.relationTypeId, score: s.score, direction: s.direction })) },
         supportedFixes: fixes,
       });

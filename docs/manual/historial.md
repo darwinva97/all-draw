@@ -81,12 +81,12 @@ justo antes (la más reciente de la lista).
 
 ## Borrar una instantánea {#borrar}
 
-Solo la persona **dueña** del espacio ve el botón **Borrar** en cada instantánea. Pide
+Solo el **propietario** del espacio ve el botón **Borrar** en cada instantánea. Pide
 confirmación y no se puede deshacer.
 
 ## Quién puede hacer qué {#permisos}
 
-| Acción | viewer (lectura) | editor | owner (dueño) |
+| Acción | solo lectura | puede editar | propietario |
 |---|:---:|:---:|:---:|
 | Ver la lista | ✓ | ✓ | ✓ |
 | Descargar JSON | ✓ | ✓ | ✓ |
@@ -100,7 +100,7 @@ Ver [compartir y colaborar](compartir-y-colaborar.md) para los roles.
 
 - Cada espacio guarda como máximo **100 instantáneas**. Al pasar de ahí, el servidor borra las
   **automáticas más antiguas** (las que no tienen etiqueta).
-- Las **etiquetadas** no se borran solas; solo las borra el dueño. Si un espacio acumula muchas
+- Las **etiquetadas** no se borran solas; solo las borra el propietario. Si un espacio acumula muchas
   etiquetadas, ocupan sitio de esas 100 y quedan menos huecos para las automáticas.
 - Si se **borra el espacio**, se borran también todas sus instantáneas.
 
@@ -146,7 +146,7 @@ permitir perder, guarda además tu propio `.alldraw.json`.
 
 - **"No veo el botón Historial."** Estás en un espacio local. Solo los espacios del servidor
   tienen historial.
-- **"No puedo crear ni restaurar."** Tienes rol de lectura (viewer). Puedes ver y descargar, pero
+- **"No puedo crear ni restaurar."** Tienes rol de **solo lectura**. Puedes ver y descargar, pero
   no cambiar el espacio.
 - **"Restauré y he perdido lo que hice hoy."** No: justo antes de restaurar se creó una
   instantánea automática con el estado de hoy. Restáurala.

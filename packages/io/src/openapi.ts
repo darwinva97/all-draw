@@ -11,6 +11,7 @@ import { parse as parseYaml } from 'yaml';
 import { parseWorkspace, type Workspace, type KeyValue, type Library } from '@all-draw/core';
 import { API_ELEMENT_TYPE, API_OPERATION_ELEMENT_TYPE, API_TYPE_ID, API_OPERATION_TYPE_ID, OPERATION_RELATION_NAME, apiElementId, operationElementId } from './drawer';
 import { emptyWs, makeEl, makeRel, slug } from './archimate';
+import { tr } from './i18n';
 
 export interface OpenApiImport { workspace: Workspace; warnings: string[]; apiId: string }
 export const OPENAPI_LIB_ID = 'lib:apis';
@@ -38,11 +39,11 @@ export function importOpenApi(input: string | object, opts: { name?: string } = 
   const resolve = <T>(obj: T, seen = new Set<string>()): T => {
     const ref = (obj as { $ref?: unknown } | null)?.$ref;
     if (typeof ref !== 'string') return obj;
-    if (!ref.startsWith('#/')) { warn(`Referencia externa no soportada: ${ref}`); return {} as T; }
+    if (!ref.startsWith('#/')) { warn(tr('Referencia externa no soportada: {ref}', { ref })); return {} as T; }
     if (seen.has(ref)) return {} as T;
     let cur: unknown = doc;
     for (const seg of ref.slice(2).split('/')) cur = (cur as Json | undefined)?.[seg.replace(/~1/g, '/').replace(/~0/g, '~')];
-    if (cur === undefined) { warn(`Referencia no encontrada: ${ref}`); return {} as T; }
+    if (cur === undefined) { warn(tr('Referencia no encontrada: {ref}', { ref })); return {} as T; }
     return resolve(cur as T, new Set([...seen, ref]));
   };
 
@@ -121,7 +122,7 @@ export function importOpenApi(input: string | object, opts: { name?: string } = 
       const rb = op.requestBody ? resolve(op.requestBody) : undefined;
       const opKey = op.operationId || `${method}-${path}`;
       const oid = operationElementId(slug(`${apiId}-${opKey}`) || `op${++n}`);
-      if (ws.elements[oid]) { warn(`Operación ${opKey} repetida; se omite`); continue; }
+      if (ws.elements[oid]) { warn(tr('Operación {operation} repetida; se omite', { operation: opKey })); continue; }
       const el = makeEl(oid, API_OPERATION_TYPE_ID, op.summary || op.operationId || `${method.toUpperCase()} ${path}`);
       el.libraryId = lib.id;
       el.template = true;
@@ -142,7 +143,7 @@ export function importOpenApi(input: string | object, opts: { name?: string } = 
       ws.relations[rid].name = OPERATION_RELATION_NAME;
     }
   }
-  if (!Object.keys(doc.paths ?? {}).length) warn('El documento no tiene `paths`; solo se crea la API');
+  if (!Object.keys(doc.paths ?? {}).length) warn(tr('El documento no tiene `paths`; solo se crea la API'));
   apiEl.fields.tags = [...tags].join(', ');
   apiEl.tags = [...tags];
   return { workspace: parseWorkspace(ws), warnings, apiId: apiEl.id };
@@ -159,9 +160,9 @@ function readDoc(input: string | object): Doc {
   let raw: unknown = input;
   if (typeof input === 'string') {
     const t = input.trim();
-    try { raw = t.startsWith('{') ? JSON.parse(t) : parseYaml(t); } catch (e) { throw new Error(`No se puede leer el documento OpenAPI: ${(e as Error).message}`); }
+    try { raw = t.startsWith('{') ? JSON.parse(t) : parseYaml(t); } catch (e) { throw new Error(tr('No se puede leer el documento OpenAPI: {error}', { error: (e as Error).message })); }
   }
   const doc = raw as Doc | null;
-  if (!doc || typeof doc !== 'object' || (!doc.openapi && !doc.swagger && !doc.paths)) throw new Error('El documento no parece un OpenAPI (faltan `openapi`/`swagger` y `paths`).');
+  if (!doc || typeof doc !== 'object' || (!doc.openapi && !doc.swagger && !doc.paths)) throw new Error(tr('El documento no parece un OpenAPI (faltan `openapi`/`swagger` y `paths`).'));
   return doc;
 }

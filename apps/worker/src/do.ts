@@ -11,8 +11,9 @@
  *   GET  /snapshot                   POST /commands {commands, label}   GET /validate
  *   GET  /svg?viewId&theme&padding   POST /drop    POST /revoke {userId?, linkToken?, code, reason}
  *
- * Cada WebSocket se acepta con etiquetas de hibernación `[rol, "u:<userId>" | "l:<token de enlace>"]`: sobreviven a
- * la hibernación y `/revoke` las usa (`ctx.getWebSockets(tag)`) para cerrar las conexiones de un acceso revocado.
+ * Cada WebSocket se acepta con etiquetas de hibernación `[rol, "u:<userId>" | "l:<token de enlace>", "s:<sesión>" | "k:<API key>"]`:
+ * sobreviven a la hibernación y `/revoke` las usa (`ctx.getWebSockets(tag)`) para cerrar las conexiones de un acceso revocado
+ * (un enlace, un usuario, una sesión cerrada o una clave revocada).
  *   GET  /snapshots                  POST /snapshots {authorId, label}
  *   GET  /snapshots/:sid             POST /snapshots/:sid/restore {authorId}   DELETE /snapshots/:sid
  *
@@ -22,7 +23,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Command, Workspace, WorkspaceMeta } from '@all-draw/core';
 import {
-  CommandError, DEFAULT_MAX_DOC_BYTES, LiveDoc, WS_DELETED, attachConnection, closeConn, opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, parseCommands, parseWorkspaceJson,
+  CommandError, DEFAULT_MAX_DOC_BYTES, LiveDoc, WS_DELETED, attachConnection, closeConn, matchesIdentity, opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, parseCommands, parseWorkspaceJson,
   type ConnIdentity, type ConnMatch, type DocPersistence, type Role, type Snapshot, type SnapshotMeta, type SyncHandlers, type SyncSocket,
 } from '@all-draw/server-core';
 import { newId } from '@all-draw/core';
@@ -32,18 +33,29 @@ export const ROLE_HEADER = 'x-alldraw-role';
 /** Identidad de la conexión (sólo una de las dos): la pone el worker tras autorizar; nunca se fía de la del cliente. */
 export const USER_HEADER = 'x-alldraw-user';
 export const LINK_HEADER = 'x-alldraw-link';
+/** Con qué credencial entró el usuario: la sesión (`sessionIdOf`) o la API key (id). */
+export const SESSION_HEADER = 'x-alldraw-session';
+export const KEY_HEADER = 'x-alldraw-key';
 const userTag = (id: string) => `u:${id}`;
 const linkTag = (token: string) => `l:${token}`;
+const sessionTag = (id: string) => `s:${id}`;
+const keyTag = (id: string) => `k:${id}`;
 /** Etiquetas de hibernación de un socket: el rol primero (compatibles con los aceptados antes) y la identidad. */
 export function socketTags(role: Role, identity: ConnIdentity | null): string[] {
   const tags: string[] = [role];
-  if (identity?.userId) tags.push(userTag(identity.userId));
-  else if (identity?.linkToken) tags.push(linkTag(identity.linkToken));
+  if (identity?.userId) {
+    tags.push(userTag(identity.userId));
+    if (identity.sessionId) tags.push(sessionTag(identity.sessionId));
+    else if (identity.keyId) tags.push(keyTag(identity.keyId));
+  } else if (identity?.linkToken) tags.push(linkTag(identity.linkToken));
   return tags;
 }
-function identityFromTags(tags: string[]): ConnIdentity | undefined {
-  const u = tags.find(t => t.startsWith('u:')), l = tags.find(t => t.startsWith('l:'));
-  return u || l ? { userId: u ? u.slice(2) : null, linkToken: l ? l.slice(2) : null } : undefined;
+export function identityFromTags(tags: string[]): ConnIdentity | undefined {
+  const get = (p: string) => tags.find(t => t.startsWith(p))?.slice(2);
+  const u = get('u:'), l = get('l:'), sid = get('s:'), kid = get('k:');
+  if (!u && !l) return undefined;
+  // Sockets aceptados antes de existir `s:`/`k:`: credencial desconocida (se tratan como sesión al revocar).
+  return { userId: u ?? null, linkToken: l ?? null, ...(sid ? { sessionId: sid } : {}), ...(kid ? { keyId: kid } : {}) };
 }
 /** WebSockets por espacio por defecto (`MAX_WS_PER_WORKSPACE`) y código de cierre al pasarse (igual que Node). */
 export const DEFAULT_MAX_WS_PER_WORKSPACE = 100;
@@ -158,11 +170,14 @@ export class WorkspaceDO extends DurableObject<Env> {
     return this.attach(ws, await this.doc(), role, identityFromTags(tags));
   }
 
-  /** Cierra con `code` los sockets abiertos con ese usuario o enlace (por etiqueta: vale también tras hibernar). */
+  /** Cierra con `code` los sockets abiertos con ese usuario, enlace, sesión o clave (por etiqueta: vale también tras hibernar). */
   private async revoke(match: ConnMatch, code: number, reason: string): Promise<number> {
     const targets = new Set<WebSocket>();
-    if (match.userId) for (const ws of this.ctx.getWebSockets(userTag(match.userId))) targets.add(ws);
-    if (match.linkToken) for (const ws of this.ctx.getWebSockets(linkTag(match.linkToken))) targets.add(ws);
+    const add = (tag: string) => { for (const ws of this.ctx.getWebSockets(tag)) if (matchesIdentity(identityFromTags(this.ctx.getTags(ws)), match)) targets.add(ws); };
+    if (match.userId) add(userTag(match.userId));
+    if (match.linkToken) add(linkTag(match.linkToken));
+    if (match.sessionId) add(sessionTag(match.sessionId));
+    if (match.keyId) add(keyTag(match.keyId));
     const live = targets.size && this.live ? await this.live : null;
     for (const ws of targets) {
       try { ws.close(code, reason); } catch { /* ya cerrada */ }
@@ -178,7 +193,8 @@ export class WorkspaceDO extends DurableObject<Env> {
     // Antes de cargar el doc: sin sockets abiertos no hay nada que cerrar ni motivo para leer el storage.
     if (url.pathname === '/revoke' && request.method === 'POST') {
       const b = await request.json() as ConnMatch & { code?: number; reason?: string };
-      const match: ConnMatch = { ...(typeof b.userId === 'string' && b.userId ? { userId: b.userId } : {}), ...(typeof b.linkToken === 'string' && b.linkToken ? { linkToken: b.linkToken } : {}) };
+      const str = (k: 'userId' | 'linkToken' | 'sessionId' | 'keyId' | 'exceptSessionId') => (typeof b[k] === 'string' && b[k] ? { [k]: b[k] } : {});
+      const match: ConnMatch = { ...str('userId'), ...str('linkToken'), ...str('sessionId'), ...str('keyId'), ...str('exceptSessionId'), ...(b.sessionsOnly === true ? { sessionsOnly: true } : {}) };
       return json({ closed: await this.revoke(match, Number(b.code) || 4401, String(b.reason ?? 'acceso revocado')) });
     }
     const live = await this.doc();
@@ -195,7 +211,10 @@ export class WorkspaceDO extends DurableObject<Env> {
         return new Response(null, { status: 101, webSocket: client });
       }
       const userId = request.headers.get(USER_HEADER), linkToken = request.headers.get(LINK_HEADER);
-      const identity: ConnIdentity | null = userId || linkToken ? { userId: userId || null, linkToken: userId ? null : linkToken || null } : null;
+      const sessionId = request.headers.get(SESSION_HEADER), keyId = request.headers.get(KEY_HEADER);
+      const identity: ConnIdentity | null = userId
+        ? { userId, linkToken: null, sessionId: sessionId || null, keyId: sessionId ? null : keyId || null }
+        : linkToken ? { userId: null, linkToken } : null;
       this.ctx.acceptWebSocket(server, socketTags(role, identity));
       this.attach(server, live, role, identity ?? undefined);
       return new Response(null, { status: 101, webSocket: client });

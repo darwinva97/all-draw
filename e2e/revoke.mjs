@@ -1,7 +1,9 @@
 // Revocar con el espacio abierto y la identidad en la presencia:
 // - con cuenta, la presencia lleva el nombre de la cuenta; con enlace sin cuenta, un nombre local estable (no cambia al recargar);
 // - bajar a un miembro a lectura le cambia el rol al momento (cierre 4205 → reconecta); quitarlo o revocar el enlace
-//   muestra «Ya no tienes acceso a este espacio» con «Volver al inicio».
+//   muestra «Ya no tienes acceso a este espacio» con «Volver al inicio»;
+// - borrar el espacio con alguien dentro le avisa y lo deja en solo lectura (4410);
+// - «Cerrar todas las sesiones» desde otro navegador desconecta al momento el espacio abierto (4402) y revoca la clave.
 // Uso: BASE=http://127.0.0.1:<puerto> node e2e/revoke.mjs
 import { chromium } from 'playwright-core';
 const base = process.env.BASE ?? 'http://127.0.0.1:4002';
@@ -82,6 +84,34 @@ await b.waitForFunction(() => location.hash === '#/' || location.hash === '', nu
 check(['#/', ''].includes(await b.evaluate(() => location.hash)), '«Volver al inicio» lleva al inicio');
 // Ana no se ha visto afectada
 check(/en línea/.test(await statusOf(a)) && await a.locator('[data-testid=lost-access]').count() === 0, 'Ana sigue conectada');
+
+// Borrar un espacio con alguien dentro (QA 33): se le avisa y deja de poder editar
+const ws2 = (await call(a, 'POST', '/api/workspaces', { name: 'Borrar QA' })).body.id;
+const link2 = (await call(a, 'POST', `/api/workspaces/${ws2}/links`, { role: 'editor' })).body;
+const d = await mk();
+await d.goto(link2.url.replace(/^https?:\/\/[^/]+/, base), { waitUntil: 'networkidle' });
+await waitText(d, '.app-status', /en línea/);
+check(!(await d.locator('.app-name').isDisabled()), 'Dani edita por enlace');
+check((await call(a, 'DELETE', `/api/workspaces/${ws2}`)).status === 204, 'Ana borra el espacio');
+await d.waitForSelector('[data-testid=lost-access][data-lost=deleted]', { timeout: 10000 }).catch(() => {});
+check(/Este espacio se ha borrado/.test(await d.locator('[data-testid=lost-access]').innerText().catch(() => '')), 'Dani ve «Este espacio se ha borrado»');
+check(await d.locator('.app-name').isDisabled(), 'y ya no puede editar (solo lectura)');
+check(/^sin acceso$/.test((await statusOf(d)).trim()), `estado de Dani: «${await statusOf(d)}»`);
+
+// Cerrar todas las sesiones desde otro navegador (QA 8 y 9): el espacio abierto se desconecta al momento y la clave muere
+const ws3 = (await call(a, 'POST', '/api/workspaces', { name: 'Sesiones QA' })).body.id;
+const key = (await call(a, 'POST', '/api/keys', { name: 'agente e2e' })).body.key;
+await a.goto(`${base}/#/s/${ws3}`, { waitUntil: 'networkidle' });
+await waitText(a, '.app-status', /en línea/);
+const a2 = await mk();
+await a2.goto(base + '/#/', { waitUntil: 'networkidle' });
+check((await call(a2, 'POST', '/api/auth/login', { email: `ana-${stamp}@test.local`, password: 'contraseña-larga' })).status === 200, 'Ana entra en otro navegador');
+check((await call(a2, 'DELETE', '/api/auth/sessions?revokeKeys=true')).status === 204, '«Cerrar todas las sesiones» con «Revocar también las claves API»');
+await a.waitForSelector('[data-testid=lost-access][data-lost=session]', { timeout: 10000 }).catch(() => {});
+check(/Se ha cerrado tu sesión/.test(await a.locator('[data-testid=lost-access]').innerText().catch(() => '')), 'el primer navegador ve «Se ha cerrado tu sesión» sin recargar');
+check(await a.locator('.app-name').isDisabled(), 'y deja de editar');
+const keyStatus = await a2.evaluate(async k => (await fetch('/api/auth/me', { headers: { authorization: `Bearer ${k}` } })).status, key);
+check(keyStatus === 401, `la API key queda revocada (${keyStatus})`);
 
 await browser.close();
 console.log('ERRORS', errors);

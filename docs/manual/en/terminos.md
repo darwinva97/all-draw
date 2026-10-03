@@ -21,12 +21,12 @@ the server and can be shared). Its features are described in this manual.
 
 ## The software is free; the service is something else {#software-libre}
 
-The all-draw **code** is free software under the **MIT** licence, published at
+The all-draw **code** is free software under the **MIT** license, published at
 https://github.com/darwinva97/all-draw. You can download, modify and install it wherever you want
-under that licence (see [self-hosting](agentes-y-api.md#autoalojar)).
+under that license (see [self-hosting](agentes-y-api.md#autoalojar)).
 
 These terms refer to the **hosted service** we provide at the address above: the server, its
-storage and its operation. If you use an installation run by another person or organisation, their
+storage and its operation. If you use an installation run by another person or organization, their
 terms apply, not these.
 
 ## Free, "as is" and with no availability guarantee {#tal-cual}

@@ -701,7 +701,7 @@ export const enResponsive: Record<string, string> = {
   'Añadir': 'Add', 'Inspector': 'Inspector', 'Más': 'More', 'Más opciones': 'More options', 'Paneles': 'Panels',
   'Rejilla': 'Grid', 'Atajos': 'Shortcuts',
   'Mostrar u ocultar vistas y paleta': 'Show or hide views and palette', 'Mostrar u ocultar el inspector': 'Show or hide the inspector',
-  'Toca un elemento para añadirlo al centro del lienzo.': 'Tap an item to add it to the centre of the canvas.',
+  'Toca un elemento para añadirlo al centro del lienzo.': 'Tap an item to add it to the center of the canvas.',
 };
 Object.assign(en, enResponsive);
 
@@ -726,7 +726,7 @@ export const enSecurity: Record<string, string> = {
   '¿Restablecer la contraseña de {email}? Se cerrarán sus sesiones y tendrás que darle la contraseña temporal.': 'Reset the password of {email}? Their sessions will be closed and you will have to hand them the temporary password.',
   'Contraseña temporal (cópiala ahora):': 'Temporary password (copy it now):',
   'Historial': 'History',
-  'El servidor guarda una instantánea automática cada 30 minutos de actividad y antes de cada restauración; las etiquetadas no se podan.': 'The server keeps an automatic snapshot every 30 minutes of activity and before each restore; labelled ones are never pruned.',
+  'El servidor guarda una instantánea automática cada 30 minutos de actividad y antes de cada restauración; las etiquetadas no se podan.': 'The server keeps an automatic snapshot every 30 minutes of activity and before each restore; labeled ones are never pruned.',
   'Etiqueta de la instantánea': 'Snapshot label',
   'Etiqueta (opcional)': 'Label (optional)',
   'Crear instantánea': 'Create snapshot',
@@ -809,7 +809,7 @@ Object.assign(en, {
   'El editor': 'The editor',
   'Paleta, lienzo, inspector, conexiones, alineación y problemas.': 'Palette, canvas, inspector, connections, alignment and problems.',
   'Librerías, reglas y personas': 'Libraries, rules and people',
-  'Tipos propios, componentes reutilizables, colores por datos y responsables.': 'Custom types, reusable components, data-driven colours and owners.',
+  'Tipos propios, componentes reutilizables, colores por datos y responsables.': 'Custom types, reusable components, data-driven colors and owners.',
   'Importar y exportar': 'Import and export',
   'Archi, BPMN, Mermaid, Drawer, OpenAPI, imágenes y copias de seguridad.': 'Archi, BPMN, Mermaid, Drawer, OpenAPI, images and backups.',
   'Teclas y gestos para trabajar más rápido.': 'Keys and gestures to work faster.',
@@ -833,7 +833,7 @@ Object.assign(en, {
   'Clases UML': 'UML classes',
   'Clases, interfaces y sus relaciones.': 'Classes, interfaces and their relationships.',
   'Mapa mental': 'Mind map',
-  'Ideas que se ramifican desde un centro.': 'Ideas branching out from a centre.',
+  'Ideas que se ramifican desde un centro.': 'Ideas branching out from a center.',
   'Algoritmos y decisiones.': 'Algorithms and decisions.',
   'Flujo de datos (DFD)': 'Data flow (DFD)',
   'Procesos, almacenes y flujos de datos.': 'Processes, data stores and data flows.',
@@ -984,7 +984,7 @@ Object.assign(en, {
   'Secciones': 'Sections',
   'Enlaces del pie': 'Footer links',
   'Términos': 'Terms',
-  'Código abierto, licencia MIT': 'Open source, MIT licence',
+  'Código abierto, licencia MIT': 'Open source, MIT license',
   'Mis espacios': 'My workspaces',
   '¿Revocar la clave «{name}»?': 'Revoke the key “{name}”?',
   'Los agentes y scripts que la usen dejarán de tener acceso.': 'Agents and scripts that use it will lose access.',
@@ -1151,7 +1151,7 @@ Object.assign(en, {
   'Mapa capas × etapas con pines': 'Layers × stages map with pins',
   'Servicios con datos JSON cuyos campos se conectan entre sí.': 'Services with JSON data whose fields are connected to each other.',
   'Un pago con tarjeta entre cliente, tienda, API y banco.': 'A card payment between customer, shop, API and bank.',
-  'Una idea central con cuatro ramas para ordenar un lanzamiento.': 'A central idea with four branches to organise a launch.',
+  'Una idea central con cuatro ramas para ordenar un lanzamiento.': 'A central idea with four branches to organize a launch.',
   'Validar una solicitud, con una decisión y un bucle de corrección.': 'Validate a request, with a decision and a correction loop.',
   'Vista principal': 'Main view',
   'Proceso de pedido': 'Order process',
@@ -1193,7 +1193,7 @@ Object.assign(en, {
   'reservar stock': 'reserve stock',
   'Enviado': 'Shipped',
   'Entregado': 'Delivered',
-  'Cancelado': 'Cancelled',
+  'Cancelado': 'Canceled',
   'devolver el importe': 'refund the amount',
   'pago recibido': 'payment received',
   'enviar': 'ship',
@@ -1239,8 +1239,8 @@ Object.assign(en, {
   'API de pagos': 'Payments API',
   'Banco': 'Bank',
   'confirma el pago': 'confirms the payment',
-  'autorizar cargo': 'authorise charge',
-  'autorizado': 'authorised',
+  'autorizar cargo': 'authorize charge',
+  'autorizado': 'authorized',
   'muestra el recibo': 'shows the receipt',
   'Lanzamiento del producto': 'Product launch',
   'Público': 'Audience',
@@ -1328,7 +1328,7 @@ Object.assign(en, {
   'INSERT cliente': 'INSERT customer',
   'muestra la confirmación': 'shows the confirmation',
   'Proceso (BPMN)': 'Process (BPMN)',
-  'Externos en gris': 'External in grey',
+  'Externos en gris': 'External in gray',
   'Servicios sin repo': 'Services without repo',
 } satisfies Record<string, string>);
 
@@ -1344,4 +1344,151 @@ Object.assign(en, {
   'sin acceso': 'no access',
   'sin conexión — los cambios se sincronizarán': 'offline — changes will sync',
   'Abierto con la copia de este navegador; se sincroniza al volver la conexión': 'Opened from this browser’s copy; it syncs when the connection is back',
+} satisfies Record<string, string>);
+
+// ==== QA2 servidor (sesiones y claves, portada sin cuenta, documentación, accesibilidad)
+Object.assign(en, {
+  'Escribe al menos 2 letras para buscar.': 'Type at least 2 letters to search.',
+  // Sesiones y claves (8, 9, 52, 54)
+  'Revocar también las claves API': 'Also revoke API keys',
+  'Sesiones': 'Sessions',
+  '¿Cerrar todas las sesiones?': 'Sign out of all sessions?',
+  'Cierra la sesión en todos los navegadores, incluido este, y desconecta al momento los espacios que tengan abiertos.': 'Signs out in every browser, this one included, and immediately disconnects the workspaces they have open.',
+  'Se cierra la sesión en todos los navegadores, también en este, y los espacios abiertos se desconectan al momento. Tus claves API también se revocan.': 'You will be signed out in every browser, this one too, and open workspaces disconnect immediately. Your API keys are revoked as well.',
+  'Se cierra la sesión en todos los navegadores, también en este, y los espacios abiertos se desconectan al momento. Tus claves API siguen funcionando.': 'You will be signed out in every browser, this one too, and open workspaces disconnect immediately. Your API keys keep working.',
+  'Las demás sesiones se cierran siempre y sus espacios abiertos se desconectan. Los agentes y scripts que usen tus claves dejarán de tener acceso si las revocas.': 'Your other sessions are always closed and their open workspaces disconnect. Agents and scripts using your keys lose access if you revoke them.',
+  'Contraseña cambiada. Se han cerrado las demás sesiones y revocado tus claves API.': 'Password changed. Your other sessions were closed and your API keys revoked.',
+  'La contraseña necesita al menos 8 caracteres que no sean espacios': 'The password needs at least 8 characters that are not spaces',
+  'La contraseña nueva tiene que ser distinta de la actual': 'The new password must be different from the current one',
+  'Al restablecer una contraseña, revocar también las claves API de esa cuenta': 'When resetting a password, also revoke that account’s API keys',
+  'Se cerrarán sus sesiones (sus espacios abiertos se desconectan), se revocarán sus claves API y tendrás que darle la contraseña temporal.': 'Their sessions will be closed (open workspaces disconnect), their API keys revoked, and you will have to give them the temporary password.',
+  'Se cerrarán sus sesiones (sus espacios abiertos se desconectan) y tendrás que darle la contraseña temporal. Sus claves API seguirán funcionando.': 'Their sessions will be closed (open workspaces disconnect) and you will have to give them the temporary password. Their API keys will keep working.',
+  'Se ha cerrado tu sesión': 'Your session has ended',
+  'Se cerró la sesión en este navegador (desde aquí o desde otro, o al cambiar la contraseña). Lo que ves ya no se sincroniza: entra de nuevo para seguir.': 'You were signed out in this browser (from here or another browser, or because the password changed). What you see no longer syncs: sign in again to continue.',
+  'Quien lo administra lo ha borrado del servidor. Lo que ves ya no se sincroniza y no se puede seguir editando.': 'Its owner deleted it from the server. What you see no longer syncs and can no longer be edited.',
+  // Formularios de cuenta (29)
+  'Revisa: {fields}': 'Check: {fields}',
+  'Escribe un correo completo, por ejemplo nombre@dominio.com': 'Enter a full email address, for example name@domain.com',
+  'Escribe tu nombre': 'Enter your name',
+  // Enlaces caducados (51), renombrar en el servidor (27), subir sin sesión (67), historial (50)
+  'Este enlace ya no sirve': 'This link no longer works',
+  'No se pudo cambiar el nombre en el servidor': 'Could not rename the workspace on the server',
+  'Sin sesión no se puede subir': 'You need to be signed in to upload',
+  'El espacio sigue guardado en este navegador. Entra o crea una cuenta cuando quieras subirlo.': 'The workspace is still saved in this browser. Sign in or create an account whenever you want to upload it.',
+  'Manual, sin etiqueta': 'Manual, no label',
+  // Portada e inicio sin cuenta (15, 25, 47, 56)
+  'Otras formas de empezar': 'Other ways to start',
+  'Desde una plantilla': 'From a template',
+  'Importar un fichero…': 'Import a file…',
+  'Lo que crees aquí se guarda en el servidor, en tu cuenta.': 'What you create here is saved on the server, in your account.',
+  'Sin registro: lo que crees se guarda en este navegador y funciona sin conexión.': 'No sign-up: what you create is saved in this browser and works offline.',
+  'Pausar el pase de vistas': 'Pause the view slideshow',
+  'Reanudar el pase de vistas': 'Resume the view slideshow',
+  'Pausar': 'Pause',
+  'Reanudar': 'Resume',
+  'Sin conexión con el servidor. Los espacios del servidor que abriste en este navegador siguen disponibles; los cambios se sincronizan al volver la red.': 'No connection to the server. The server workspaces you opened in this browser are still available; changes sync when you are back online.',
+  // Recorrido en pantallas táctiles (42)
+  'Toca «Añadir» y elige un tipo para crear un elemento en el lienzo. En la pestaña Modelo están los que ya existen, para reutilizarlos en esta vista.': 'Tap “Add” and pick a type to create an element on the canvas. The Model tab lists the existing ones, to reuse them in this view.',
+  'Arrastra con el dedo para mover elementos y pellizca para el zoom. En «Más» están la búsqueda y el resto de acciones.': 'Drag with your finger to move elements and pinch to zoom. “More” has search and the other actions.',
+  'Toca un elemento y arrastra desde uno de sus puntos hasta otro. Solo se ofrecen las relaciones válidas en la notación de la vista.': 'Tap an element and drag from one of its dots to another element. Only the relationships valid in the view’s notation are offered.',
+  'Mantén pulsado un elemento y elige «Abrir en otra dimensión» para llevarlo a una vista BPMN, de estados, C4… Es el mismo elemento en todas.': 'Long-press an element and choose “Open in another dimension” to take it to a BPMN, state, C4… view. It is the same element in all of them.',
+} satisfies Record<string, string>);
+
+// ==== QA2 paneles (menús contextuales, paleta y vistas con teclado, pestañas, compartir en solo lectura)
+Object.assign(en, {
+  'Secciones del inspector': 'Inspector sections',
+  'Secciones del espacio': 'Workspace sections',
+  'Compartir en solo lectura…': 'Share read-only…',
+  'Para enseñar esta vista a alguien en solo lectura, usa el botón Compartir de la barra superior (espacios del servidor).': 'To show this view to someone read-only, use the Share button in the top bar (server workspaces).',
+  'Borrar la vista (Supr con la vista enfocada)': 'Delete the view (Del with the view focused)',
+} satisfies Record<string, string>);
+
+// ==== QA2 idioma (fallos 11, 12, 13, 24, 26, 43, 44, 45, 80, 81)
+// Campos de los packs (etiquetas, opciones `select`, ayudas), mensajes del núcleo/io/layout y referencia de la API con
+// errores del servidor: diccionarios aparte, como `en-docs`.
+import { enFields } from './en-fields';
+import { enMessages } from './en-messages';
+import { enApi } from './en-api';
+Object.assign(en, enFields, enMessages, enApi);
+Object.assign(en, {
+  // Plurales (`tn`): singular y plural son claves distintas
+  '{n} respuesta': '{n} reply',
+  '{n} nodo': '{n} node',
+  'Importado desde {format} con {n} aviso': 'Imported from {format} with {n} warning',
+  '{what}: {n} aviso': '{what}: {n} warning',
+  // Último paso del recorrido (no confundir con el pseudoestado «Terminar» → Terminate)
+  'Finalizar': 'Finish',
+  // Título de la pestaña de un espacio sin nombre
+  'Sin nombre': 'Untitled',
+} satisfies Record<string, string>);
+
+// ==== QA2 import-export (fallos 5, 6, 7, 34–41, 57–60, 64, 82)
+Object.assign(en, {
+  // Errores de ficheros que no se pueden leer (io: detect.ts)
+  'El fichero «{name}» está vacío.': 'The file “{name}” is empty.',
+  '«{name}» no es un fichero de texto (parece binario). Los formatos admitidos son JSON, XML, YAML o Mermaid.': '“{name}” is not a text file (it looks binary). Supported formats are JSON, XML, YAML or Mermaid.',
+  '«{name}» es JSON pero está incompleto: termina antes de tiempo (línea {line}). ¿Se cortó al copiarlo o descargarlo?': '“{name}” is JSON but incomplete: it ends too early (line {line}). Was it cut off while copying or downloading?',
+  '«{name}» es JSON pero está mal formado en la línea {line}, columna {col}: {detail}': '“{name}” is JSON but malformed at line {line}, column {col}: {detail}',
+  '«{name}» es JSON válido, pero no corresponde a ningún formato conocido (all-draw, Drawer, Structurizr, XState u OpenAPI).': '“{name}” is valid JSON, but it does not match any known format (all-draw, Drawer, Structurizr, XState or OpenAPI).',
+  '«{name}» es un diagrama de draw.io: all-draw puede exportar a draw.io, pero no importarlo.': '“{name}” is a draw.io diagram: all-draw can export to draw.io, but not import it.',
+  '«{name}» es XML con raíz <{root}>, que no es Archi, ArchiMate Open Exchange ni BPMN 2.0.': '“{name}” is XML with root <{root}>, which is not Archi, ArchiMate Open Exchange or BPMN 2.0.',
+  '«{name}» parece Structurizr DSL; exporta el espacio a JSON desde Structurizr e importa ese JSON.': '“{name}” looks like Structurizr DSL; export the workspace to JSON from Structurizr and import that JSON.',
+  'No se reconoce el formato de «{name}». Formatos admitidos: all-draw, Drawer, Archi, ArchiMate Open Exchange, BPMN 2.0, Structurizr JSON, XState, Mermaid y OpenAPI.': 'The format of “{name}” is not recognized. Supported formats: all-draw, Drawer, Archi, ArchiMate Open Exchange, BPMN 2.0, Structurizr JSON, XState, Mermaid and OpenAPI.',
+  '«{name}» parece {format}, pero el XML está incompleto: termina en la línea {line} sin cerrar {tags}. ¿Se cortó al copiarlo o descargarlo?': '“{name}” looks like {format}, but the XML is incomplete: it ends at line {line} without closing {tags}. Was it cut off while copying or downloading?',
+  '«{name}» parece {format}, pero el XML está mal formado en la línea {line}, columna {col}: {detail}': '“{name}” looks like {format}, but the XML is malformed at line {line}, column {col}: {detail}',
+  '«{name}» parece {format}, pero el JSON está incompleto: termina antes de tiempo (línea {line}).': '“{name}” looks like {format}, but the JSON is incomplete: it ends too early (line {line}).',
+  '«{name}» parece {format}, pero el JSON está mal formado en la línea {line}, columna {col}: {detail}': '“{name}” looks like {format}, but the JSON is malformed at line {line}, column {col}: {detail}',
+  '«{name}» parece {format}, pero no se pudo leer: {detail}': '“{name}” looks like {format}, but it could not be read: {detail}',
+  'El importador BPMN no está disponible: {detail}': 'The BPMN importer is not available: {detail}',
+  // Mermaid (io: mermaid.ts)
+  'La transición «{from}» → «{to}» une estados de compuestos distintos: Mermaid no lo admite y puede dibujarla fuera de ellos': 'The transition “{from}” → “{to}” joins states of different composite states: Mermaid does not support it and may draw it outside them',
+  'La vista «{view}» ({notation}) no tiene equivalente en Mermaid: se exporta como flowchart (cajas y flechas, sin la semántica de la notación)': 'The view “{view}” ({notation}) has no Mermaid equivalent: it is exported as a flowchart (boxes and arrows, without the notation’s semantics)',
+  'El mensaje de creación «{text}» se exporta como síncrono (Mermaid exige declarar el participante en ese punto)': 'The create message “{text}” is exported as synchronous (Mermaid requires declaring the participant at that point)',
+  'El fragmento «{kind}» no existe en Mermaid; se omite (sus mensajes sí se exportan)': 'The “{kind}” fragment does not exist in Mermaid; it is skipped (its messages are exported)',
+  '«{name}» no es una pieza de secuencia y no se exporta': '“{name}” is not a sequence element and is not exported',
+  '«{name}» no es UML; se exporta como clase': '“{name}” is not UML; it is exported as a class',
+  'La relación con el paquete «{name}» no tiene equivalente en Mermaid; se omite': 'The relationship with the package “{name}” has no Mermaid equivalent; it is skipped',
+  '`end` sin bloque abierto': '`end` without an open block',
+  'Los diagramas Mermaid «{kind}» no se pueden importar; se admiten flowchart/graph, stateDiagram, sequenceDiagram y classDiagram.': 'Mermaid “{kind}” diagrams cannot be imported; flowchart/graph, stateDiagram, sequenceDiagram and classDiagram are supported.',
+  'El texto no parece un diagrama Mermaid: la primera línea debería ser flowchart, graph, stateDiagram-v2, sequenceDiagram o classDiagram (es «{line}»).': 'The text does not look like a Mermaid diagram: the first line should be flowchart, graph, stateDiagram-v2, sequenceDiagram or classDiagram (it is “{line}”).',
+  // Menú Importar / Exportar
+  'Deshacer importación': 'Undo import',
+  'Algunas partes del fichero no tienen equivalente exacto en all-draw.': 'Some parts of the file have no exact equivalent in all-draw.',
+  'No hay nada que exportar': 'Nothing to export',
+  'El espacio no tiene vistas.': 'The workspace has no views.',
+  'El espacio no tiene elementos ArchiMate.': 'The workspace has no ArchiMate elements.',
+  'El espacio no tiene elementos C4.': 'The workspace has no C4 elements.',
+  'El espacio no tiene vistas BPMN.': 'The workspace has no BPMN views.',
+  'La vista «{name}» está vacía.': 'The view “{name}” is empty.',
+} satisfies Record<string, string>);
+
+// ==== QA2 lienzo (conectar, selector de relación, compartimentos, accesibilidad de React Flow, vista vacía)
+Object.assign(en, {
+  'No hay relaciones válidas de «{from}» a «{to}» en {notation}': 'No valid relationship from “{from}” to “{to}” in {notation}',
+  'En BPMN, el flujo de secuencia no sale de su pool y el de mensaje solo une pools distintas.': 'In BPMN, a sequence flow stays inside its pool and a message flow only joins different pools.',
+  'Al revés sí: {list}.': 'The other way round, yes: {list}.',
+  '«{from}» puede conectarse con: {list}.': '“{from}” can connect to: {list}.',
+  '«{from}» no puede ser origen de ninguna relación en {notation}.': '“{from}” cannot be the source of any relationship in {notation}.',
+  'Nombre repetido': 'Duplicate name',
+  'Clave primaria': 'Primary key',
+  'hacia arriba': 'up',
+  'hacia abajo': 'down',
+  'a la izquierda': 'left',
+  'a la derecha': 'right',
+  'Pulsa Intro o Espacio para seleccionar un nodo. Supr lo quita de esta vista y Escape cancela.': 'Press Enter or Space to select a node. Delete removes it from this view and Escape cancels.',
+  'Pulsa Intro o Espacio para seleccionar un nodo; después, las flechas lo mueven. Supr lo quita de esta vista y Escape cancela.': 'Press Enter or Space to select a node; then the arrow keys move it. Delete removes it from this view and Escape cancels.',
+  'Nodo movido {dir}. Nueva posición: x {x}, y {y}': 'Node moved {dir}. New position: x {x}, y {y}',
+  'Pulsa Intro o Espacio para seleccionar una relación. Supr la quita de esta vista y Escape cancela.': 'Press Enter or Space to select a relationship. Delete removes it from this view and Escape cancels.',
+  'Controles del lienzo': 'Canvas controls',
+  'Acercar': 'Zoom in',
+  'Alejar': 'Zoom out',
+  'Bloquear o desbloquear la edición': 'Lock or unlock editing',
+  'Minimapa': 'Minimap',
+  'Punto de conexión': 'Connection point',
+  'Vista «{view}» de «{name}»': '{view} view of “{name}”',
+  'Describe aquí «{name}» con esta notación: arrastra tipos de la paleta (por ejemplo, {example}) y conéctalos.': 'Describe “{name}” here with this notation: drag types from the palette (for example, {example}) and connect them.',
+  'Colocar «{name}» en esta vista': 'Place “{name}” in this view',
+  'Vista vacía': 'Empty view',
+  'Esta vista aún no tiene elementos.': 'This view has no elements yet.',
+  'Arrastra aquí un tipo de la paleta (por ejemplo, {example}) o pulsa Ctrl+K para buscar.': 'Drag a type from the palette here (for example, {example}) or press Ctrl+K to search.',
 } satisfies Record<string, string>);

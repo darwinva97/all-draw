@@ -10,7 +10,7 @@ import * as syncProtocol from 'y-protocols/sync';
 import { makeApi } from './helpers';
 import { authorizeConnection, makeHasher } from '../src/auth';
 import { MSG_SYNC, WS_DELETED, WS_REVOKED, WS_ROLE_CHANGED, attachConnection, revokeConnections, type SyncSocket } from '../src/ysync';
-import type { ConnIdentity } from '../src/docs';
+import { sessionIdOf, type ConnIdentity } from '../src/docs';
 
 const PW = 'contraseña-larga';
 type T = ReturnType<typeof makeApi>;
@@ -32,7 +32,9 @@ describe('revocar accesos cierra los WebSockets abiertos', () => {
     const id = (await a.api.post('/api/workspaces', { name: 'S' })).body.id as string;
     const link = (await a.api.post(`/api/workspaces/${id}/links`, { role: 'viewer' })).body.token as string;
     const ctx = { store: t.store, hash: makeHasher(null) };
-    expect(await authorizeConnection(ctx, a.token, id)).toEqual({ role: 'owner', identity: { userId: a.user.id, linkToken: null } });
+    expect(await authorizeConnection(ctx, a.token, id)).toEqual({ role: 'owner', identity: { userId: a.user.id, linkToken: null, sessionId: sessionIdOf(await ctx.hash(a.token)), keyId: null } });
+    const key = (await a.api.post('/api/keys', { name: 'agente' })).body as { id: string; key: string };
+    expect(await authorizeConnection(ctx, key.key, id)).toEqual({ role: 'owner', identity: { userId: a.user.id, linkToken: null, sessionId: null, keyId: key.id } });
     expect(await authorizeConnection(ctx, link, id)).toEqual({ role: 'viewer', identity: { userId: null, linkToken: link } });
     expect(await authorizeConnection(ctx, null, id)).toMatchObject({ close: 4401 });
     await t.close();

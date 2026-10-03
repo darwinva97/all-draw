@@ -21,16 +21,17 @@ If you are signed in, **New workspace on the server** and **Import…** create s
 
 ## Creating an account and signing in {#cuenta}
 
-![Dialog to sign in or create an account](../img/02-entrar.png)
+![Dialog to sign in or create an account (Spanish interface)](../img/02-entrar.png)
 
-1. On the home screen, press **Sign in / register**.
+1. On the home screen, press **Sign in / register** (top right). If you do not have any workspace yet, you will see
+   the all-draw landing page instead of the home screen: there the button is called **Sign in**.
 2. If you already have an account, type your email and password and press **Sign in**.
 3. If not, press **I don't have an account**, fill in email, name and a password of **at least 8 characters**, and press
    **Register**.
 
 Depending on how the server is set up, registration may be open, require an **Invite code** (ask whoever runs the
 server), or be closed ("Registration is closed on this server."). Your session lasts 30 days from the last time you use
-the app; to leave, press **sign out** next to your name on the home screen.
+the app; to leave, open the menu under your name (top right) and press **Sign out**.
 
 ## Uploading a local workspace to the server {#subir}
 
@@ -50,14 +51,17 @@ Each person has a role in each server workspace:
 
 | Role | What they can do |
 |---|---|
-| `viewer` | See every view, search, export, read comments and follow changes live. Cannot modify anything. |
-| `editor` | Everything above, plus editing: drawing, changing data, using the Workspace panel, commenting, importing and restoring history snapshots. |
-| `owner` | Everything above, plus **Share** (create and revoke links), deleting the workspace and deleting snapshots. |
+| **read-only** | See every view, search, export, read comments and follow changes live. Cannot modify anything. |
+| **can edit** | Everything above, plus editing: drawing, changing data, using the Workspace panel, commenting, importing and restoring history snapshots. |
+| **owner** | Everything above, plus **Share** (create and revoke links), deleting the workspace and deleting snapshots. |
+
+In the [API](agentes-y-api.md) the same roles are called `viewer`, `editor` and `owner`.
 
 - The **owner** is whoever creates (or uploads) the workspace.
 - Server **administrators** see every workspace with owner permissions. The first user to register on a server is an
   administrator.
-- Your role appears in the bar, next to the connection status (for example, `● online · editor`).
+- Your role appears in the bar, next to the connection status (for example, `● online · can edit`), and in the
+  **On the server** list on the home screen.
 
 From the interface you share with **links**. Giving a role to a specific account (members) or transferring ownership is
 done through the API for now (`PUT /api/workspaces/:id/members/:userId` with `{ "role": "editor" }`); see
@@ -67,7 +71,7 @@ done through the API for now (`PUT /api/workspaces/:id/members/:userId` with `{ 
 
 Only the owner sees the **Share** button.
 
-![Share dialog with an edit link and a read-only link](../img/10-compartir.png)
+![Share dialog with an edit link and a read-only link (Spanish interface)](../img/10-compartir.png)
 
 1. Open the workspace (it must be on the server) and press **Share**.
 2. Choose what you want the other person to be able to do:
@@ -102,19 +106,19 @@ offline. Revoking does not delete anything that person may have exported or copi
 
 The same happens when you **remove a member**, when that person's **account is deleted** and when the **workspace is
 deleted** (then the notice is "This workspace has been deleted"). If a member's **role changes** (for example from
-`editor` to `viewer`), their connection is re-established on its own with the new role: they see "Your permissions in
-this workspace have changed" and, if they become a viewer, they stop being able to edit right away.
+**can edit** to **read-only**), their connection is re-established on its own with the new role: they see "Your
+permissions in this workspace have changed" and, if they become read-only, they stop being able to edit right away.
 
 ## Presence {#presencia}
 
-In a server workspace the bar shows a coloured circle with initials for each connected person (yours first). Hover over
+In a server workspace the bar shows a colored circle with initials for each connected person (yours first). Hover over
 it to see who it is and which view they are in. If there are more than six of you, "+*N*" is shown.
 
 When you are in the same view, you also see their **cursor**, with their name, moving on the canvas.
 
 How each person appears:
 
-- **Signed in**, with their **account name** and a fixed colour (the same on every reload and on every device). It is
+- **Signed in**, with their **account name** and a fixed color (the same on every reload and on every device). It is
   also the signature of their comments.
 - **With a link and no account**, as "Anonymous" followed by a number. That name is generated the first time and saved
   in the browser, so it does not change when reloading; it is the same one used to sign their comments. If you want to
@@ -142,7 +146,7 @@ Every server workspace you open has a **copy in your browser**. If the network d
 all-draw can be installed as an app (PWA) and starts even without a network. Offline you can open and edit all your
 **local workspaces** and also the **server workspaces you have already opened in that browser**:
 
-1. The saved copy opens with the last permission you had (if you were a viewer, it stays read-only).
+1. The saved copy opens with the last permission you had (if you were read-only, it stays read-only).
 2. The bar shows `○ offline — changes will sync`. **Share** and **History** are not available until the network
    returns.
 3. As soon as the connection returns your permissions are checked, it connects and everything syncs; the status
@@ -158,7 +162,7 @@ server" and you can **Retry** when it returns. If you are going to travel, open 
 
 ## Read-only {#solo-lectura}
 
-With a read-only link or the `viewer` role, the editor opens in **read-only mode**:
+With a read-only link or the **read-only** role, the editor opens in **read-only mode**:
 
 - the palette, the **Workspace** button, undo/redo, snap to grid and the import option do not appear;
 - the inspector shows the data but does not let you change it;
@@ -170,10 +174,14 @@ and a read-only link only allows reading. See [Agents and API](agentes-y-api.md)
 
 ## Your account {#ajustes-cuenta}
 
-When you are signed in, the home screen shows your name followed by **API keys** and **sign out**. **API keys** opens
-the **Account** screen (`#/keys`).
+When you are signed in, your name appears in the top-right corner. Clicking it opens the account menu, with your email
+and two options:
 
-![Account screen with API keys](../img/12-claves-api.png)
+- **Account and API keys**: opens the **Account** screen (`#/keys`).
+- **Sign out**: ends the session in this browser. If you had a server workspace open in another tab of this browser,
+  it is disconnected right away.
+
+![Account screen with API keys (Spanish interface)](../img/12-claves-api.png)
 
 It has these sections:
 
@@ -187,6 +195,24 @@ It has these sections:
 - **Sign out everywhere**: ends your session in every browser, **including this one**, and takes you back to the home
   screen. Use it if you signed in on someone else's computer or think someone is using your account.
 
+### What happens when sessions are closed {#cerrar-sesiones}
+
+**Change password**, **Sign out everywhere** and a **reset** by an administrator (see
+[Server administration](#administracion)) close the sessions **and disconnect right away** the server workspaces open
+in those browsers: whoever has them open stops receiving and sending changes and has to sign in again. Anything not yet
+sent does not reach the server.
+
+All three offer the **Also revoke API keys** checkbox, ticked by default, so the agents and scripts that use your keys
+lose access too. Untick it only if you are sure your keys have not leaked (for example, if you just want to end the
+session on a borrowed computer).
+
+**Sign out** (in the menu under your name) only affects this browser: it ends its session and disconnects the server
+workspace it had open. Your API keys keep working.
+
+> [!NOTE]
+> An API key cannot close sessions or change the password: those actions are only available with a signed-in browser
+> session. That way, whoever gets hold of a key cannot lock you out of your account.
+
 ## Server administration {#administracion}
 
 If you are an administrator, the **Account** screen also shows **Server users**: every account with its name, email,
@@ -197,7 +223,8 @@ creation date and whether it is an administrator.
 1. Go to **Account** and find that person under **Server users**.
 2. Press **Reset** next to their email and confirm.
 3. A **temporary password** appears. Copy it now (it will not be shown again) and get it to them through a secure
-   channel. Their open sessions are closed.
+   channel. Their open sessions are closed and their open workspaces are disconnected right away (see
+   [What happens when sessions are closed](#cerrar-sesiones)).
 4. The person signs in with the temporary password and changes it under **Account → Change password**.
 
 You cannot reset your own password from this list; use **Change password**.

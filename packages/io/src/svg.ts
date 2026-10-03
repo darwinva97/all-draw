@@ -10,6 +10,8 @@ import { allPorts, resolveStyle, type ArrowHead, type Element, type ElementType,
 import { cellRects, normalizeGrid, cellKey } from '@all-draw/notation-grid';
 import { figureEntry, figureOf, figureParts, iconParts, showsIcon, textInset } from '@all-draw/notation-archimate';
 import { edgePath, floatingEndpoints, type Box, type Endpoints, type Pt, type Router } from './bendpath-svg';
+import { renderSequenceSvg } from './svg-sequence';
+import { tr, trn } from './i18n';
 
 export type SvgTheme = 'light' | 'dark' | 'dual';
 
@@ -58,13 +60,13 @@ export const THEME_VARS: Record<'light' | 'dark', Record<string, string>> = {
     '--ad-bg': '#f6f7f9', '--ad-panel': '#ffffff', '--ad-border': '#e3e6ea', '--ad-text': '#1b1f24', '--ad-muted': '#6b7280', '--ad-accent': '#2563eb',
     '--ad-header': '#f3f4f6', '--ad-header-border': '#d1d5db', '--ad-cell': 'rgba(0,0,0,.02)', '--ad-cell-border': '#e5e7eb',
     '--ad-note': '#fff8c5', '--ad-visual-border': '#d4d4d8', '--ad-group': 'rgba(0,0,0,.02)',
-    '--ad-node-fill': '#ffffff', '--ad-node-stroke': '#a6a6a6', '--ad-edge': '#444444',
+    '--ad-node-fill': '#ffffff', '--ad-node-stroke': '#a6a6a6', '--ad-edge': '#444444', '--ad-ink': '#000000', '--ad-hdr-mix': '100%',
   },
   dark: {
     '--ad-bg': '#0f1115', '--ad-panel': '#1a1d23', '--ad-border': '#2b3039', '--ad-text': '#e6e8eb', '--ad-muted': '#9aa3b2', '--ad-accent': '#60a5fa',
     '--ad-header': '#20242c', '--ad-header-border': '#3a404b', '--ad-cell': 'rgba(255,255,255,.03)', '--ad-cell-border': '#2b3039',
     '--ad-note': '#3b3620', '--ad-visual-border': '#3f434b', '--ad-group': 'rgba(255,255,255,.03)',
-    '--ad-node-fill': '#1c2230', '--ad-node-stroke': '#4a5568', '--ad-edge': '#9aa3b2',
+    '--ad-node-fill': '#1c2230', '--ad-node-stroke': '#4a5568', '--ad-edge': '#9aa3b2', '--ad-ink': '#e6e8ec', '--ad-hdr-mix': '42%',
   },
 };
 
@@ -117,6 +119,13 @@ export function svgStyle(theme: SvgTheme, fontFamily: string): string {
     '.ad-header rect{fill:var(--ad-header);stroke:var(--ad-header-border)}',
     '.ad-header text{font-size:12px;font-weight:600;fill:var(--ad-text)}',
     '.ad-shape-group>.ad-shape,.ad-shape-container>.ad-shape{stroke-dasharray:4 3}',
+    '.ad-cls__stereo{font-size:11px;opacity:.8}',
+    '.ad-cls__name{font-weight:600}',
+    '.ad-cls__row{font-size:12px}',
+    '.ad-cls__detail{font-size:11px;opacity:.7}',
+    '.ad-cls__pk{font-size:9px;font-weight:700}',
+    '.ad-cls__row.is-pk .ad-cls__text{font-weight:600;text-decoration:underline}',
+    '.ad-cls__row.is-dup .ad-cls__text{fill:#b91c1c}',
     '[data-detail-view]{cursor:pointer}',
   ].join('\n');
 }
@@ -188,10 +197,101 @@ function textBlock(lines: string[], o: TextOpts): string {
 const SVG_SHAPES = new Set<Shape>(['ellipse', 'diamond', 'hexagon', 'parallelogram', 'cylinder', 'actor', 'circle', 'double-circle', 'bar']);
 const LABEL_BELOW = new Set<Shape>(['circle', 'double-circle', 'diamond', 'bar', 'actor']);
 
-/** Figura que se pinta: la del tipo, salvo la persona de C4 (`c4:Person`, tipo `actor`). Igual que `figureFor` del editor. */
-type Figure = Shape | 'person';
+/**
+ * Figura que se pinta: la del tipo, salvo la persona de C4 (`c4:Person`, tipo `actor`) y el almacén DFD
+ * (`dfd:DataStore`: dos líneas paralelas). Igual que `figureFor` del editor.
+ */
+type Figure = Shape | 'person' | 'store';
 export function figureFor(typeId: string | undefined, shape: Shape): Figure {
-  return shape === 'actor' && !!typeId && typeId.startsWith('c4:') ? 'person' : shape;
+  if (shape === 'actor' && !!typeId && typeId.startsWith('c4:')) return 'person';
+  if (shape === 'bar' && typeId === 'dfd:DataStore') return 'store';
+  return shape;
+}
+
+/** Negro o casi negro (pseudoestados): en tema oscuro se pinta con la tinta clara (`--ad-ink`). Igual que `isInk` del editor. */
+export function isInk(hex: string | undefined): boolean {
+  const m = hex ? /^#?([0-9a-f]{6})$/i.exec(hex.trim()) : null; if (!m) return false;
+  const n = parseInt(m[1]!, 16);
+  return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 < 40;
+}
+
+// ---------------------------------------------------------------- Compartimentos (réplica de editor/src/nodes/compartments.ts)
+/*
+ * Clase, interfaz, enumeración UML y entidad ER (`meta.compartments` del tipo): cabecera con «estereotipo» y nombre, y
+ * una sección por campo con una fila por entrada; los pines de las filas quedan a la altura de su fila. Misma geometría
+ * que el lienzo: si cambias algo aquí, cámbialo allí también.
+ */
+export interface CompartmentRow { text: string; detail?: string; portKey: string; pk?: boolean; dup?: boolean }
+export interface Compartments { stereotype?: string; italic: boolean; sections: CompartmentRow[][] }
+interface CompartmentSpec { sections: string[]; stereotype?: string; abstract?: string; pk?: string }
+const CMP = { pad: 5, stereo: 14, name: 18, row: 18, secPad: 3, emptySec: 10, border: 1 } as const;
+const strOf = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+const memberName = (text: string) => text.replace(/^\s*[-+#~]\s*/, '').split(/[:(\s]/)[0]!.trim().toLowerCase();
+
+export function compartmentsOf(el: Pick<Element, 'fields'>, type: ElementType | undefined): Compartments | undefined {
+  const spec = type?.meta?.compartments as CompartmentSpec | undefined;
+  if (!spec || !Array.isArray(spec.sections) || !spec.sections.length) return undefined;
+  const f = el.fields ?? {};
+  const stereotype = (spec.stereotype && strOf(f[spec.stereotype])) || strOf(type?.meta?.stereotypeDefault);
+  const pk = new Set(spec.pk && Array.isArray(f[spec.pk]) ? (f[spec.pk] as unknown[]).map(String) : []);
+  const sections = spec.sections.map(key => {
+    const v = f[key];
+    if (!Array.isArray(v)) return [];
+    const rows: CompartmentRow[] = [];
+    v.forEach((x, i) => {
+      if (typeof x === 'string') { if (x.trim()) rows.push({ text: x.trim(), portKey: `${key}[${i}]` }); }
+      else if (x && typeof x === 'object' && strOf((x as { key?: unknown }).key)) {
+        const k = String((x as { key: unknown }).key);
+        rows.push({ text: k, detail: strOf((x as { value?: unknown }).value), portKey: `${key}.${k}`, pk: pk.has(k) || undefined });
+      }
+    });
+    const seen = new Map<string, number>();
+    const names = rows.map(r => (r.text.includes('(') ? '' : memberName(r.text)));
+    names.forEach(n => { if (n) seen.set(n, (seen.get(n) ?? 0) + 1); });
+    rows.forEach((r, i) => { if (names[i] && seen.get(names[i]!)! > 1) r.dup = true; });
+    return rows;
+  });
+  return { stereotype, italic: !!(spec.abstract && f[spec.abstract] === true), sections };
+}
+
+export interface CompartmentLayout { headerH: number; sections: { y: number; h: number; rows: (CompartmentRow & { cy: number })[] }[]; height: number }
+export function compartmentLayout(c: Compartments): CompartmentLayout {
+  const headerH = CMP.pad * 2 + CMP.name + (c.stereotype ? CMP.stereo : 0);
+  let y = headerH;
+  const sections = c.sections.map(rows => {
+    const h = rows.length ? CMP.secPad * 2 + rows.length * CMP.row : CMP.emptySec;
+    const sec = { y, h, rows: rows.map((r, i) => ({ ...r, cy: y + CMP.secPad + i * CMP.row + CMP.row / 2 })) };
+    y += h;
+    return sec;
+  });
+  return { headerH, sections, height: y + CMP.border * 2 };
+}
+
+/** Cabecera, separadores y filas de un clasificador en la caja `b` (las coordenadas del layout van dentro del borde). */
+function renderCompartments(c: Compartments, l: CompartmentLayout, b: Box, label: string, textColor: string, stroke: string, strokeWidth: number): string {
+  const out: string[] = [];
+  const x0 = b.x + CMP.border, y0 = b.y + CMP.border, cx = b.x + b.w / 2;
+  const maxChars = (w: number, fs: number) => Math.max(1, Math.floor(w / (fs * 0.55)));
+  const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, Math.max(1, n - 1))}…` : t);
+  const nameY = y0 + CMP.pad + (c.stereotype ? CMP.stereo : 0) + CMP.name / 2;
+  if (c.stereotype) out.push(textBlock([`«${c.stereotype}»`], { x: cx, y: y0 + CMP.pad + CMP.stereo / 2, cls: 'ad-cls__stereo', fill: textColor, fontSize: 11, lineH: 14 }));
+  out.push(textBlock([clip(label, maxChars(b.w - 16, 13))], { x: cx, y: nameY, cls: 'ad-cls__name ad-node__label', fill: textColor, extra: c.italic ? { 'font-style': 'italic' } : undefined }));
+  for (const sec of l.sections) {
+    const sy = y0 + sec.y;
+    out.push(`<line${attrs({ x1: b.x, y1: sy, x2: b.x + b.w, y2: sy, stroke, 'stroke-width': strokeWidth })}/>`);
+    for (const r of sec.rows) {
+      const y = y0 + r.cy;
+      let x = x0 + 7;
+      const parts: string[] = [];
+      if (r.pk) { parts.push(`<text class="ad-cls__pk"${attrs({ x, y, 'dominant-baseline': 'central', fill: textColor })}>PK</text>`); x += 20; }
+      const detailW = r.detail ? Math.min(textW(r.detail, 11), (b.w - 16) * 0.45) : 0;
+      const room = b.x + b.w - 8 - x - (detailW ? detailW + 6 : 0);
+      parts.push(`<text class="ad-cls__text"${attrs({ x, y, 'dominant-baseline': 'central', fill: textColor })}>${escapeXml(clip(r.text, maxChars(room, 12)))}</text>`);
+      if (r.detail) parts.push(`<text class="ad-cls__detail"${attrs({ x: b.x + b.w - 8, y, 'text-anchor': 'end', 'dominant-baseline': 'central', fill: textColor })}>${escapeXml(clip(r.detail, maxChars(detailW, 11)))}</text>`);
+      out.push(`<g${attrs({ class: `ad-cls__row${r.pk ? ' is-pk' : ''}${r.dup ? ' is-dup' : ''}` })}>${parts.join('')}</g>`);
+    }
+  }
+  return out.join('');
 }
 
 /** Persona C4 (cabeza + cuerpo redondeado, texto dentro del cuerpo). Réplica de `personGeometry` de `shapes.tsx`. */
@@ -230,12 +330,18 @@ function shapeSvg(shape: Figure, b: Box, fill: string, stroke: string, strokeWid
   switch (shape) {
     case 'ellipse': body = `<ellipse cx="50" cy="50" rx="49" ry="49"${c}/>`; break;
     case 'circle': body = `<circle cx="50" cy="50" r="48"${c}/>`; break;
-    case 'double-circle': body = `<circle cx="50" cy="50" r="48"${c}/><circle cx="50" cy="50" r="38"${c}/>`; break;
+    case 'double-circle':
+      // Estado final (relleno de tinta): diana, anillo vacío y punto lleno, como el lienzo.
+      body = isInk(fill) || fill === 'var(--ad-ink)'
+        ? `<circle cx="50" cy="50" r="47"${attrs({ fill: 'var(--ad-node-fill)', stroke: f, 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' })}/><circle cx="50" cy="50" r="30"${attrs({ fill: f, stroke: 'none' })}/>`
+        : `<circle cx="50" cy="50" r="48"${c}/><circle cx="50" cy="50" r="38"${c}/>`;
+      break;
     case 'diamond': body = `<polygon points="50,1 99,50 50,99 1,50"${c}/>`; break;
     case 'hexagon': body = `<polygon points="25,2 75,2 98,50 75,98 25,98 2,50"${c}/>`; break;
     case 'parallelogram': body = `<polygon points="20,2 98,2 80,98 2,98"${c}/>`; break;
     case 'bar': body = `<rect x="0" y="40" width="100" height="20"${attrs({ fill: stroke, stroke, 'vector-effect': 'non-scaling-stroke' })}/>`; break;
     case 'cylinder': body = `<path d="M2,15 v70 a48,12 0 0 0 96,0 v-70"${c}/><ellipse cx="50" cy="15" rx="48" ry="12"${c}/>`; break;
+    case 'store': body = `<rect x="0" y="1" width="100" height="98"${attrs({ fill: f, stroke: 'none' })}/><path d="M0,1 H100 M0,99 H100"${attrs({ fill: 'none', stroke, 'stroke-width': strokeWidth, 'vector-effect': 'non-scaling-stroke' })}/>`; break;
     default: return '';
   }
   return `<g class="ad-shape"${attrs({ transform: `translate(${num(b.x)},${num(b.y)}) scale(${num(b.w / 100)},${num(b.h / 100)})` })}>${body}</g>`;
@@ -327,7 +433,8 @@ interface Ctx {
   store: Store; reg: NotationRegistry; viewId: string; prefix: string; bare: boolean;
   markers: Map<string, string>;
   abs: Map<string, Box>;
-  portsOf: Map<string, { port: Port; y: number }[]>;
+  /** `row`: pin de una fila de compartimento (no se dibuja; solo fija dónde sale la arista). */
+  portsOf: Map<string, { port: Port; y: number; row?: boolean }[]>;
   /** Cajas de rótulos que pueden salir de los nodos (cardinalidades y roles): entran en la caja envolvente. */
   extents: Box[];
   /** Color de las aristas sin color propio: el del editor en cada tema (`#444` claro, `#9aa3b2` oscuro). */
@@ -394,11 +501,14 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
   const person = figure === 'person';
   const isContainer = !!type?.container;
   const explicit = rule.bg ?? vn.style.fill ?? type?.color;
+  // Pseudoestados negros del tipo (inicial, final, bifurcación…): tinta del tema, clara en oscuro (negro sobre negro no se ve).
+  const ink = rule.bg === undefined && vn.style.fill === undefined && isInk(type?.color);
   // Sin color propio, el relleno sigue al tema (blanco en claro, panel en oscuro), como el editor.
-  const fill = explicit ?? 'var(--ad-node-fill)';
-  const stroke = rule.border ?? vn.style.stroke ?? (explicit ? darken(explicit, 0.35) : 'var(--ad-node-stroke)');
+  const fill = ink ? 'var(--ad-ink)' : explicit ?? 'var(--ad-node-fill)';
+  const stroke = rule.border ?? vn.style.stroke ?? (ink ? 'var(--ad-ink)' : explicit ? darken(explicit, 0.35) : 'var(--ad-node-stroke)');
   const svgShape = SVG_SHAPES.has(shape);
-  const below = LABEL_BELOW.has(shape) && !person;
+  const below = LABEL_BELOW.has(shape) && !person && figure !== 'store';
+  const cmp = compartmentsOf(el, type);
   // Etiquetas bajo la figura (círculos, rombos…): color legible sobre el contenedor que las rodea, o el del tema.
   const onParent = parentFill ? readable(parentFill) : 'var(--ad-text)';
   const textColor = rule.text ?? vn.style.text ?? (svgShape && below ? onParent : !explicit ? 'var(--ad-text)' : readable(explicit));
@@ -406,7 +516,8 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
   const fontSize = vn.style.fontSize ?? 13;
   const strokeWidth = rule.borderWidth ?? 1;
   const dash = rule.borderStyle === 'dashed' ? '6 4' : rule.borderStyle === 'dotted' ? '2 3' : (shape === 'group' || shape === 'container') ? '4 3' : undefined;
-  const label = vn.text ?? (el.name || (type?.name ?? ''));
+  // Sin nombre, una figura con la etiqueta debajo (evento, compuerta, inicial…) no repite el nombre del tipo.
+  const label = vn.text ?? (el.name || (below ? '' : (type?.name ?? '')));
   // ArchiMate: figuras e iconos de Archi (mismas `FIGURES` que el editor).
   const archi = ctx.reg.notationOf(el.typeId) === 'archimate' ? figureEntry(el.typeId) : undefined;
   const archiDef = archi ? figureOf(el.typeId, vn.style.figure === 1 ? 1 : 0) : undefined;
@@ -444,24 +555,38 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
   if (rule.accent) parts.push(`<rect${attrs({ x: b.x, y: b.y, width: rule.accentWidth ?? 4, height: b.h, fill: rule.accent })}/>`);
   if (rule.top) parts.push(`<rect${attrs({ x: b.x, y: b.y, width: b.w, height: rule.topWidth ?? 4, fill: rule.top })}/>`);
 
-  // Etiqueta
-  if (shape !== 'pool' && shape !== 'lane') {
+  // Etiqueta (los clasificadores llevan cabecera y filas)
+  if (cmp) parts.push(renderCompartments(cmp, compartmentLayout(cmp), b, label, textColor, stroke, strokeWidth));
+  else if (shape !== 'pool' && shape !== 'lane') {
     const lineH = fontSize * 1.25;
+    // `labelPosition` del nodo (importadores): `bottom` fuera, bajo la figura (datos BPMN); `top` arriba (contenedores de Archi).
+    const pos = vn.style.labelPosition;
     if (below) {
       parts.push(textBlock([label], { x: b.x + b.w / 2, y: b.y + b.h + 2 + lineH / 2, cls: 'ad-node__label', fill: textColor, fontSize }));
+    } else if (pos === 'bottom') {
+      const lines = wrapText(label, Math.max(b.w + 40, 80), fontSize);
+      parts.push(textBlock(lines, { x: b.x + b.w / 2, y: b.y + b.h + 2 + (lines.length * lineH) / 2, cls: 'ad-node__label', fill: rule.text ?? vn.style.text ?? onParent, fontSize, lineH }));
+      if (icon) parts.push(textBlock([icon], { x: b.x + b.w / 2, y: b.y + b.h / 2, cls: 'ad-node__icon', fill: textColor, fontSize: 16, lineH: 17 }));
     } else {
       const padX = 10, padY = 4;
       // Zona útil (las figuras de Archi con cabecera o pestañas laterales reservan margen).
       const area = { x: b.x + inset.left, y: b.y + inset.top, w: Math.max(fontSize, b.w - inset.left - inset.right), h: Math.max(lineH, b.h - inset.top - inset.bottom) };
       const maxW = Math.max(fontSize, area.w - padX * 2);
-      const lines = wrapText(label, maxW, fontSize);
+      // Una palabra más ancha que la caja no se parte a mitad («Manageme nt»): se reduce la letra hasta que quepa (mín. 9 px).
+      const longest = Math.max(0, ...label.split(/\s+/).map(w => w.length));
+      const fs = longest ? Math.max(9, Math.min(fontSize, Math.floor((maxW / (longest * 0.55)) * 10) / 10)) : fontSize;
+      const lh = fs * 1.25;
+      const lines = wrapText(label, maxW, fs);
       const blocks: { lines: string[]; cls: string; fontSize: number; lineH: number }[] = [];
       if (icon) blocks.push({ lines: [icon], cls: 'ad-node__icon', fontSize: 16, lineH: 17 });
-      blocks.push({ lines, cls: 'ad-node__label', fontSize, lineH });
-      if (type) blocks.push({ lines: [type.name], cls: 'ad-node__type', fontSize: 10, lineH: 13 });
+      blocks.push({ lines, cls: 'ad-node__label', fontSize: fs, lineH: lh });
+      // El tipo, solo si cabe (en cajas pequeñas, como las de Archi, se salía por debajo).
+      const used = blocks.reduce((t, k) => t + k.lines.length * k.lineH, 0) + padY * 2;
+      // Sin nombre propio la etiqueta ya es el tipo: no se repite debajo (como el lienzo).
+      if (type && label !== type.name && (isContainer || pos === 'top' || used + 14 <= area.h)) blocks.push({ lines: [type.name], cls: 'ad-node__type', fontSize: 10, lineH: 13 });
       const total = blocks.reduce((s, k) => s + k.lines.length * k.lineH, 0) + (blocks.length - 1);
       const left = isContainer;
-      let y = left ? area.y + padY + 2 : area.y + (area.h - total) / 2;
+      let y = left || pos === 'top' ? area.y + padY + 2 : area.y + (area.h - total) / 2;
       const x = left ? area.x + padX : area.x + area.w / 2;
       for (const k of blocks) {
         const h = k.lines.length * k.lineH;
@@ -479,7 +604,8 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
   if (vn.detailViewId) parts.push(`<text class="ad-node__drill"${attrs({ x: b.x + b.w - 3, y: b.y + b.h - 2, 'text-anchor': 'end', fill: textColor })}>⤵</text>`);
   // Pines
   const ports = ctx.portsOf.get(vn.id) ?? [];
-  for (const { port, y } of ports) {
+  for (const { port, y, row } of ports) {
+    if (row) continue;
     const txt = port.label ?? port.key;
     const w = textW(txt, 10) + 8, h = 14;
     const out = port.direction === 'out';
@@ -607,20 +733,32 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
     const p = n.parentNodeId ? byId.get(n.parentNodeId) : undefined;
     if (p && guard < 50) { const pb = resolve(p, guard + 1); x += pb.x; y += pb.y; }
     else if (rects && n.cell) { const c = rects.cells[cellKey(n.cell.layerId, n.cell.stageId)]; if (c) { x += c.x; y += c.y; } }
-    const b = { x, y, w: n.w, h: n.h };
+    // Clasificadores: crecen hasta que caben todas sus filas (como el lienzo).
+    const el = n.elementId ? store.get('elements', n.elementId) : undefined;
+    const cmp = el ? compartmentsOf(el, reg.elementType(el.typeId)) : undefined;
+    const b = { x, y, w: n.w, h: cmp ? Math.max(n.h, compartmentLayout(cmp).height) : n.h };
     ctx.abs.set(n.id, b);
     return b;
   };
   nodes.forEach(n => resolve(n));
+  // Secuencia: líneas de vida, activaciones, fragmentos y mensajes los pinta `svg-sequence.ts` (el resto, lo genérico).
+  const seq = renderSequenceSvg(store, reg, view, { theme, bare: ctx.bare });
+  if (seq) for (const [id, b] of seq.boxes) ctx.abs.set(id, b);
 
   // Pines visibles por nodo (posición absoluta en y)
   for (const n of nodes) {
     if (!n.elementId) continue;
     const el = store.get('elements', n.elementId); if (!el) continue;
-    const vis = visiblePorts(allPorts(el, reg.fieldsOf(el.typeId)), n);
-    if (!vis.length) continue;
+    const all = allPorts(el, reg.fieldsOf(el.typeId));
     const b = ctx.abs.get(n.id)!;
-    ctx.portsOf.set(n.id, vis.map((port, i) => ({ port, y: b.y + ((i + 1) / (vis.length + 1)) * b.h })));
+    // Filas de compartimento: su pin está a la altura de la fila (siempre, aunque no se dibuje).
+    const cmp = compartmentsOf(el, reg.elementType(el.typeId));
+    const rowY = new Map<string, number>();
+    if (cmp) for (const sec of compartmentLayout(cmp).sections) for (const r of sec.rows) rowY.set(r.portKey, b.y + CMP.border + r.cy);
+    const rows = all.filter(p => rowY.has(p.key)).map(port => ({ port, y: rowY.get(port.key)!, row: true }));
+    const vis = visiblePorts(all, n).filter(p => !rowY.has(p.key));
+    if (!vis.length && !rows.length) continue;
+    ctx.portsOf.set(n.id, [...rows, ...vis.map((port, i) => ({ port, y: b.y + ((i + 1) / (vis.length + 1)) * b.h }))]);
   }
 
   // Orden de pintado: profundidad (padres primero), luego contenedores, luego z
@@ -645,7 +783,11 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
     const header = (r: { x: number; y: number; w: number; h: number }, text: string, fill?: string, vertical = false) => {
       const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
       const lines = vertical ? [text] : wrapText(text, r.w - 8, 12);
-      g.push(`<g class="ad-header"><rect${attrs({ x: r.x, y: r.y, width: r.w, height: r.h, fill, style: fill ? `fill:${fill}` : undefined })}/>${textBlock(lines, { x: cx, y: cy, fontSize: 12, lineH: 14, fill: fill ? readable(fill) : undefined })}</g>`);
+      // Cabecera con color de capa: el color tal cual en claro y mezclado con el panel en oscuro (`--ad-hdr-mix`), con texto
+      // del tema (blanco si el color es oscuro). `style` porque la regla `.ad-header` ganaría a los atributos `fill`.
+      const tint = fill ? `fill:color-mix(in srgb, ${fill} var(--ad-hdr-mix), var(--ad-panel))` : undefined;
+      const ink = fill ? `fill:${readable(fill) === '#fff' ? '#fff' : 'var(--ad-text)'}` : undefined;
+      g.push(`<g class="ad-header"><rect${attrs({ x: r.x, y: r.y, width: r.w, height: r.h, fill, style: tint })}/>${textBlock(lines, { x: cx, y: cy, fontSize: 12, lineH: 14, extra: { style: ink } })}</g>`);
     };
     for (const [id, r] of Object.entries(rects.layers)) { const l = grid.layers.find(x => x.id === id); header(r, l?.name ?? '', l?.color); }
     for (const [id, r] of Object.entries(rects.stages)) header(r, grid.stages.find(x => x.id === id)?.name ?? '');
@@ -655,19 +797,23 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
 
   const nodeSvg: string[] = [];
   for (const n of ordered) {
+    if (seq?.nodeIds.has(n.id)) continue;
     const b = ctx.abs.get(n.id)!;
     const el = n.elementId ? store.get('elements', n.elementId) : undefined;
     if (n.elementId && !el) { nodeSvg.push(`<g class="ad-node ad-node--missing"><rect${attrs({ x: b.x, y: b.y, width: b.w, height: b.h, rx: 4, fill: '#fee2e2', stroke: '#dc2626' })}/>${textBlock(['?'], { x: b.x + b.w / 2, y: b.y + b.h / 2 })}</g>`); continue; }
     if (!el) { nodeSvg.push(renderVisualNode(ctx, n, b)); continue; }
     const type = reg.elementType(el.typeId);
-    const dimmed = (reg.notationOf(el.typeId) !== view.notationId && reg.notationOf(el.typeId) !== 'freeform' && !el.libraryId) || !reg.inViewpoint(view.notationId, view.viewpointId, el.typeId);
+    // Capas × etapas es un mapa de varias notaciones a la vez: no se atenúa nada (como en el lienzo).
+    const dimmed = !isGrid && ((reg.notationOf(el.typeId) !== view.notationId && reg.notationOf(el.typeId) !== 'freeform' && !el.libraryId) || !reg.inViewpoint(view.notationId, view.viewpointId, el.typeId));
     let pf: string | undefined, anc = n.parentNodeId ? byId.get(n.parentNodeId) : undefined, guard = 0, onPaper = false;
     while (anc && pf === undefined && guard++ < 50) { pf = explicitFill(ctx, anc); if (pf !== undefined) onPaper = isPaperContainer(ctx, anc); anc = anc.parentNodeId ? byId.get(anc.parentNodeId) : undefined; }
     nodeSvg.push(renderElementNode(ctx, n, el, type, b, dimmed, pf, onPaper));
   }
-  const edgeSvg = edges.map(e => renderEdge(ctx, e)).filter(Boolean);
+  const edgeSvg = edges.filter(e => !seq?.edgeIds.has(e.id)).map(e => renderEdge(ctx, e)).filter(Boolean);
+  if (seq) { body.push(seq.back); ctx.extents.push(...seq.extents); }
   body.push(`<g class="ad-nodes">${nodeSvg.join('')}</g>`);
   body.push(`<g class="ad-edges">${edgeSvg.join('')}</g>`);
+  if (seq) body.push(seq.front);
 
   // Marcadores (comentarios del HTML): encima de todo; varios en el mismo sitio se ponen en fila.
   const markerBoxes: Box[] = [];
@@ -706,8 +852,9 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
     const b = ctx.abs.get(n.id)!;
     const el = n.elementId ? store.get('elements', n.elementId) : undefined;
     const shape = el ? reg.elementType(el.typeId)?.shape : undefined;
-    const below = shape && LABEL_BELOW.has(shape) && figureFor(el?.typeId, shape) !== 'person' ? 22 : 0;
-    const ports = ctx.portsOf.get(n.id) ?? [];
+    const fig = shape ? figureFor(el?.typeId, shape) : undefined;
+    const below = (shape && LABEL_BELOW.has(shape) && fig !== 'person' && fig !== 'store') || n.style.labelPosition === 'bottom' ? 22 : 0;
+    const ports = (ctx.portsOf.get(n.id) ?? []).filter(p => !p.row);
     const portW = ports.length ? Math.max(...ports.map(p => textW(p.port.label ?? p.port.key, 10) + 14)) : 0;
     grow(b.x - portW, b.y - (rule_has_badge(ctx, el) ? 10 : 0), b.w + portW * 2, b.h + below);
   }
@@ -718,16 +865,19 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
   const vx = Math.floor(minX - padding), vy = Math.floor(minY - padding);
   const vw = Math.ceil(maxX + padding) - vx, vh = Math.ceil(maxY + padding) - vy;
 
-  const title = `${view.name || 'Vista'}`;
+  const title = `${view.name || tr('Vista')}`;
   const elCount = nodes.filter(n => n.elementId).length;
-  const desc = `Vista "${view.name}" (${view.notationId}${view.kind !== 'freeform' ? `, ${view.kind}` : ''}) con ${elCount} elementos y ${edges.length} relaciones.${view.doc ? ` ${view.doc}` : ''}`;
+  // Descripción accesible en el idioma inyectado (`setIoTranslator`): nombre de la notación y del tipo de vista, no sus ids.
+  const kindName = ({ grid: 'Capas × etapas', sequence: 'Secuencia', tree: 'Árbol', matrix: 'Matriz' } as Record<string, string>)[view.kind];
+  const notation = `${reg.pack(view.notationId)?.name ?? view.notationId}${kindName ? `, ${tr(kindName)}` : ''}`;
+  const desc = tr('Vista "{name}" ({notation}) con {elements} y {relations}.', { name: view.name, notation, elements: trn('{n} elemento', '{n} elementos', elCount), relations: trn('{n} relación', '{n} relaciones', edges.length) }) + (view.doc ? ` ${view.doc}` : '');
   const tId = `${prefix}-title`, dId = `${prefix}-desc`;
   const bg = opts.background ?? 'var(--ad-bg)';
   const head = ctx.bare ? '' : `<title id="${tId}">${escapeXml(title)}</title><desc id="${dId}">${escapeXml(desc)}</desc>`;
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg"${attrs({ class: 'ad-svg', viewBox: `${vx} ${vy} ${vw} ${vh}`, width: vw, height: vh, role: 'img', 'aria-labelledby': ctx.bare ? undefined : `${tId} ${dId}`, 'data-view': ctx.bare ? undefined : viewId, 'data-theme': theme === 'dual' ? undefined : theme })}>`,
     head,
-    `<style>${svgStyle(theme, fontFamily)}${markerBoxes.length ? `\n${MARKER_CSS}` : ''}</style>`,
+    `<style>${svgStyle(theme, fontFamily)}${seq ? `\n${seq.css}` : ''}${markerBoxes.length ? `\n${MARKER_CSS}` : ''}</style>`,
     `<defs>${[...ctx.markers.values()].join('')}</defs>`,
     bg === 'transparent' || bg === 'none' ? '' : `<rect class="ad-bg"${attrs({ x: vx, y: vy, width: vw, height: vh, fill: bg })}/>`,
     ...body,

@@ -24,21 +24,23 @@ servidor.
 
 ![Diálogo para entrar o crear una cuenta](img/02-entrar.png)
 
-1. En el inicio, pulsa **Entrar / registrarse**.
+1. En el inicio, pulsa **Entrar / registrarse** (arriba a la derecha). Si todavía no tienes ningún espacio, verás la
+   portada de all-draw en lugar del inicio: allí el botón se llama **Entrar**.
 2. Si ya tienes cuenta, escribe tu correo y contraseña y pulsa **Entrar**.
 3. Si no, pulsa **No tengo cuenta**, rellena correo, nombre y una contraseña de **al menos 8 caracteres**, y pulsa
    **Registrarme**.
 
 Según cómo esté configurado el servidor, el registro puede ser abierto, pedir un **Código de invitación** (pídeselo a
 quien administre el servidor) o estar cerrado ("El registro está cerrado en este servidor"). La sesión dura 30 días
-desde la última vez que usas la aplicación; para salir, pulsa **salir** junto a tu nombre en el inicio.
+desde la última vez que usas la aplicación; para salir, abre el menú de tu nombre (arriba a la derecha) y pulsa
+**Cerrar sesión**.
 
 ## Subir un espacio local al servidor {#subir}
 
 1. Entra con tu cuenta.
 2. Abre el espacio local y pulsa **Subir al servidor** en la barra del editor. También puedes hacerlo desde el
    inicio, con el botón **Subir al servidor** de ese espacio en la lista **En este navegador**.
-3. Se crea una **copia** en el servidor y se abre (su dirección pasa a ser `#/s/<id>`). Tú eres su dueño.
+3. Se crea una **copia** en el servidor y se abre (su dirección pasa a ser `#/s/<id>`). Tú eres su propietario.
 
 > [!IMPORTANT]
 > El espacio local original **sigue existiendo** en tu navegador y ya no está conectado a la copia del servidor. A
@@ -51,14 +53,17 @@ Cada persona tiene un rol en cada espacio del servidor:
 
 | Rol | Qué puede hacer |
 |---|---|
-| `viewer` (lector) | Ver todas las vistas, buscar, exportar, leer comentarios y seguir los cambios en directo. No puede modificar nada. |
-| `editor` | Todo lo anterior y además editar: dibujar, cambiar datos, usar el panel Espacio, comentar, importar y restaurar instantáneas del historial. |
-| `owner` (dueño) | Todo lo anterior y además **Compartir** (crear y revocar enlaces), borrar el espacio y borrar instantáneas. |
+| **solo lectura** | Ver todas las vistas, buscar, exportar, leer comentarios y seguir los cambios en directo. No puede modificar nada. |
+| **puede editar** | Todo lo anterior y además editar: dibujar, cambiar datos, usar el panel Espacio, comentar, importar y restaurar instantáneas del historial. |
+| **propietario** | Todo lo anterior y además **Compartir** (crear y revocar enlaces), borrar el espacio y borrar instantáneas. |
 
-- El **dueño** es quien crea (o sube) el espacio.
-- Los **administradores** del servidor ven todos los espacios con permisos de dueño. El primer usuario que se registra
+En la [API](agentes-y-api.md) los mismos roles se llaman `viewer`, `editor` y `owner`.
+
+- El **propietario** es quien crea (o sube) el espacio.
+- Los **administradores** del servidor ven todos los espacios con permisos de propietario. El primer usuario que se registra
   en un servidor es administrador.
-- Tu rol aparece en la barra, junto al estado de la conexión (por ejemplo, `● en línea · editor`).
+- Tu rol aparece en la barra, junto al estado de la conexión (por ejemplo, `● en línea · puede editar`), y en la lista
+  **En el servidor** del inicio.
 
 Desde la interfaz se comparte con **enlaces**. Dar un rol a una cuenta concreta (miembros) o transferir la propiedad
 se hace hoy por la API (`PUT /api/workspaces/:id/members/:userId` con `{ "role": "editor" }`); ver
@@ -66,7 +71,7 @@ se hace hoy por la API (`PUT /api/workspaces/:id/members/:userId` con `{ "role":
 
 ## Invitar a alguien {#invitar}
 
-Solo el dueño ve el botón **Compartir**.
+Solo el propietario ve el botón **Compartir**.
 
 ![Diálogo Compartir con un enlace de edición y otro de lectura](img/10-compartir.png)
 
@@ -102,9 +107,9 @@ inicio**; lo que tuviera sin enviar ya no llega al servidor, y la copia que guar
 conexión. Revocar no borra lo que esa persona haya podido exportar o copiar.
 
 Lo mismo ocurre al **quitar a un miembro**, al **borrar la cuenta** de esa persona y al **borrar el espacio** (en ese
-caso el aviso es «Este espacio se ha borrado»). Si a un miembro se le **cambia el rol** (por ejemplo, de `editor` a
-`viewer`), su conexión se rehace sola con el rol nuevo: ve «Tus permisos en este espacio han cambiado» y, si pasa a
-lector, deja de poder editar en ese mismo momento.
+caso el aviso es «Este espacio se ha borrado»). Si a un miembro se le **cambia el rol** (por ejemplo, de **puede editar** a
+**solo lectura**), su conexión se rehace sola con el rol nuevo: ve «Tus permisos en este espacio han cambiado» y, si
+pasa a solo lectura, deja de poder editar en ese mismo momento.
 
 ## Presencia {#presencia}
 
@@ -158,7 +163,7 @@ servidor» y podrás **Reintentar** cuando vuelva. Si vas a viajar, abre antes l
 
 ## Solo lectura {#solo-lectura}
 
-Con un enlace de lectura o el rol `viewer`, el editor se abre en **modo solo lectura**:
+Con un enlace de lectura o el rol **solo lectura**, el editor se abre en **modo solo lectura**:
 
 - no aparecen la paleta, el botón **Espacio**, deshacer/rehacer, el ajuste a rejilla ni la opción de importar;
 - el inspector muestra los datos, pero no deja cambiarlos;
@@ -170,8 +175,12 @@ usuario, y un enlace de lectura solo permite leer. Ver [Agentes y API](agentes-y
 
 ## Tu cuenta {#ajustes-cuenta}
 
-Con la sesión iniciada, en el inicio aparece tu nombre seguido de **claves API** y **salir**. **claves API** abre la
-pantalla **Cuenta** (`#/keys`).
+Con la sesión iniciada, arriba a la derecha aparece tu nombre. Al pulsarlo se abre el menú de la cuenta, con tu
+correo y dos opciones:
+
+- **Cuenta y claves API**: abre la pantalla **Cuenta** (`#/keys`).
+- **Cerrar sesión**: cierra la sesión en este navegador. Si tenías un espacio del servidor abierto en otra pestaña de
+  este navegador, se desconecta al momento.
 
 ![Pantalla Cuenta con las claves API](img/12-claves-api.png)
 
@@ -187,6 +196,24 @@ Tiene estas secciones:
 - **Cerrar todas las sesiones**: cierra tu sesión en todos los navegadores, **incluido este**, y te devuelve al
   inicio. Úsalo si has entrado en un ordenador ajeno o crees que alguien usa tu cuenta.
 
+### Qué pasa al cerrar sesiones {#cerrar-sesiones}
+
+**Cambiar contraseña**, **Cerrar todas las sesiones** y el **restablecimiento** que hace un administrador (ver
+[Administración del servidor](#administracion)) cierran las sesiones **y desconectan al momento** los espacios del
+servidor que estuvieran abiertos en esos navegadores: quien los tenga abiertos deja de recibir y de enviar cambios y
+tiene que volver a entrar. Lo que no se hubiera enviado todavía no llega al servidor.
+
+Los tres ofrecen la casilla **Revocar también las claves API**, marcada por defecto: así los agentes y scripts que
+usen tus claves también pierden el acceso. Desmárcala solo si estás seguro de que tus claves no se han filtrado (por
+ejemplo, si solo quieres cerrar la sesión de un ordenador prestado).
+
+**Cerrar sesión** (en el menú de tu nombre) solo afecta a este navegador: cierra su sesión y desconecta el espacio
+del servidor que tuviera abierto. Las claves API siguen funcionando.
+
+> [!NOTE]
+> Una clave API no puede cerrar sesiones ni cambiar la contraseña: esas acciones solo se pueden hacer con la sesión
+> iniciada en el navegador. Así, quien consiga una clave no puede echarte de tu cuenta.
+
 ## Administración del servidor {#administracion}
 
 Si eres administrador, la pantalla **Cuenta** muestra además **Usuarios del servidor**: todas las cuentas con su
@@ -197,7 +224,8 @@ nombre, correo, fecha de creación y si son administradoras.
 1. Entra en **Cuenta** y busca a esa persona en **Usuarios del servidor**.
 2. Pulsa **Restablecer** junto a su correo y confirma.
 3. Aparece una **contraseña temporal**. Cópiala ahora (no se vuelve a mostrar) y házsela llegar por un canal seguro.
-   Sus sesiones abiertas se cierran.
+   Sus sesiones abiertas se cierran y sus espacios abiertos se desconectan al momento (ver
+   [Qué pasa al cerrar sesiones](#cerrar-sesiones)).
 4. La persona entra con la contraseña temporal y la cambia en **Cuenta → Cambiar contraseña**.
 
 No puedes restablecer tu propia contraseña desde esta lista; usa **Cambiar contraseña**.
@@ -205,8 +233,8 @@ No puedes restablecer tu propia contraseña desde esta lista; usa **Cambiar cont
 ## Errores comunes {#errores-comunes}
 
 **"No veo el botón Compartir."**
-Solo lo ve el dueño, y solo en espacios del servidor. Si el espacio es local, súbelo primero con **Subir al
-servidor**. Si no eres el dueño, pídele que te mande un enlace.
+Solo lo ve el propietario, y solo en espacios del servidor. Si el espacio es local, súbelo primero con **Subir al
+servidor**. Si no eres el propietario, pídele que te mande un enlace.
 
 **"Al pulsar Subir al servidor sale «Necesitas una cuenta en el servidor»."**
 Tienes que entrar con tu cuenta antes. Vuelve al inicio (☰), pulsa **Entrar / registrarse** y repite.

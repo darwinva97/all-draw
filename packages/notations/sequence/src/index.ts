@@ -25,7 +25,7 @@ export const SEQUENCE_ELEMENT_TYPES: ElementType[] = [
     shape: 'rect', color: '#DAE8FC', icon: '⌶',
     doc: 'Participante de la interacción: actor, objeto, sistema o componente. `kind` fija el estereotipo de cabecera (Robustness: boundary/control/entity).',
     fields: [
-      { key: 'kind', label: 'Clase', kind: 'select', options: 'actor,boundary,control,entity,database,participant', required: true },
+      { key: 'kind', label: 'Tipo de participante', kind: 'select', options: 'actor,boundary,control,entity,database,participant', optionLabels: { actor: 'Actor', boundary: 'Frontera (boundary)', control: 'Control', entity: 'Entidad', database: 'Base de datos', participant: 'Participante' }, required: true },
       { key: 'type', label: 'Tipo', kind: 'text', doc: 'Clase o tipo del participante ("pedido: Pedido").' },
       { key: 'stereotype', label: 'Estereotipo', kind: 'text' },
     ],
@@ -39,12 +39,12 @@ export const SEQUENCE_ELEMENT_TYPES: ElementType[] = [
     shape: 'group', container: true, color: '#F5F5F5', icon: '⧉',
     doc: 'Fragmento combinado (alt, opt, loop, par, break, critical, ref). Contiene por anidamiento los mensajes y activaciones que agrupa.',
     fields: [
-      { key: 'kind', label: 'Operador', kind: 'select', options: 'alt,opt,loop,par,break,critical,ref', required: true },
+      { key: 'kind', label: 'Operador', kind: 'select', options: 'alt,opt,loop,par,break,critical,ref', optionLabels: { alt: 'alt (alternativas)', opt: 'opt (opcional)', loop: 'loop (bucle)', par: 'par (en paralelo)', break: 'break (salida)', critical: 'critical (región crítica)', ref: 'ref (referencia)' }, required: true },
       { key: 'condition', label: 'Condición', kind: 'text', doc: 'Guarda del operando ("[stock > 0]") o nombre del diagrama referido (ref).' },
     ],
   }),
   el('Note', 'Nota', CAT.annotations, {
-    shape: 'note', color: '#FFF2CC', icon: '🗒',
+    shape: 'note', color: '#FFF2CC', icon: '✎',
     doc: 'Comentario anclado a una línea de vida o a un mensaje (con `core:link`).',
     fields: [{ key: 'text', label: 'Texto', kind: 'textarea' }],
   }),
@@ -55,7 +55,7 @@ export const SEQUENCE_RELATION_TYPES: RelationType[] = [
     id: MESSAGE, name: 'Mensaje', category: CAT.control, line: 'solid', sourceHead: 'none', targetHead: 'arrow',
     doc: '`kind`: sync (cabeza llena), async (abierta), return (discontinua), create (a la cabecera), destroy (X). `order` fija la posición vertical.',
     fields: [
-      { key: 'kind', label: 'Clase', kind: 'select', options: 'sync,async,return,create,destroy' },
+      { key: 'kind', label: 'Tipo de mensaje', kind: 'select', options: 'sync,async,return,create,destroy', optionLabels: { sync: 'Síncrono', async: 'Asíncrono', return: 'Retorno', create: 'Creación', destroy: 'Destrucción' } },
       { key: 'order', label: 'Orden', kind: 'number', doc: 'Posición en la secuencia (1, 2, 3…).' },
       { key: 'text', label: 'Texto', kind: 'text', doc: 'Nombre de la operación o del mensaje ("crearPedido(items)").' },
     ],

@@ -141,7 +141,7 @@ function Fields({ fields }: { fields: FieldDef[] }) {
     <details className="docs-ref__fields">
       <summary>{t('Campos ({n})', { n: fields.length })}</summary>
       <table>
-        <thead><tr><th scope="col">{t('Campo')}</th><th scope="col">{t('Clave')}</th><th scope="col">{t('Clase')}</th><th scope="col">{t('Valores')}</th></tr></thead>
+        <thead><tr><th scope="col">{t('Campo')}</th><th scope="col">{t('Clave')}</th><th scope="col">{t('Clase de campo')}</th><th scope="col">{t('Valores')}</th></tr></thead>
         <tbody>
           {fields.map(f => (
             <tr key={f.key}>

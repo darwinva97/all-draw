@@ -8,6 +8,7 @@ import { useEditor } from '../context';
 import { useAnyChange } from '../hooks';
 import { searchWorkspace, type SearchAction, type SearchHit } from '../search';
 import { Icon, type IconName } from '../icons';
+import { useModal } from '../ui/modal';
 
 /** Resultados que se pintan de golpe; el resto sale con "mostrar más". */
 export const CMDK_PAGE = 200;
@@ -30,7 +31,11 @@ export function CommandPalette({ open, onClose, actions, onAction }: CommandPale
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { if (open) { setQ(''); setIdx(0); setPending(null); setTimeout(() => input.current?.focus(), 0); } }, [open]);
+  // Foco en el campo al abrir, atrapado mientras está abierta; Escape vuelve de "elige una vista" o cierra; al cerrar,
+  // el foco vuelve a donde estaba (salvo que el salto a un elemento lo lleve al lienzo).
+  const pendingRef = useRef(pending); pendingRef.current = pending;
+  const box = useModal(open, onClose, { onEscape: () => (pendingRef.current ? setPending(null) : onClose()) });
+  useEffect(() => { if (open) { setQ(''); setIdx(0); setPending(null); } }, [open]);
   const hits = useMemo(() => (open ? searchWorkspace(store, registry, q, { viewId, actions }) : []), [open, store, registry, q, viewId, actions]);
   useEffect(() => { setIdx(0); setShown(CMDK_PAGE); }, [q]);
   useEffect(() => { list.current?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' }); }, [idx]);
@@ -66,13 +71,12 @@ export function CommandPalette({ open, onClose, actions, onAction }: CommandPale
     if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(items.length - 1, i + 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
     else if (e.key === 'Enter') { e.preventDefault(); items[idx]?.onPick(); }
-    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (pending) setPending(null); else onClose(); }
   };
 
   return (
     <div className="ad-cmdk-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="ad-cmdk" role="dialog" aria-modal="true" aria-label={t('Buscar')} onKeyDown={onKey}>
-        <input ref={input} className="ad-cmdk__input" aria-label={t('Buscar elementos, vistas o acciones')} placeholder={pending ? t('«{name}» aparece en… (elige una vista)', { name: pending.label }) : t('Buscar elementos, vistas o acciones…')} value={q} onChange={e => setQ(e.target.value)} disabled={!!pending} />
+      <div ref={box} className="ad-cmdk" role="dialog" aria-modal="true" aria-label={t('Buscar')} onKeyDown={onKey}>
+        <input ref={input} data-autofocus className="ad-cmdk__input" aria-label={t('Buscar elementos, vistas o acciones')} placeholder={pending ? t('«{name}» aparece en… (elige una vista)', { name: pending.label }) : t('Buscar elementos, vistas o acciones…')} value={q} onChange={e => setQ(e.target.value)} readOnly={!!pending} aria-disabled={!!pending || undefined} />
         <div ref={list} className="ad-cmdk__list">
           {items.length === 0 && <div className="ad-empty">{t('Sin resultados para «{q}».', { q })}</div>}
           {items.slice(0, shown).map((it, i) => (

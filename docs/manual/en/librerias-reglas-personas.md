@@ -1,6 +1,6 @@
 # Libraries, rules and people
 
-Notations (ArchiMate, BPMN, C4…) come with their own element types. But every organisation also has its own
+Notations (ArchiMate, BPMN, C4…) come with their own element types. But every organization also has its own
 vocabulary: *Microservice*, *Queue*, *API*, *Team*… and wants to see at a glance what is deprecated, who is responsible
 for what, or what is still missing a connection. That is what the **Workspace** panel is for.
 
@@ -11,7 +11,7 @@ or **Esc**.
 Everything you define here belongs to the workspace: it is saved with it, travels in the `.alldraw.json` export and
 your collaborators see it instantly. In read-only mode the **Workspace** button does not appear.
 
-![Workspace panel, Rules tab](../img/09-espacio-reglas.png)
+![Workspace panel, Rules tab (Spanish interface)](../img/09-espacio-reglas.png)
 
 ## Libraries {#librerias}
 
@@ -119,7 +119,7 @@ If you delete a component, its instances remain as standalone elements.
 
 ## Rules {#reglas}
 
-A **rule** automatically styles the elements (or relationships) that meet some conditions. It is for "colouring by
+A **rule** automatically styles the elements (or relationships) that meet some conditions. It is for "coloring by
 data": seeing deprecated things in red, highlighting a team's work, flagging what has no owner… without going node by
 node, and consistently across every view.
 
@@ -142,11 +142,11 @@ node, and consistently across every view.
 
    | Option | Effect |
    |---|---|
-   | Background, Text color, Border | Node colours |
+   | Background, Text color, Border | Node colors |
    | Border width, Border style | The border line: *Solid*, *Dashed* or *Dotted* |
-   | Left stripe / Top stripe | A coloured band along the edge, with its width or height |
+   | Left stripe / Top stripe | A colored band along the edge, with its width or height |
    | Opacity | From 0 (invisible) to 1 (opaque); useful for dimming |
-   | Glow | A coloured halo around the node |
+   | Glow | A colored halo around the node |
    | Badge and Badge text | A small mark in the corner, with a short text (for example "!") |
    | Icon | An emoji or text before the name |
    | Bold, Strikethrough | Formatting of the name |
@@ -201,7 +201,7 @@ If instead of a person you use a *Team* field from your library, the condition w
 
 **4. Dashed lines for legacy integrations (on relations).**
 With **Applies to** = **Relations**, only Name, Documentation, Type, Notation, Property and Field are evaluated. For
-example, Property · key `protocol` · equals · `SOAP`, styling **Border** orange (the line colour) and **Border style**
+example, Property · key `protocol` · equals · `SOAP`, styling **Border** orange (the line color) and **Border style**
 *Dashed* (the line stroke).
 
 > [!TIP]

@@ -1,5 +1,6 @@
-import { memo, useState, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, useInternalNode, useReactFlow, type EdgeProps, type Edge } from '@xyflow/react';
+import { memo, useState, useCallback, useMemo, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, useInternalNode, useReactFlow, useStoreApi, type EdgeProps, type Edge, type InternalNode } from '@xyflow/react';
+import { labelSize, pathStops, placeLabel, rectAround, type Rect } from './label-place';
 import { floatingEndpoints } from './floating';
 import { bendPath, type Pt } from './bendpath';
 import { cardEnds, endDirection, endLabel, END_KEYS, type EndLabel, type Side } from './cardinality';
@@ -82,6 +83,31 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
 
   const fieldLabel = rel && type ? type.fields.filter(f => ['text', 'select'].includes(f.kind) && !END_KEYS.has(f.key)).map(f => rel.fields[f.key]).filter(v => typeof v === 'string' && v.trim()).join(' · ') : '';
   const label = ve.label ?? (rel?.name || fieldLabel);
+  // Etiqueta en el recorrido, sin tapar nodos ni otras etiquetas (las de aristas con id menor ya están colocadas).
+  const storeApi = useStoreApi();
+  // `useStoreApi` da un objeto por componente; `getState` es el mismo para todo el lienzo.
+  const boxes = labelBoxesOf(storeApi.getState);
+  const lowerSeen = useRef(0);
+  const myBox = useRef<Rect | null>(null);
+  const [, recheck] = useState(0);
+  const showLabel = !!(label || mappings0(rel) || p.selected || rule.badge || rule.icon);
+  if (showLabel) {
+    const stops = pathStops(path);
+    if (stops) {
+      const size = labelSize(`${label || (type?.name ?? '')}${rel?.mappings.length ? '  ' : ''}${rule.icon ? '  ' : ''}`);
+      const lookup = storeApi.getState().nodeLookup;
+      const lower: Rect[] = [];
+      for (const [id, r] of boxes) if (id < p.id) lower.push(r);
+      lowerSeen.current = lower.length;
+      const at = placeLabel(stops, size, lookup.size <= LABEL_AVOID_MAX_NODES ? obstacles(lookup, p.source, p.target) : [], lower);
+      lx = at.x; ly = at.y;
+      myBox.current = rectAround(at, size);
+      boxes.set(p.id, myBox.current);
+    }
+  } else { myBox.current = null; boxes.delete(p.id); }
+  useEffect(() => { if (myBox.current) boxes.set(p.id, myBox.current); return () => { boxes.delete(p.id); }; }, [boxes, p.id]);
+  // Al montar todas a la vez, una con id menor puede colocarse después: se recoloca una vez.
+  useEffect(() => { let n = 0; for (const id of boxes.keys()) if (id < p.id) n++; if (n !== lowerSeen.current) recheck(x => x + 1); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const dash = line === 'dashed' ? '8 5' : line === 'dotted' ? '2 4' : undefined;
   const ms = markerId(sh, color, true), mt = markerId(th, color, false);
   const mappings = rel?.mappings.length ? rel.mappings.map(m => `${m.fromPath} → ${m.toPath}`).join('\n') : '';
@@ -132,6 +158,33 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
     </>
   );
 });
+
+/** A partir de tantos nodos, la etiqueta no esquiva nodos (sería recorrerlos todos en cada arista): va en el punto medio. */
+const LABEL_AVOID_MAX_NODES = 400;
+const mappings0 = (rel: { mappings: unknown[] } | undefined) => !!rel?.mappings.length;
+/** Cajas de las etiquetas colocadas, por lienzo (almacén de React Flow) y arista. */
+const LABEL_BOXES = new WeakMap<object, Map<string, Rect>>();
+function labelBoxesOf(key: object): Map<string, Rect> {
+  let m = LABEL_BOXES.get(key); if (!m) { m = new Map(); LABEL_BOXES.set(key, m); }
+  return m;
+}
+/**
+ * Cajas de los nodos que una etiqueta no debe tapar: todos menos los que contienen a los extremos de la arista (la
+ * etiqueta de una arista dentro de una pool o de un estado compuesto va dentro de él), grupos, celdas y cabeceras.
+ */
+function obstacles(lookup: Map<string, InternalNode>, source: string, target: string): Rect[] {
+  const skip = new Set<string>();
+  for (const end of [source, target]) { let cur = lookup.get(end)?.parentId, guard = 0; while (cur && guard++ < 50) { skip.add(cur); cur = lookup.get(cur)?.parentId; } }
+  const out: Rect[] = [];
+  for (const n of lookup.values()) {
+    if (n.hidden || skip.has(n.id) || (n.type !== 'element' && n.type !== 'visual')) continue;
+    const d = n.data as { node?: { visualType?: string } };
+    if (d.node?.visualType && d.node.visualType !== 'core:note' && d.node.visualType !== 'core:label' && d.node.visualType !== 'core:image') continue;
+    const a = n.internals.positionAbsolute;
+    out.push({ x: a.x, y: a.y, w: n.measured.width ?? n.width ?? 0, h: n.measured.height ?? n.height ?? 0 });
+  }
+  return out;
+}
 
 /** Id del marcador. El de origen lleva `-s`: su `orient` (`auto-start-reverse`) difiere del de destino y los ids son globales en el documento. */
 function markerId(head: ArrowHead, color: string, start: boolean) { return `ad-m-${head}-${color.replace(/[^a-z0-9]/gi, '')}${start ? '-s' : ''}`; }

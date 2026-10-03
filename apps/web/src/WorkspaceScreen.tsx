@@ -4,17 +4,21 @@ import { listLocalWorkspaces, localWorkspaceRole, openLocalWorkspace, setLocalWo
 import { traceCoverage, type Validator } from '@all-draw/core';
 import { createRegistry, bindLibraries } from './registry';
 import { connectRoom, takeShareToken } from './share';
-import { api, setBearer, ApiError, type WorkspaceInfo, type ShareLink } from './api';
+import { api, setBearer, ApiError, ACCOUNT_KEY, cachedAccount, isNetworkError, type WorkspaceInfo, type ShareLink } from './api';
 import { ImportExport } from './ImportExport';
 import { HistoryDialog } from './History';
 import { AuthDialog, useDialog } from './Auth';
 import { LangSelect } from './App';
+import { useDocumentTitle, useWorkspaceName } from './title';
 import { HelpMenu } from './HelpMenu';
 import { roleLabel } from './Chrome';
 import { Tour, editorTourSteps, tourSeen } from './Tour';
 import { docHref } from './help';
 import { reportError } from './notify';
 import { useT, useLang } from '@all-draw/i18n';
+
+/** El inspector de vista abre el diálogo Compartir (que vive en la barra) con este evento. */
+const SHARE_EVENT = 'alldraw:share';
 import './pwa';
 
 const BASE_VALIDATORS: Validator[] = [traceCoverage];
@@ -25,14 +29,15 @@ async function loadValidators(): Promise<Validator[]> {
 }
 const docsHref = (slug: string, anchor?: string) => docHref(slug as Parameters<typeof docHref>[0], anchor);
 
-/** `noCopy`: sin red y sin copia de este espacio en el navegador (nunca se abrió aquí). */
-type OpenError = { kind: 'auth' | 'forbidden' | 'missing' | 'offline' | 'other'; detail: string; noCopy?: boolean };
-/** Acceso perdido con el espacio abierto: revocado (enlace, permiso, cuenta) o espacio borrado. */
-type Lost = 'revoked' | 'deleted';
+/** `noCopy`: sin red y sin copia de este espacio en el navegador (nunca se abrió aquí). `link`: enlace caducado o revocado. */
+type OpenError = { kind: 'auth' | 'forbidden' | 'missing' | 'offline' | 'link' | 'other'; detail: string; noCopy?: boolean };
+/** Acceso perdido con el espacio abierto: revocado (enlace, permiso, cuenta), espacio borrado o sesión cerrada. */
+type Lost = 'revoked' | 'deleted' | 'session';
 function classify(e: unknown): OpenError {
   const detail = e instanceof Error ? e.message : String(e);
   if (e instanceof ApiError) {
     if (e.network) return { kind: 'offline', detail };
+    if (e.status === 401 && (e.code === 'link_expired' || e.code === 'link_invalid')) return { kind: 'link', detail };
     if (e.status === 401) return { kind: 'auth', detail };
     if (e.status === 403) return { kind: 'forbidden', detail };
     if (e.status === 404) return { kind: 'missing', detail };
@@ -44,8 +49,7 @@ function classify(e: unknown): OpenError {
 // ---------------------------------------------------------------- identidad en presencia y comentarios
 /** Mismo almacén que el panel de comentarios del editor: nombre local (sin cuenta), generado una vez y editable. */
 const ME_KEY = 'alldraw:me';
-/** Último usuario con sesión (id y nombre): para firmar presencia y comentarios si se abre sin conexión. */
-const ACCOUNT_KEY = 'alldraw:account';
+/** Último usuario con sesión (id y nombre, `ACCOUNT_KEY`): para firmar presencia y comentarios si se abre sin conexión. */
 type Account = { id: string; name: string };
 
 /** Color estable derivado de un texto (id de usuario o nombre local): el mismo en cada recarga y en cada equipo. */
@@ -63,9 +67,6 @@ export function localMeName(generate: () => string): string {
   const name = generate();
   writeStore(ME_KEY, name);
   return name;
-}
-function cachedAccount(): Account | null {
-  try { const a = JSON.parse(readStore(ACCOUNT_KEY) ?? 'null') as Account | null; return a && typeof a.id === 'string' && typeof a.name === 'string' ? a : null; } catch { return null; }
 }
 
 /**
@@ -95,7 +96,7 @@ function useMe(enabled: boolean): PresenceMe {
 }
 
 /** Códigos de cierre del WebSocket (ver `@all-draw/server-core/ysync`). */
-const WS_LOST: Record<number, Lost> = { 4401: 'revoked', 4403: 'revoked', 4404: 'deleted', 4410: 'deleted' };
+const WS_LOST: Record<number, Lost> = { 4401: 'revoked', 4402: 'session', 4403: 'revoked', 4404: 'deleted', 4410: 'deleted' };
 const WS_ROLE_CHANGED = 4205;
 /** Cada cuánto se reintenta abrir con el servidor un espacio abierto sin conexión (además del evento `online`). */
 const OFFLINE_RETRY_MS = 15_000;
@@ -213,8 +214,12 @@ export function WorkspaceScreen({ id, mode, viewId }: { id: string; mode: 'local
   }, [id, mode, localId, registry, attempt]);
 
   useEffect(() => { if (lw && !tourSeen()) { const h = setTimeout(() => setTour(true), 700); return () => clearTimeout(h); } }, [lw]);
-  useEffect(() => { const n = lw?.store.meta().name; document.title = n ? `${n} · all-draw` : 'all-draw'; return () => { document.title = 'all-draw'; }; }, [lw]);
+  // Título de la pestaña: el nombre en vivo (renombrados propios y ajenos); antes de sincronizar, el del servidor.
+  const liveName = useWorkspaceName(lw?.store).trim();
+  const tabName = liveName && liveName !== 'Sin nombre' ? liveName : info?.name?.trim() || (liveName ? t('Sin nombre') : '');
+  useDocumentTitle(tabName ? `${tabName} · all-draw` : null);
   const retry = useCallback(() => setAttempt(a => a + 1), []);
+  const rename = useServerRename(id, mode === 'server' && !!info && info.role !== 'viewer' && !lost);
 
   if (error) return <OpenErrorScreen error={error} mode={mode} onRetry={retry} />;
   if (!lw || (mode === 'server' && !info)) return <WorkspaceSkeleton />;
@@ -230,28 +235,42 @@ export function WorkspaceScreen({ id, mode, viewId }: { id: string; mode: 'local
   };
   return (
     <EditorProvider store={lw.store} history={lw.history} registry={registry} initialViewId={initial} readOnly={readOnly} validators={validators}
-      presence={conn ? { awareness: conn.awareness, me } : undefined} docsHref={docsHref}>
-      <Editor toolbarLeft={<LeftTools />} toolbarRight={<RightTools lw={lw} id={id} mode={mode} info={info} conn={conn} offline={offline} lost={!!lost} onTour={() => setTour(true)} />} onRequestLayout={readOnly ? undefined : onLayout} />
+      presence={conn ? { awareness: conn.awareness, me } : undefined} docsHref={docsHref}
+      onShare={mode === 'server' && info?.role === 'owner' && !offline ? () => window.dispatchEvent(new Event(SHARE_EVENT)) : undefined}>
+      <Editor toolbarLeft={<LeftTools onRename={mode === 'server' ? rename : undefined} />} toolbarRight={<RightTools lw={lw} id={id} mode={mode} info={info} conn={conn} offline={offline} lost={!!lost} onTour={() => setTour(true)} />} onRequestLayout={readOnly ? undefined : onLayout} />
       {tour && !lost && <Tour steps={editorTourSteps(mode)} onClose={() => setTour(false)} />}
-      {lost && <LostAccessDialog why={lost} />}
+      {lost && <LostAccessDialog why={lost} onRetry={retry} />}
     </EditorProvider>
   );
 }
 
-/** Aviso al perder el acceso con el espacio abierto (enlace revocado, permiso quitado, espacio borrado). */
-function LostAccessDialog({ why }: { why: Lost }) {
+/**
+ * Aviso al perder el acceso con el espacio abierto (enlace revocado, permiso quitado, espacio borrado, sesión cerrada).
+ * El editor queda en solo lectura: lo que se vea ya no se guarda en el servidor.
+ */
+function LostAccessDialog({ why, onRetry }: { why: Lost; onRetry: () => void }) {
   const t = useT();
   const home = useRef<HTMLAnchorElement>(null);
+  const [auth, setAuth] = useState(false);
   useEffect(() => { home.current?.focus(); }, []);
+  const title = why === 'deleted' ? t('Este espacio se ha borrado') : why === 'session' ? t('Se ha cerrado tu sesión') : t('Ya no tienes acceso a este espacio');
+  const text = why === 'deleted'
+    ? t('Quien lo administra lo ha borrado del servidor. Lo que ves ya no se sincroniza y no se puede seguir editando.')
+    : why === 'session'
+      ? t('Se cerró la sesión en este navegador (desde aquí o desde otro, o al cambiar la contraseña). Lo que ves ya no se sincroniza: entra de nuevo para seguir.')
+      : t('Han revocado el enlace o tu permiso. Lo que ves ya no se sincroniza y los cambios que no se hubieran enviado no llegarán al servidor.');
   return (
     <div className="modal">
-      <div className="modal__box" role="alertdialog" aria-modal="true" aria-labelledby="lost-title" aria-describedby="lost-text" data-testid="lost-access">
-        <h2 id="lost-title">{why === 'deleted' ? t('Este espacio se ha borrado') : t('Ya no tienes acceso a este espacio')}</h2>
-        <p id="lost-text" className="modal__lead">{why === 'deleted'
-          ? t('Quien lo administra lo ha borrado del servidor. Lo que ves ya no se sincroniza.')
-          : t('Han revocado el enlace o tu permiso. Lo que ves ya no se sincroniza y los cambios que no se hubieran enviado no llegarán al servidor.')}</p>
-        <div className="modal__foot"><HelpLink slug="compartir-y-colaborar" /><span className="spacer" /><a ref={home} className="btn btn--primary" href="#/"><Icon name="spaces" size={14} />{t('Volver al inicio')}</a></div>
+      <div className="modal__box" role="alertdialog" aria-modal="true" aria-labelledby="lost-title" aria-describedby="lost-text" data-testid="lost-access" data-lost={why}>
+        <h2 id="lost-title">{title}</h2>
+        <p id="lost-text" className="modal__lead">{text}</p>
+        <div className="modal__foot">
+          <HelpLink slug="compartir-y-colaborar" /><span className="spacer" />
+          {why === 'session' && <button type="button" className="btn" onClick={() => setAuth(true)}><Icon name="key" size={14} />{t('Entrar')}</button>}
+          <a ref={home} className="btn btn--primary" href="#/"><Icon name="spaces" size={14} />{t('Volver al inicio')}</a>
+        </div>
       </div>
+      {auth && <AuthDialog onClose={() => { setAuth(false); void api.sessionUser().catch(() => null).then(u => { if (u) onRetry(); }); }} />}
     </div>
   );
 }
@@ -277,6 +296,7 @@ function OpenErrorScreen({ error, mode, onRetry }: { error: OpenError; mode: 'lo
   const copy: Record<OpenError['kind'], { title: string; text: string; icon: 'key' | 'cloudOff' | 'search' | 'warning' }> = {
     auth: { title: t('Entra para abrir este espacio'), text: t('Es un espacio del servidor y no hay una sesión abierta en este navegador. Entra con tu cuenta o abre el enlace que te compartieron.'), icon: 'key' },
     forbidden: { title: t('No tienes acceso a este espacio'), text: t('Pide a quien lo creó que te comparta un enlace, o entra con la cuenta que tiene acceso.'), icon: 'key' },
+    link: { title: t('Este enlace ya no sirve'), text: error.detail, icon: 'key' },
     missing: { title: t('Este espacio no existe'), text: mode === 'local' ? t('No está guardado en este navegador. Los espacios locales solo existen donde se crearon; puede que se borrasen los datos del navegador.') : t('Puede que lo hayan borrado o que el enlace esté incompleto.'), icon: 'search' },
     offline: { title: t('Sin conexión con el servidor'), text: error.noCopy && mode === 'server'
       ? t('Este espacio no se ha abierto antes en este navegador, así que no hay copia para trabajar sin conexión. Vuelve a intentarlo cuando tengas red.')
@@ -294,7 +314,7 @@ function OpenErrorScreen({ error, mode, onRetry }: { error: OpenError; mode: 'lo
         <div className="state__actions">
           {error.kind === 'auth' && <button type="button" className="btn btn--primary" onClick={() => setAuth(true)}>{t('Entrar')}</button>}
           {(error.kind === 'offline' || error.kind === 'other') && <button type="button" className="btn btn--primary" onClick={onRetry}><Icon name="replay" />{t('Reintentar')}</button>}
-          <a className={`btn ${error.kind === 'missing' || error.kind === 'forbidden' ? 'btn--primary' : ''}`} href="#/"><Icon name="spaces" />{t('Ir a mis espacios')}</a>
+          <a className={`btn ${error.kind === 'missing' || error.kind === 'forbidden' || error.kind === 'link' ? 'btn--primary' : ''}`} href="#/"><Icon name="spaces" />{t('Ir a mis espacios')}</a>
         </div>
       </div>
       {auth && <AuthDialog onClose={() => { setAuth(false); onRetry(); }} />}
@@ -302,16 +322,56 @@ function OpenErrorScreen({ error, mode, onRetry }: { error: OpenError; mode: 'lo
   );
 }
 
-function LeftTools() {
+/**
+ * Renombrar en el editor un espacio del servidor cambia también su nombre en el servidor (inicio, lista del admin,
+ * exportación): `PATCH /api/workspaces/:id` con debounce. Sin red se reintenta al volver la conexión.
+ */
+function useServerRename(id: string, enabled: boolean): (name: string) => void {
+  const t = useT();
+  const tRef = useRef(t); tRef.current = t;
+  const pending = useRef<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const send = useCallback(async (quiet = false) => {
+    const name = pending.current; if (name === null) return;
+    try { await api.renameWorkspace(id, name); if (pending.current === name) pending.current = null; }
+    catch (e) {
+      if (isNetworkError(e)) return; // se reintenta con el evento `online`
+      pending.current = null;
+      if (!quiet) reportError(e, { title: tRef.current('No se pudo cambiar el nombre en el servidor') });
+    }
+  }, [id]);
+  useEffect(() => {
+    const onOnline = () => { void send(); };
+    addEventListener('online', onOnline);
+    return () => { removeEventListener('online', onOnline); clearTimeout(timer.current); void send(true); };
+  }, [send]);
+  return useCallback((name: string) => {
+    const n = name.trim();
+    if (!enabled || !n) return;
+    pending.current = n.slice(0, 200);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => { void send(); }, 800);
+  }, [enabled, send]);
+}
+
+function LeftTools({ onRename }: { onRename?: (name: string) => void }) {
   const { store, viewId, openView, readOnly } = useEditor();
   const t = useT();
   const meta = useMeta();
   const views = useCollection('views');
+  // El nombre no se puede dejar vacío (fallo 68): mientras se escribe se acepta, pero al salir vacío vuelve el de antes.
+  const [draft, setDraft] = useState<string | null>(null);
+  const before = useRef(meta.name);
   useEffect(() => { if (viewId && meta.currentViewId !== viewId && !readOnly) store.setMeta({ currentViewId: viewId }); }, [viewId, meta.currentViewId, store, readOnly]);
   useEffect(() => { if (!viewId && views.length) openView((meta.currentViewId && store.get('views', meta.currentViewId)) ? meta.currentViewId : views[0]!.id); }, [viewId, views, meta.currentViewId, store, openView]);
+  const commit = (name: string) => { store.setMeta({ name, updatedAt: new Date().toISOString() }); onRename?.(name); };
   return <>
     <a className="btn btn--ghost btn--icon" href="#/" title={t('Todos los espacios')} aria-label={t('Todos los espacios')}><Icon name="spaces" /></a>
-    <input className="app-name" aria-label={t('Nombre del espacio')} value={meta.name} disabled={readOnly} onChange={e => store.setMeta({ name: e.target.value, updatedAt: new Date().toISOString() })} />
+    <input className="app-name" aria-label={t('Nombre del espacio')} value={draft ?? meta.name} disabled={readOnly} maxLength={200}
+      onFocus={() => { before.current = meta.name; setDraft(meta.name); }}
+      onChange={e => { const v = e.target.value; setDraft(v); if (v.trim()) commit(v); }}
+      onBlur={() => { if (!(draft ?? '').trim() && before.current.trim()) commit(before.current); setDraft(null); }}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { if (e.key === 'Escape') { setDraft(before.current); commit(before.current); } e.currentTarget.blur(); } }} />
   </>;
 }
 
@@ -319,17 +379,25 @@ function RightTools({ lw, id, mode, info, conn, offline, lost, onTour }: { lw: L
   const t = useT();
   const [status, setStatus] = useState('connecting');
   const [share, setShare] = useState(false);
+  useEffect(() => { const open = () => setShare(true); window.addEventListener(SHARE_EVENT, open); return () => window.removeEventListener(SHARE_EVENT, open); }, []);
   const [history, setHistory] = useState(false);
   const [uploading, setUploading] = useState(false);
+  /** «Subir al servidor» sin sesión: se entra aquí mismo y la subida sigue sola (fallo 67). */
+  const [authForUpload, setAuthForUpload] = useState(false);
   useEffect(() => { if (!conn) return; const h = setInterval(() => setStatus(conn.status()), 1000); return () => clearInterval(h); }, [conn]);
   const upload = async () => {
     setUploading(true);
     try { const snap = lw.store.snapshot(); const w = await api.createWorkspace(snap.meta.name || t('Espacio'), snap); toast.success(t('Subido al servidor'), { description: t('Ahora puedes compartirlo desde «Compartir».') }); location.hash = `#/s/${w.id}`; }
     catch (e) {
       setUploading(false);
-      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) toast.error(t('Necesitas una cuenta para subirlo'), { description: t('Entra o regístrate desde el inicio y vuelve a pulsar «Subir al servidor».'), action: { label: t('Ir al inicio'), onClick: () => { location.hash = '#/'; } } });
+      if (e instanceof ApiError && e.status === 401) setAuthForUpload(true);
       else reportError(e, { title: t('No se pudo subir al servidor'), retry: () => void upload() });
     }
+  };
+  const afterAuth = async () => {
+    setAuthForUpload(false);
+    if (await api.sessionUser().catch(() => null)) void upload();
+    else toast.info(t('Sin sesión no se puede subir'), { description: t('El espacio sigue guardado en este navegador. Entra o crea una cuenta cuando quieras subirlo.') });
   };
   const state = lost ? { cls: 'is-off', text: t('sin acceso') }
     : offline ? { cls: 'is-off', text: t('sin conexión — los cambios se sincronizarán') }
@@ -347,6 +415,7 @@ function RightTools({ lw, id, mode, info, conn, offline, lost, onTour }: { lw: L
     <HelpMenu onTour={onTour} />
     {share && <ShareDialog id={id} onClose={() => setShare(false)} />}
     {history && info && <HistoryDialog id={id} role={info.role} onClose={() => setHistory(false)} />}
+    {authForUpload && <AuthDialog initialMode="register" onClose={() => void afterAuth()} />}
   </>;
 }
 

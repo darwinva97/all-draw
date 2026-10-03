@@ -49,7 +49,7 @@ aplicación tu navegador hace peticiones normales a la web (ver [infraestructura
 
 ### Contenido que guardas en el servidor {#datos-de-contenido}
 
-- **Espacios**: nombre, dueño, fechas y todo su contenido (elementos, relaciones, vistas,
+- **Espacios**: nombre, propietario, fechas y todo su contenido (elementos, relaciones, vistas,
   librerías, reglas, personas y comentarios).
 - **Miembros y enlaces compartidos**: quién tiene acceso a cada espacio, con qué rol, quién creó
   cada enlace y cuándo caduca.
@@ -116,7 +116,7 @@ sobre ti. No vendemos ni cedemos datos.
 | Cuenta | Hasta que se borre |
 | Sesión | 30 días desde el último uso; al cerrar sesión se borra |
 | Claves API | Hasta que las revoques o se borre la cuenta |
-| Espacios y comentarios | Hasta que la persona dueña los borre |
+| Espacios y comentarios | Hasta que su propietario los borre |
 | Instantáneas | Hasta 100 por espacio; las automáticas más antiguas se borran solas; todas se borran con el espacio |
 | Copias de seguridad del servidor | 30 días; después se borran solas |
 | Recuento de intentos por IP | Minutos, solo en memoria |
@@ -200,12 +200,12 @@ Datos** (https://www.aepd.es).
 
 - **Espacios locales**: en el inicio, **Borrar** junto al espacio; o borra los datos del sitio en
   tu navegador.
-- **Espacios del servidor**: la persona dueña los borra con **Borrar** en el inicio. Se borran con
+- **Espacios del servidor**: su propietario los borra con **Borrar** en el inicio. Se borran con
   ellos sus instantáneas, miembros y enlaces.
 - **Claves API y sesiones**: **Cuenta** → **Revocar** y **Cerrar todas las sesiones**.
 - **Cuenta**: **Cuenta → Tus datos → Eliminar cuenta…**, con tu contraseña. Se borran tu cuenta, tus
-  sesiones, tus claves API y tu acceso a espacios ajenos. Cada espacio tuyo pasa a su editor más
-  antiguo; los que no tienen editores se borran, y de ellos se guarda una copia final que se elimina
+  sesiones, tus claves API y tu acceso a espacios ajenos. Cada espacio tuyo pasa al miembro más antiguo
+  que **puede editar**; los que no tienen ninguno se borran, y de ellos se guarda una copia final que se elimina
   sola a los 30 días, como el resto de copias de seguridad. Si no puedes entrar, pídelo a
   `TODO(titular): email de contacto`.
 

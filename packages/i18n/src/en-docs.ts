@@ -21,7 +21,7 @@ export const enDocs: Record<string, string> = {
   "Colapsado: se abre por drill-down (`detailViewId`). Expandido: contiene nodos de flujo en la misma vista.": "Collapsed: opened via drill-down (`detailViewId`). Expanded: contains flow nodes in the same view.",
   "Subproceso disparado por su evento de inicio (`triggeredByEvent`). Sin flujos de secuencia de entrada ni de salida.": "Subprocess triggered by its start event (`triggeredByEvent`). No incoming or outgoing sequence flows.",
   "Las actividades internas se ejecutan en cualquier orden hasta la condición de fin.": "The inner activities are performed in any order until the completion condition is met.",
-  "Subproceso transaccional: doble borde; se cancela con eventos `cancel`.": "Transactional subprocess: double border; cancelled by `cancel` events.",
+  "Subproceso transaccional: doble borde; se cancela con eventos `cancel`.": "Transactional subprocess: double border; canceled by `cancel` events.",
   "Invoca un proceso global reutilizable.": "Invokes a reusable global process.",
   "Se adhiere al borde de una actividad (`attachedTo`). No interruptor = borde discontinuo. Con `compensation` se une por Association a la actividad compensadora.": "Attached to the boundary of an activity (`attachedTo`). Non-interrupting = dashed border. With `compensation`, it is linked by an Association to the compensation activity.",
   "XOR: un solo camino.": "XOR: exactly one path.",

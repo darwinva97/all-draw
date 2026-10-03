@@ -27,6 +27,7 @@ los atajos del lienzo no se disparan. Así **Supr** borra letras y no nodos.
 | **Ctrl+K** o **Ctrl+F** | Abre (o cierra) la búsqueda: elementos, vistas y acciones |
 | **?** | Abre (o cierra) el panel de atajos |
 | **Esc** | Cierra menús, paneles y diálogos; cancela el renombrado |
+| **Shift+F10** o tecla **Menú** | Abre el menú contextual de lo seleccionado en el lienzo (o el del lienzo, sin selección) |
 | **Ctrl+Z** | Deshacer |
 | **Ctrl+Y** o **Ctrl+Shift+Z** | Rehacer |
 
@@ -115,6 +116,16 @@ En los diálogos (entrar, compartir, búsqueda, atajos, Espacio…):
 | **Tab** / **Shift+Tab** | Pasa al control siguiente / anterior (el foco no sale del diálogo) |
 | **Esc** | Cierra el diálogo y devuelve el foco al botón que lo abrió |
 
+## Menús, paleta y paneles {#menus-y-paneles}
+
+| Tecla | Dónde | Qué hace |
+|---|---|---|
+| **↑** / **↓**, **Inicio** / **Fin** | Menú contextual | Recorre las opciones; **Intro** elige; **Esc** o **Tab** lo cierran y el foco vuelve al lienzo |
+| **Tab**, luego **↑** / **↓** | Paleta y lista de vistas | Entra en la lista (una sola parada de **Tab**) y se mueve por ella |
+| **Intro** o **Espacio** | Un tipo de la paleta | Lo añade en un hueco libre cerca del centro del lienzo visible (igual que un clic) |
+| **Intro** / **Supr** | Una vista de la lista | La abre / la borra (pide confirmación) |
+| **←** / **→** | Pestañas (paleta, inspector, Espacio) | Cambia de pestaña |
+
 ## Ratón {#raton}
 
 | Gesto | Dónde | Qué hace |
@@ -123,6 +134,7 @@ En los diálogos (entrar, compartir, búsqueda, atajos, Espacio…):
 | Rueda | Lienzo | Acerca o aleja |
 | Doble clic | Fondo del lienzo | Acerca |
 | Arrastrar | Desde la paleta al lienzo | Crea un nodo (o una aparición, desde la pestaña **Modelo**) |
+| Clic | Un tipo de la paleta | Lo añade en un hueco libre cerca del centro del lienzo |
 | Arrastrar | Un nodo | Lo mueve; si lo sueltas dentro de un contenedor, lo anida |
 | Arrastrar | Esquinas de un nodo seleccionado | Cambia su tamaño |
 | Arrastrar | Desde el borde inferior de un nodo hasta otro | Crea una relación (aparece el menú **Tipo de relación**) |
@@ -155,7 +167,7 @@ all-draw se adapta al tamaño de la pantalla:
 | Pellizcar | Acerca o aleja |
 | Arrastrar un nodo | Lo mueve |
 | **Mantener pulsado** un nodo (medio segundo, sin mover el dedo) | Abre el menú del nodo, igual que el clic derecho |
-| Tocar un tipo en la hoja **Añadir** | Lo añade en el centro del lienzo |
+| Tocar un tipo en la hoja **Añadir** | Lo añade en un hueco libre cerca del centro del lienzo |
 | Tocar fuera de la hoja, arrastrar su asa hacia abajo o pulsar su **×** | Cierra la hoja |
 
 En la hoja **Más** están la ruta de vistas, **Espacio**, buscar, ajuste a rejilla, tema, atajos, **Ajustar a la

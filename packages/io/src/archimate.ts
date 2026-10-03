@@ -18,6 +18,7 @@
 import { SCHEMA_VERSION, parseWorkspace, type Workspace, type Element, type Relation, type View, type ViewNode, type ViewEdge, type ElementType, type Library, type NodeStyle } from '@all-draw/core';
 import { ELEMENTS, RELATIONS } from '@all-draw/notation-archimate';
 import { parseXml, buildXml, attr, attrNum, children, child, childText, attrs, type XmlNode } from './xml';
+import { tr } from './i18n';
 
 export interface ArchimateImport { workspace: Workspace; warnings: string[] }
 export interface TextExport { text: string; warnings: string[] }
@@ -53,7 +54,7 @@ export function importArchimate(xml: string): ArchimateImport {
   const warn = (s: string) => { if (!warnings.includes(s)) warnings.push(s); };
   const doc = parseXml(xml, { arrayTags: ['folder', 'element', 'child', 'sourceConnection', 'bendpoint', 'property', 'profile', 'feature'] });
   const root = child(doc, 'archimate:model') ?? child(doc, 'model');
-  if (!root || !attr(root, 'xmlns:archimate') && !doc['archimate:model']) throw new Error('El fichero no parece un modelo de Archi (falta `archimate:model`).');
+  if (!root || !attr(root, 'xmlns:archimate') && !doc['archimate:model']) throw new Error(tr('El fichero no parece un modelo de Archi (falta `archimate:model`).'));
 
   const ws = emptyWs(attr(root, 'name') || 'Modelo ArchiMate');
   ws.meta.description = childText(root, 'purpose');
@@ -85,7 +86,7 @@ export function importArchimate(xml: string): ArchimateImport {
       const type = attr(el, 'xsi:type') ?? '';
       const local = localName(type);
       if (local === 'ArchimateDiagramModel') rawDiagrams.push({ node: el, folder: path.join('/') });
-      else if (local === 'SketchModel' || local === 'CanvasModel') warn(`La vista "${attr(el, 'name') ?? attr(el, 'id')}" es un ${local === 'SketchModel' ? 'boceto' : 'lienzo'} de Archi y no se importa`);
+      else if (local === 'SketchModel' || local === 'CanvasModel') warn(tr('La vista "{view}" es un {kind} de Archi y no se importa', { view: attr(el, 'name') ?? attr(el, 'id'), kind: tr(local === 'SketchModel' ? 'boceto' : 'lienzo') }));
       else if (local.endsWith('Relationship')) rawRelations.push({ node: el, type: local, folder: path.join('/') });
       else rawElements.push({ node: el, type: local, folder: path.join('/') });
     }
@@ -96,16 +97,16 @@ export function importArchimate(xml: string): ArchimateImport {
   // ---- elementos
   for (const { node, type, folder } of rawElements) {
     const id = attr(node, 'id');
-    if (!id) { warn(`Elemento ${type} sin id; se omite`); continue; }
+    if (!id) { warn(tr('Elemento {type} sin id; se omite', { type })); continue; }
     const typeId = `${ARCHIMATE_NS}:${type}`;
-    if (!ARCHIMATE_ELEMENT_IDS.has(typeId)) { warn(`Tipo ArchiMate desconocido "${type}" (elemento ${id}); se omite`); continue; }
-    if (ws.elements[id]) { warn(`Elemento ${id} duplicado; se conserva el primero`); continue; }
+    if (!ARCHIMATE_ELEMENT_IDS.has(typeId)) { warn(tr('Tipo ArchiMate desconocido "{type}" (elemento {id}); se omite', { type, id })); continue; }
+    if (ws.elements[id]) { warn(tr('Elemento {id} duplicado; se conserva el primero', { id })); continue; }
     const el = makeEl(id, typeId, attr(node, 'name') ?? '');
     el.doc = childText(node, 'documentation');
     el.props = readProps(node, warn, `elemento "${el.name}"`);
     if (type === 'Junction') el.fields = { junctionType: attr(node, 'type') === 'or' ? 'or' : 'and' };
     for (const p of (attr(node, 'profiles') ?? '').split(/\s+/).filter(Boolean)) {
-      if (profileIds.has(p)) el.profiles.push(p); else warn(`El elemento "${el.name}" (${id}) usa el perfil inexistente ${p}`);
+      if (profileIds.has(p)) el.profiles.push(p); else warn(tr('El elemento "{name}" ({id}) usa el perfil inexistente {profile}', { name: el.name, id, profile: p }));
     }
     if (folder) el.features = { archiFolder: folder };
     ws.elements[id] = el;
@@ -121,11 +122,11 @@ export function importArchimate(xml: string): ArchimateImport {
   };
   for (const { node, type, folder } of rawRelations) {
     const id = attr(node, 'id');
-    if (!id) { warn(`Relación ${type} sin id; se omite`); continue; }
+    if (!id) { warn(tr('Relación {type} sin id; se omite', { type })); continue; }
     const typeId = `${ARCHIMATE_NS}:${type.replace(/Relationship$/, '')}`;
-    if (!ARCHIMATE_RELATION_IDS.has(typeId)) { warn(`Relación ArchiMate desconocida "${type}" (${id}); se omite`); continue; }
+    if (!ARCHIMATE_RELATION_IDS.has(typeId)) { warn(tr('Relación ArchiMate desconocida "{type}" ({id}); se omite', { type, id })); continue; }
     const from = endOf(attr(node, 'source')), to = endOf(attr(node, 'target'));
-    if (!from || !to) { warn(`La relación ${id} (${type}) apunta a conceptos inexistentes (${attr(node, 'source')} → ${attr(node, 'target')}); se omite`); continue; }
+    if (!from || !to) { warn(tr('La relación {id} ({type}) apunta a conceptos inexistentes ({from} → {to}); se omite', { id, type, from: attr(node, 'source'), to: attr(node, 'target') })); continue; }
     const rel = makeRel(id, typeId, from, to);
     rel.name = attr(node, 'name') ?? '';
     rel.doc = childText(node, 'documentation');
@@ -139,7 +140,7 @@ export function importArchimate(xml: string): ArchimateImport {
   }
   // extremos que apuntan a relaciones que al final no se importaron
   for (const rel of Object.values(ws.relations)) {
-    for (const end of [rel.from, rel.to]) if (end.relationId && !ws.relations[end.relationId]) { warn(`La relación ${rel.id} apunta a la relación omitida ${end.relationId}; se omite`); delete ws.relations[rel.id]; }
+    for (const end of [rel.from, rel.to]) if (end.relationId && !ws.relations[end.relationId]) { warn(tr('La relación {id} apunta a la relación omitida {relation}; se omite', { id: rel.id, relation: end.relationId })); delete ws.relations[rel.id]; }
   }
 
   // ---- diagramas
@@ -156,8 +157,8 @@ export function importArchimate(xml: string): ArchimateImport {
 
     const visit = (c: XmlNode, parent: ViewNode | undefined, ax: number, ay: number) => {
       const nid = attr(c, 'id');
-      if (!nid) { warn(`Vista "${view.name}": objeto sin id; se omite`); return; }
-      if (ws.nodes[nid]) { warn(`Vista "${view.name}": nodo ${nid} duplicado; se omite`); return; }
+      if (!nid) { warn(tr('Vista "{view}": objeto sin id; se omite', { view: view.name })); return; }
+      if (ws.nodes[nid]) { warn(tr('Vista "{view}": nodo {node} duplicado; se omite', { view: view.name, node: nid })); return; }
       const type = localName(attr(c, 'xsi:type') ?? 'DiagramObject');
       const b = child(c, 'bounds');
       const w = attrNum(b, 'width', -1), h = attrNum(b, 'height', -1);
@@ -165,7 +166,7 @@ export function importArchimate(xml: string): ArchimateImport {
       if (parent) vn.parentNodeId = parent.id;
       if (type === 'DiagramObject') {
         const elId = attr(c, 'archimateElement');
-        if (!elId || !ws.elements[elId]) { warn(`Vista "${view.name}": el nodo ${nid} apunta al elemento inexistente ${elId}; se omite`); return; }
+        if (!elId || !ws.elements[elId]) { warn(tr('Vista "{view}": el nodo {node} apunta al elemento inexistente {element}; se omite', { view: view.name, node: nid, element: elId })); return; }
         vn.elementId = elId;
         if (attr(c, 'type') === '1') vn.style.figure = 1;
       } else if (type === 'Group') {
@@ -177,14 +178,18 @@ export function importArchimate(xml: string): ArchimateImport {
         const ref = attr(c, 'model');
         vn.visualType = 'core:label';
         if (ref && diagramNames.has(ref)) { vn.detailViewId = ref; vn.text = diagramNames.get(ref) ?? ''; }
-        else { warn(`Vista "${view.name}": la referencia ${nid} apunta a la vista inexistente ${ref}`); vn.text = attr(c, 'name') ?? ''; }
-      } else { warn(`Vista "${view.name}": objeto ${type} no soportado; se importa como nota`); vn.visualType = 'core:note'; vn.text = attr(c, 'name') ?? ''; }
+        else { warn(tr('Vista "{view}": la referencia {node} apunta a la vista inexistente {ref}', { view: view.name, node: nid, ref })); vn.text = attr(c, 'name') ?? ''; }
+      } else { warn(tr('Vista "{view}": objeto {type} no soportado; se importa como nota', { view: view.name, type })); vn.visualType = 'core:note'; vn.text = attr(c, 'name') ?? ''; }
       const props = readProps(c, warn, `nodo ${nid}`);
       if (Object.keys(props).length) vn.meta = { props };
       ws.nodes[nid] = vn;
       abs.set(nid, { x: ax + vn.x, y: ay + vn.y, w: vn.w, h: vn.h });
       for (const sc of children(c, 'sourceConnection')) pendingConnections.push({ node: sc, sourceNodeId: nid });
-      for (const cc of children(c, 'child')) visit(cc, vn, ax + vn.x, ay + vn.y);
+      const kids = children(c, 'child');
+      for (const cc of kids) visit(cc, vn, ax + vn.x, ay + vn.y);
+      // Archi pone el nombre arriba salvo `textPosition` 1 (centro) o 2 (abajo): en un nodo con hijos, centrado quedaría tapado.
+      const tp = attr(c, 'textPosition');
+      if (kids.length && vn.elementId && tp !== '1') vn.style.labelPosition = tp === '2' ? 'bottom' : 'top';
     };
     for (const c of children(dg, 'child')) visit(c, undefined, 0, 0);
 
@@ -192,9 +197,9 @@ export function importArchimate(xml: string): ArchimateImport {
       const eid = attr(sc, 'id'), src = attr(sc, 'source') ?? sourceNodeId, tgt = attr(sc, 'target');
       if (!eid) continue;
       const a = abs.get(src), b = tgt ? abs.get(tgt) : undefined;
-      if (!a || !b || !tgt) { warn(`Vista "${view.name}": la conexión ${eid} une objetos inexistentes o conexiones (${src} → ${tgt}); se omite`); continue; }
+      if (!a || !b || !tgt) { warn(tr('Vista "{view}": la conexión {id} une objetos inexistentes o conexiones ({from} → {to}); se omite', { view: view.name, id: eid, from: src, to: tgt })); continue; }
       const relId = attr(sc, 'archimateRelationship');
-      if (relId && !ws.relations[relId]) { warn(`Vista "${view.name}": la conexión ${eid} apunta a la relación inexistente ${relId}; se omite`); continue; }
+      if (relId && !ws.relations[relId]) { warn(tr('Vista "{view}": la conexión {id} apunta a la relación inexistente {relation}; se omite', { view: view.name, id: eid, relation: relId })); continue; }
       const edge: ViewEdge = { id: eid, viewId: id, fromNodeId: src, toNodeId: tgt, bendpoints: [], style: {} };
       if (relId) edge.relationId = relId;
       if (attr(sc, 'lineColor')) edge.style.color = attr(sc, 'lineColor');
@@ -218,13 +223,13 @@ export function exportArchimate(ws: Workspace): TextExport {
 
   // ---- elementos exportables
   const elements = Object.values(ws.elements).filter(e => {
-    if (!e.typeId.startsWith(`${ARCHIMATE_NS}:`)) { warn(`El elemento "${e.name}" (${e.id}) no es ArchiMate (${e.typeId}); se omite`); return false; }
-    if (!ARCHIMATE_ELEMENT_IDS.has(e.typeId)) { warn(`El elemento "${e.name}" (${e.id}) tiene un tipo ArchiMate desconocido (${e.typeId}); se omite`); return false; }
+    if (!e.typeId.startsWith(`${ARCHIMATE_NS}:`)) { warn(tr('El elemento "{name}" ({id}) no es ArchiMate ({type}); se omite', { name: e.name, id: e.id, type: e.typeId })); return false; }
+    if (!ARCHIMATE_ELEMENT_IDS.has(e.typeId)) { warn(tr('El elemento "{name}" ({id}) tiene un tipo ArchiMate desconocido ({type}); se omite', { name: e.name, id: e.id, type: e.typeId })); return false; }
     return true;
   });
   const elIds = new Set(elements.map(e => e.id));
   const relations = Object.values(ws.relations).filter(r => r.typeId.startsWith(`${ARCHIMATE_NS}:`) && ARCHIMATE_RELATION_IDS.has(r.typeId));
-  for (const r of Object.values(ws.relations)) if (!relations.includes(r)) warn(`La relación ${r.id} (${r.typeId}) no es ArchiMate; se omite`);
+  for (const r of Object.values(ws.relations)) if (!relations.includes(r)) warn(tr('La relación {id} ({type}) no es ArchiMate; se omite', { id: r.id, type: r.typeId }));
   const relIds = new Set(relations.map(r => r.id));
   const okEnd = (e: Relation['from']) => (e.elementId ? elIds.has(e.elementId) : e.relationId ? relIds.has(e.relationId) : false);
   pruneRelations(relations, relIds, okEnd, warn);
@@ -273,8 +278,8 @@ export function exportArchimate(ws: Workspace): TextExport {
 
   // ---- vistas
   const views = Object.values(ws.views).filter(v => {
-    if (v.notationId !== ARCHIMATE_NS) { warn(`La vista "${v.name}" es de la notación ${v.notationId}; se omite`); return false; }
-    if (v.kind === 'grid') { warn(`La vista "${v.name}" es una rejilla; se omite`); return false; }
+    if (v.notationId !== ARCHIMATE_NS) { warn(tr('La vista "{view}" es de la notación {notation}; se omite', { view: v.name, notation: v.notationId })); return false; }
+    if (v.kind === 'grid') { warn(tr('La vista "{view}" es una rejilla; se omite', { view: v.name })); return false; }
     return true;
   });
   const viewIds = new Set(views.map(v => v.id));
@@ -294,7 +299,7 @@ export function exportArchimate(ws: Workspace): TextExport {
       if (a && b && okNode(a) && okNode(b) && (!e.relationId || relIds.has(e.relationId))) targetConnections.set(b.id, [...(targetConnections.get(b.id) ?? []), e.id]);
     }
     const build = (n: ViewNode, ax: number, ay: number): XmlNode | null => {
-      if (!okNode(n)) { warn(`Vista "${v.name}": el nodo ${n.id} apunta a un elemento no exportado; se omite con sus hijos`); return null; }
+      if (!okNode(n)) { warn(tr('Vista "{view}": el nodo {node} apunta a un elemento no exportado; se omite con sus hijos', { view: v.name, node: n.id })); return null; }
       const x: XmlNode = {};
       if (n.elementId) { x['@_xsi:type'] = `${ARCHIMATE_NS}:DiagramObject`; x['@_id'] = n.id; }
       else if (n.detailViewId && viewIds.has(n.detailViewId)) { x['@_xsi:type'] = `${ARCHIMATE_NS}:DiagramModelReference`; x['@_id'] = n.id; }
@@ -324,8 +329,8 @@ export function exportArchimate(ws: Workspace): TextExport {
     dx.property = propsXml(vprops);
     for (const e of edges) {
       const sx = exported.get(e.fromNodeId), a = abs.get(e.fromNodeId), b = abs.get(e.toNodeId);
-      if (!sx || !a || !b) { warn(`Vista "${v.name}": la arista ${e.id} une nodos no exportados; se omite`); continue; }
-      if (e.relationId && !relIds.has(e.relationId)) { warn(`Vista "${v.name}": la arista ${e.id} usa una relación no exportada; se omite`); continue; }
+      if (!sx || !a || !b) { warn(tr('Vista "{view}": la arista {id} une nodos no exportados; se omite', { view: v.name, id: e.id })); continue; }
+      if (e.relationId && !relIds.has(e.relationId)) { warn(tr('Vista "{view}": la arista {id} usa una relación no exportada; se omite', { view: v.name, id: e.id })); continue; }
       const cx: XmlNode = attrs({ 'xsi:type': `${ARCHIMATE_NS}:Connection`, id: e.id, lineColor: e.style.color, lineWidth: e.style.width, text: e.relationId ? undefined : e.label, source: e.fromNodeId, target: e.toNodeId, archimateRelationship: e.relationId });
       cx.bendpoint = e.bendpoints.map(p => attrs({ startX: Math.round(p.x - a.cx), startY: Math.round(p.y - a.cy), endX: Math.round(p.x - b.cx), endY: Math.round(p.y - b.cy) }));
       (sx.sourceConnection as XmlNode[]).push(cx);
@@ -351,7 +356,7 @@ export function pruneRelations(relations: Relation[], relIds: Set<string>, okEnd
     for (let i = relations.length - 1; i >= 0; i--) {
       const r = relations[i]!;
       if (okEnd(r.from) && okEnd(r.to)) continue;
-      warn(`La relación ${r.id} une conceptos no exportados; se omite`);
+      warn(tr('La relación {id} une conceptos no exportados; se omite', { id: r.id }));
       relations.splice(i, 1); relIds.delete(r.id); changed = true;
     }
   }
@@ -372,7 +377,7 @@ function readProps(node: XmlNode, warn: (s: string) => void, where: string): Rec
   for (const p of children(node, 'property')) {
     const k = attr(p, 'key');
     if (!k) continue;
-    if (k in out) warn(`Propiedad "${k}" repetida en ${where}; se conserva la última`);
+    if (k in out) warn(tr('Propiedad "{key}" repetida en {where}; se conserva la última', { key: k, where }));
     out[k] = attr(p, 'value') ?? '';
   }
   return out;
@@ -393,4 +398,5 @@ function writeNodeStyle(n: ViewNode, x: XmlNode) {
   if (n.style.stroke) x['@_lineColor'] = n.style.stroke;
   if (n.style.text) x['@_fontColor'] = n.style.text;
   if (n.style.opacity !== undefined) x['@_alpha'] = String(Math.round(n.style.opacity * 255));
+  if (n.style.labelPosition === 'bottom') x['@_textPosition'] = '2';
 }

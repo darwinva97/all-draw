@@ -18,12 +18,13 @@
  * Las referencias rotas del origen producen **warnings**, nunca errores.
  */
 import {
-  SCHEMA_VERSION, parseWorkspace, allPorts, portId, NotationRegistry, CORE_PACK,
+  SCHEMA_VERSION, parseWorkspace, allPorts, portId, portKeyOf, NotationRegistry, CORE_PACK,
   type Workspace, type Library, type Element, type ElementType, type FieldDef, type Relation, type View, type ViewNode,
   type ViewEdge, type Person, type StyleRule, type KeyValue, type ArrowHead,
 } from '@all-draw/core';
 import { FREEFORM_PACK } from '@all-draw/notation-freeform';
 import { GRID_PACK, normalizeGrid } from '@all-draw/notation-grid';
+import { tr } from './i18n';
 
 // ---------------------------------------------------------------- Formato de origen (Drawer v1)
 export interface DrawerFieldDef { key: string; label: string; kind: string; options?: string }
@@ -121,7 +122,7 @@ export function importDrawer(input: unknown): DrawerImport {
     for (const t of lib.types ?? []) {
       if (!t?.id) continue;
       const id = libTypeId(lib.id, t.id);
-      if (typeIndex.has(t.id)) warn(`Tipo ${t.id} repetido entre librerías; gana el de "${lib.name}"`);
+      if (typeIndex.has(t.id)) warn(tr('Tipo {type} repetido entre librerías; gana el de "{library}"', { type: t.id, library: lib.name }));
       typeIndex.set(t.id, id);
       elementTypes.push({
         id, name: t.name || t.id, category: lib.name, color: t.color, icon: t.icon, shape: 'rounded',
@@ -138,7 +139,7 @@ export function importDrawer(input: unknown): DrawerImport {
     const apiId = c.apiId!;
     if (apis.has(apiId)) continue;
     const f = c.fields ?? {};
-    warn(`La API "${c.name}" (${apiId}) no está en el catálogo del fichero; se reconstruye sin operaciones`);
+    warn(tr('La API "{name}" ({api}) no está en el catálogo del fichero; se reconstruye sin operaciones', { name: c.name, api: apiId }));
     apis.set(apiId, { id: apiId, name: c.name, description: c.description ?? '', repoUrl: str(f.repo), docsUrl: str(f.docs), version: str(f.version), auth: str(f.auth), tags: str(f.tags), baseUrls: [], operations: [] });
   }
   const apiLibId = apis.size ? (ws.libraries[DRAWER_API_LIB_ID] ? DRAWER_API_LIB_ID : 'lib:apis') : null;
@@ -153,7 +154,7 @@ export function importDrawer(input: unknown): DrawerImport {
   const compIndex = new Map<string, string>();                  // componentId de Drawer → elementId
   const opIndex = new Map<string, Map<string, string>>();       // apiId → (operationId → elementId)
   const addElement = (e: Element) => {
-    if (ws.elements[e.id]) warn(`Elemento ${e.id} duplicado; se conserva el primero`);
+    if (ws.elements[e.id]) warn(tr('Elemento {id} duplicado; se conserva el primero', { id: e.id }));
     else ws.elements[e.id] = e;
   };
   for (const lib of src.libraries) {
@@ -163,7 +164,7 @@ export function importDrawer(input: unknown): DrawerImport {
       let typeId = 'freeform:box';
       if (c.typeId) {
         const t = typeIndex.get(c.typeId);
-        if (t) typeId = t; else warn(`El componente "${c.name}" (${c.id}) usa un tipo inexistente (${c.typeId}); pasa a freeform:box`);
+        if (t) typeId = t; else warn(tr('El componente "{name}" ({id}) usa un tipo inexistente ({type}); pasa a freeform:box', { name: c.name, id: c.id, type: c.typeId }));
       }
       compIndex.set(c.id, c.id);
       addElement(element(c.id, typeId, c.name, { doc: c.description ?? '', libraryId: lib.id, template: true, fields: { ...c.fields } }));
@@ -208,15 +209,16 @@ export function importDrawer(input: unknown): DrawerImport {
     return s;
   };
 
+  const parentTypes = new Set<string>();                       // tipos con algún placement que contiene a otros
   for (const dg of src.diagrams) {
     if (!dg?.id) continue;
-    if (ws.views[dg.id]) { warn(`Diagrama ${dg.id} duplicado; se ignora el segundo`); continue; }
+    if (ws.views[dg.id]) { warn(tr('Diagrama {id} duplicado; se ignora el segundo', { id: dg.id })); continue; }
     const grid = normalizeGrid({
       layers: (dg.layers ?? []).map(l => ({ id: l.id, name: l.name, color: l.color, ...(num(l.height) ? { size: l.height } : {}) })),
       stages: (dg.stages ?? []).map(s => ({ id: s.id, name: s.name, groupId: s.groupId ?? null, ...(num(s.width) ? { size: s.width } : {}) })),
       stageGroups: (dg.stageGroups ?? []).map(g => ({ id: g.id, name: g.name, ...(g.color ? { color: g.color } : {}) })),
     });
-    for (const s of dg.stages ?? []) if (s.groupId && !grid.stageGroups.some(g => g.id === s.groupId)) warn(`Diagrama "${dg.name}": la etapa "${s.name}" apunta al grupo inexistente ${s.groupId}`);
+    for (const s of dg.stages ?? []) if (s.groupId && !grid.stageGroups.some(g => g.id === s.groupId)) warn(tr('Diagrama "{view}": la etapa "{stage}" apunta al grupo inexistente {group}', { view: dg.name, stage: s.name, group: s.groupId }));
     const view: View = { id: dg.id, kind: 'grid', notationId: 'grid', name: dg.name || 'Diagrama', doc: dg.description ?? '', grid, style: {}, props: {} };
     if (dg.public) view.public = true;
     ws.views[dg.id] = view;
@@ -228,9 +230,9 @@ export function importDrawer(input: unknown): DrawerImport {
 
     for (const p of placements) {
       const nid = ws.nodes[p.id] ? `${dg.id}:${p.id}` : p.id;
-      if (nid !== p.id) warn(`Diagrama "${dg.name}": placement ${p.id} repetido en otro diagrama; se renombra a ${nid}`);
+      if (nid !== p.id) warn(tr('Diagrama "{view}": placement {placement} repetido en otro diagrama; se renombra a {node}', { view: dg.name, placement: p.id, node: nid }));
       let elementId = compIndex.get(p.componentId);
-      if (!elementId || !ws.elements[elementId]) { warn(`Diagrama "${dg.name}": placement ${p.id} apunta al componente inexistente ${p.componentId}; se omite`); continue; }
+      if (!elementId || !ws.elements[elementId]) { warn(tr('Diagrama "{view}": placement {placement} apunta al componente inexistente {component}; se omite', { view: dg.name, placement: p.id, component: p.componentId })); continue; }
       const meta: Record<string, unknown> = {};
       const apiId = elementId.startsWith('api-') && ws.elements[elementId]!.typeId === API_TYPE_ID ? elementId.slice(4) : null;
       if (apiId) {
@@ -238,10 +240,10 @@ export function importDrawer(input: unknown): DrawerImport {
         if (p.operationId) {
           const oid = opIndex.get(apiId)?.get(p.operationId);
           if (oid) { elementId = oid; meta.operationId = p.operationId; }
-          else warn(`Diagrama "${dg.name}": placement ${p.id} usa la operación inexistente ${p.operationId} de la API ${apiId}; se enlaza a la API`);
+          else warn(tr('Diagrama "{view}": placement {placement} usa la operación inexistente {operation} de la API {api}; se enlaza a la API', { view: dg.name, placement: p.id, operation: p.operationId, api: apiId }));
         }
       } else if (p.operationId) meta.operationId = p.operationId;
-      if (!layerIds.has(p.layerId) || !stageIds.has(p.stageId)) warn(`Diagrama "${dg.name}": placement ${p.id} está en una celda inexistente (${p.layerId} × ${p.stageId})`);
+      if (!layerIds.has(p.layerId) || !stageIds.has(p.stageId)) warn(tr('Diagrama "{view}": placement {placement} está en una celda inexistente ({layer} × {stage})', { view: dg.name, placement: p.id, layer: p.layerId, stage: p.stageId }));
       const node: ViewNode = {
         id: nid, viewId: dg.id, elementId, x: num(p.x) ? p.x! : 0, y: num(p.y) ? p.y! : 0, w: 160, h: 56, style: {},
         cell: { layerId: p.layerId, stageId: p.stageId },
@@ -257,18 +259,19 @@ export function importDrawer(input: unknown): DrawerImport {
       if (!node || !p.parentId || p.parentId === p.id) continue;
       const parent = nodeOf.get(p.parentId);
       if (parent) node.parentNodeId = parent.id;
-      else warn(`Diagrama "${dg.name}": placement ${p.id} tiene un padre ${placementIds.has(p.parentId) ? 'omitido' : 'inexistente'} (${p.parentId})`);
+      else warn(tr('Diagrama "{view}": placement {placement} tiene un padre {state} ({parent})', { view: dg.name, placement: p.id, state: tr(placementIds.has(p.parentId) ? 'omitido' : 'inexistente'), parent: p.parentId }));
     }
+    fitNestedPlacements([...nodeOf.values()], ws, parentTypes);
 
     for (const r of dg.relations ?? []) {
       if (!r?.id) continue;
       const a = nodeOf.get(r.from), b = nodeOf.get(r.to);
-      if (!a || !b) { warn(`Diagrama "${dg.name}": relación ${r.id} une placements inexistentes (${r.from} → ${r.to}); se omite`); continue; }
+      if (!a || !b) { warn(tr('Diagrama "{view}": relación {id} une placements inexistentes ({from} → {to}); se omite', { view: dg.name, id: r.id, from: r.from, to: r.to })); continue; }
       const ea = ws.elements[a.elementId!]!, eb = ws.elements[b.elementId!]!;
       const fromPort = resolvePort(ea, r.fromField, portsOf(ea));
       const toPort = resolvePort(eb, r.toField, portsOf(eb));
-      if (r.fromField && !fromPort) warn(`Diagrama "${dg.name}": relación ${r.id}: el campo de origen "${r.fromField}" no es un puerto de "${ea.name}"`);
-      if (r.toField && !toPort) warn(`Diagrama "${dg.name}": relación ${r.id}: el campo de destino "${r.toField}" no es un puerto de "${eb.name}"`);
+      if (r.fromField && !fromPort) warn(tr('Diagrama "{view}": relación {id}: el campo de origen "{field}" no es un puerto de "{name}"', { view: dg.name, id: r.id, field: r.fromField, name: ea.name }));
+      if (r.toField && !toPort) warn(tr('Diagrama "{view}": relación {id}: el campo de destino "{field}" no es un puerto de "{name}"', { view: dg.name, id: r.id, field: r.toField, name: eb.name }));
       const label = r.label ?? '';
       const key = [ea.id, eb.id, fromPort ?? '', toPort ?? '', label].join('|');
       let relId = relationKeys.get(key);
@@ -290,12 +293,15 @@ export function importDrawer(input: unknown): DrawerImport {
           targetHead: (dir === 'none' ? 'none' : 'arrow') as ArrowHead, sourceHead: (dir === 'both' ? 'arrow' : 'none') as ArrowHead,
         },
       };
-      if (fromPort) edge.fromPortId = fromPort;
-      if (toPort) edge.toPortId = toPort;
+      if (fromPort) { edge.fromPortId = fromPort; showPort(a, fromPort); }
+      if (toPort) { edge.toPortId = toPort; showPort(b, toPort); }
       if (label) edge.label = label;
       ws.edges[eid] = edge;
     }
   }
+
+  // ---- tipos que en Drawer hacen de contenedor (un placement suyo tiene hijos): etiqueta arriba, como en Drawer
+  for (const lib of Object.values(ws.libraries)) for (const t of lib.elementTypes) if (parentTypes.has(t.id)) t.container = true;
 
   // ---- los componentes usados son elementos del modelo; los demás siguen siendo plantillas
   for (const id of usedElements) { const e = ws.elements[id]; if (e) e.template = false; }
@@ -319,10 +325,10 @@ export function importDrawer(input: unknown): DrawerImport {
     for (const a of p.assignments ?? []) {
       if (!a) continue;
       const kind = ASSIGN[a.kind];
-      if (!kind) { warn(`Persona "${p.name}": asignación de clase desconocida (${a.kind}); se omite`); continue; }
+      if (!kind) { warn(tr('Persona "{name}": asignación de clase desconocida ({kind}); se omite', { name: p.name, kind: a.kind })); continue; }
       let targetId = a.targetId;
-      if (kind === 'element') { const el = compIndex.get(targetId); if (!el || !ws.elements[el]) { warn(`Persona "${p.name}": asignada a un componente inexistente (${targetId}); se omite`); continue; } targetId = el; }
-      if (kind === 'view' && !ws.views[targetId]) { warn(`Persona "${p.name}": asignada a un diagrama inexistente (${targetId}); se omite`); continue; }
+      if (kind === 'element') { const el = compIndex.get(targetId); if (!el || !ws.elements[el]) { warn(tr('Persona "{name}": asignada a un componente inexistente ({target}); se omite', { name: p.name, target: targetId })); continue; } targetId = el; }
+      if (kind === 'view' && !ws.views[targetId]) { warn(tr('Persona "{name}": asignada a un diagrama inexistente ({target}); se omite', { name: p.name, target: targetId })); continue; }
       if (kind === 'type') targetId = typeIndex.get(targetId) ?? targetId;
       const asg: Person['assignments'][number] = { id: a.id || `${p.id}:${person.assignments.length}`, role: a.role || 'Participante', kind, targetId };
       if (a.notes) asg.notes = a.notes;
@@ -338,7 +344,7 @@ export function importDrawer(input: unknown): DrawerImport {
     const conditions: StyleRule['conditions'] = [];
     for (const c of r.conditions ?? []) {
       const source = RULE_SOURCE[c.source];
-      if (!source) { warn(`Regla "${r.name}": condición con origen desconocido (${c.source}); se omite`); continue; }
+      if (!source) { warn(tr('Regla "{name}": condición con origen desconocido ({source}); se omite', { name: r.name, source: c.source })); continue; }
       const cond: StyleRule['conditions'][number] = { source, op: c.op as StyleRule['conditions'][number]['op'] };
       if (c.key) cond.key = c.key;
       if (c.value !== undefined) cond.value = c.value;
@@ -351,7 +357,7 @@ export function importDrawer(input: unknown): DrawerImport {
     };
     if (r.diagramId) {
       if (ws.views[r.diagramId]) rule.viewId = r.diagramId;
-      else warn(`Regla "${r.name}": limitada a un diagrama inexistente (${r.diagramId}); pasa a todos`);
+      else warn(tr('Regla "{name}": limitada a un diagrama inexistente ({diagram}); pasa a todos', { name: r.name, diagram: r.diagramId }));
     }
     ws.rules[r.id] = rule;
   }
@@ -367,11 +373,49 @@ export function importDrawer(input: unknown): DrawerImport {
 }
 
 // ---------------------------------------------------------------- Ayudantes
+/**
+ * Un pin usado por una relación de Drawer tiene que verse en el nodo (si no, la arista no tiene a qué engancharse):
+ * se añade su clave a `visiblePorts` y el nodo crece para que quepan todos los pines visibles.
+ */
+function showPort(node: ViewNode, id: string) {
+  const keys = new Set(node.style.visiblePorts ?? []);
+  keys.add(portKeyOf(id));
+  node.style = { ...node.style, showPorts: true, visiblePorts: [...keys] };
+  node.h = Math.max(node.h, (keys.size + 1) * 22);
+}
+
+/** Margen de los hijos dentro de un placement padre y alto reservado a su cabecera (icono, nombre y tipo). */
+const NEST_PAD = 12, NEST_HEADER = 56;
+
+/**
+ * Placements anidados (`parentId`): en Drawer el padre envuelve a sus hijos bajo su título. Aquí el padre crece hasta
+ * contenerlos, los hijos bajan si invaden el título y el tipo del padre pasa a ser contenedor (etiqueta arriba).
+ * De dentro afuera, para que un padre que a su vez es hijo crezca antes de medir a su abuelo.
+ */
+function fitNestedPlacements(nodes: ViewNode[], ws: Workspace, parentTypes: Set<string>) {
+  const kids = new Map<string, ViewNode[]>();
+  for (const n of nodes) if (n.parentNodeId) kids.set(n.parentNodeId, [...(kids.get(n.parentNodeId) ?? []), n]);
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const depth = (n: ViewNode) => { let d = 0, cur: ViewNode | undefined = n; while (cur?.parentNodeId && d < 50) { cur = byId.get(cur.parentNodeId); d++; } return d; };
+  const parents = [...kids.keys()].map(id => byId.get(id)).filter((n): n is ViewNode => !!n).sort((a, b) => depth(b) - depth(a));
+  for (const p of parents) {
+    const list = kids.get(p.id)!;
+    const top = Math.min(...list.map(k => k.y));
+    if (top < NEST_HEADER) for (const k of list) k.y += NEST_HEADER - top;
+    const left = Math.min(...list.map(k => k.x));
+    if (left < NEST_PAD) for (const k of list) k.x += NEST_PAD - left;
+    p.w = Math.max(p.w, ...list.map(k => k.x + k.w + NEST_PAD));
+    p.h = Math.max(p.h, ...list.map(k => k.y + k.h + NEST_PAD));
+    const typeId = p.elementId ? ws.elements[p.elementId]?.typeId : undefined;
+    if (typeId) parentTypes.add(typeId);
+  }
+}
+
 function readInput(input: unknown) {
   const raw = (typeof input === 'string' ? JSON.parse(input) : input) as DrawerFile | null;
   if (!raw || typeof raw !== 'object' || (!Array.isArray(raw.libraries) && !Array.isArray(raw.diagrams) && !raw.diagram))
-    throw new Error('El fichero no parece un espacio de trabajo de Drawer (faltan `libraries` y `diagrams`).');
-  if (raw.version !== undefined && raw.version !== 1) throw new Error(`Versión de Drawer no soportada: ${raw.version}`);
+    throw new Error(tr('El fichero no parece un espacio de trabajo de Drawer (faltan `libraries` y `diagrams`).'));
+  if (raw.version !== undefined && raw.version !== 1) throw new Error(tr('Versión de Drawer no soportada: {version}', { version: raw.version }));
   return {
     libraries: arr(raw.libraries).filter(l => l?.id),
     diagrams: raw.diagram ? [raw.diagram] : arr(raw.diagrams),
@@ -388,7 +432,7 @@ const lineStyle = (s: string | undefined): 'solid' | 'dashed' | 'dotted' => (s &
 
 function mapFieldDef(f: DrawerFieldDef, warn: (s: string) => void, where: string): FieldDef {
   let kind = f.kind as FieldDef['kind'];
-  if (!FIELD_KINDS.has(kind)) { warn(`Tipo ${where}: el campo "${f.key}" tiene una clase desconocida (${f.kind}); pasa a texto`); kind = 'text'; }
+  if (!FIELD_KINDS.has(kind)) { warn(tr('Tipo {where}: el campo "{field}" tiene una clase desconocida ({kind}); pasa a texto', { where, field: f.key, kind: f.kind })); kind = 'text'; }
   const def: FieldDef = { key: f.key, label: f.label || f.key, kind };
   if (f.options) def.options = f.options;
   return def;

@@ -25,6 +25,8 @@
 
 .docs-skip { position: fixed; left: 12px; top: -48px; z-index: 100; background: var(--docs-accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; }
 .docs-skip:focus { top: 10px; }
+/* En oscuro el acento es claro (#60a5fa): texto oscuro, como el botón primario (blanco daba 2.5:1). */
+.docs--dark .docs-skip { color: #0b1220; }
 
 /* ---- Cabecera */
 .docs-header { position: sticky; top: 0; z-index: 40; height: var(--docs-header-h); display: flex; align-items: center; gap: 14px; padding: 0 20px; background: color-mix(in srgb, var(--docs-surface) 92%, transparent); backdrop-filter: saturate(1.4) blur(8px); border-bottom: 1px solid var(--docs-rule); }
@@ -41,7 +43,8 @@
 /* ---- Búsqueda */
 .docs-search { position: relative; flex: 0 1 380px; margin-left: 12px; }
 .docs-search input { width: 100%; height: 36px; border: 1px solid var(--docs-rule); border-radius: 9px; background: var(--docs-sunken); color: var(--docs-ink); font: inherit; padding: 0 34px 0 34px; }
-.docs-search input::placeholder { color: var(--docs-faint); }
+.docs-search input::placeholder { color: var(--docs-faint); opacity: 1; text-overflow: ellipsis; }
+.docs-search input { text-overflow: ellipsis; }
 .docs-search input:focus { background: var(--docs-surface); border-color: var(--docs-accent); outline: 3px solid color-mix(in srgb, var(--docs-accent) 22%, transparent); outline-offset: 0; }
 .docs-search input::-webkit-search-cancel-button { display: none; }
 .docs-search__icon { position: absolute; left: 11px; top: 10px; color: var(--docs-faint); pointer-events: none; }

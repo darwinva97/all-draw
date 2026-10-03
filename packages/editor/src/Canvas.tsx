@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState, useRef, type DragEvent, type MouseEvent } from 'react';
 type DragEv = globalThis.MouseEvent | globalThis.TouchEvent;
 import {
-  ReactFlow, Background, Controls, MiniMap, useReactFlow, useStore, ReactFlowProvider, ViewportPortal, useViewport, ConnectionMode, getViewportForBounds,
-  type Node, type Edge, type Viewport, type NodeChange, type Connection, type IsValidConnection, type OnConnectEnd, type FinalConnectionState,
+  ReactFlow, Background, Controls, ControlButton, MiniMap, useReactFlow, useStore, ReactFlowProvider, ViewportPortal, useViewport, ConnectionMode, getViewportForBounds,
+  type Node, type Edge, type Viewport, type NodeChange, type Connection, type IsValidConnection, type OnConnectEnd, type OnConnectStart, type FinalConnectionState,
+  type AriaLabelConfig,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
   makeElement, makeNode, makeRelation, makeEdge, allPorts, compatibleRelationTypes, indexOf, resolveStyle, type ViewNode, type Command, type Element,
-  type Port, type RuleStyle,
+  type ElementType, type Port, type RuleStyle,
 } from '@all-draw/core';
 import { useEditor } from './context';
-import { useT } from '@all-draw/i18n';
+import { useT, useLang } from '@all-draw/i18n';
 import { useCollection, useRecord } from './hooks';
 import { ElementNode, sameElementData, type ElementNodeData } from './nodes/ElementNode';
 import { VisualNode, type VisualNodeData } from './nodes/VisualNode';
@@ -29,6 +30,11 @@ import { SequenceMessageEdge } from './views/SequenceEdges';
 import { useSequenceCanvas } from './views/useSequenceCanvas';
 import { deleteSelection } from './delete-selection';
 import { filterBpmnConnections } from './bpmn-rules';
+import { compartmentHeight } from './nodes/compartments';
+import { darken } from './nodes/shapes';
+import { groupRelationOptions, pruneBridges, explainNoRelation, type RelationGroups } from './edges/relation-options';
+import { toast } from './ui/toast';
+import { Icon } from './icons';
 
 export const CELL_PREFIX = 'cell:';
 const isCellId = (id: string | undefined | null) => !!id && id.startsWith(CELL_PREFIX);
@@ -61,12 +67,13 @@ export function Canvas(props: CanvasProps) {
   return <ReactFlowProvider key={viewId ?? ''}><CanvasInner {...props} shared={shared.current} /></ReactFlowProvider>;
 }
 
-interface Picker { x: number; y: number; options: string[]; onPick: (typeId: string) => void }
+interface Picker { x: number; y: number; groups: RelationGroups; onPick: (typeId: string) => void }
 interface LiveBox { x?: number; y?: number; w?: number; h?: number }
 
 function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: CanvasShared }) {
   const ed = useEditor();
   const t = useT();
+  const [lang] = useLang();
   const { store, registry, viewId, run, selection, select, readOnly, presence, effectiveTheme, snap, renaming, setRenaming } = ed;
   const view = useRecord('views', viewId);
   const nodesVersion = useCollection('nodes');
@@ -158,7 +165,9 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         || !!(el && view && !registry.inViewpoint(view.notationId, view.viewpointId, el.typeId));
       const isCell = n.visualType === 'core:cell';
       const lv = live[n.id];
-      const w = lv?.w ?? n.w, h = lv?.h ?? n.h;
+      // Clase, entidad…: el nodo crece hasta que caben todas sus filas (y sus pines quedan dentro).
+      const minH = el && type?.meta?.compartments ? compartmentHeight(el, type) : 0;
+      const w = lv?.w ?? n.w, h = Math.max(lv?.h ?? n.h, minH);
       const vn = lv ? { ...n, x: lv.x ?? n.x, y: lv.y ?? n.y, w, h } : n;
       const editing = renaming === n.id || undefined;
       const remoteColor = remoteSel.get(n.id);
@@ -185,6 +194,8 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         connectable: !readOnly && !!n.elementId,
         zIndex: isCell ? -10 : (type?.container || n.visualType === 'core:group') ? -1 : n.z ?? 0,
         style: { width: w, height: h },
+        // Lector de pantalla: «Nombre (Tipo)» en vez del id interno.
+        ariaLabel: el ? (el.name ? (type ? `${el.name} (${type.name})` : el.name) : type?.name ?? '') : n.text ?? undefined,
       } satisfies Node;
       return keep(seq.active ? seq.decorateNode(n, base) : base);
     })];
@@ -198,15 +209,23 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     const next = new Map<string, Edge>();
     const ids = new Set(rfNodes.map(n => n.id));
     const selectedIds = new Set(selection.edges);
+    const nameOf = (nodeId: string) => {
+      const vn = store.get('nodes', nodeId); const el = vn?.elementId ? store.get('elements', vn.elementId) : undefined;
+      return el ? (el.name || registry.elementType(el.typeId)?.name || '') : vn?.text ?? '';
+    };
     const out = indexOf(store).edgesOfView(viewId).filter(e => ids.has(e.fromNodeId) && ids.has(e.toNodeId)).map(e => {
       const selected = selectedIds.has(e.id);
       const old = prev.get(e.id);
+      // Lector de pantalla: «origen → destino (tipo)» en vez de «Edge from vn_… to vn_…».
+      const rel = e.relationId ? store.get('relations', e.relationId) : undefined;
+      const typeName = rel ? registry.relationType(rel.typeId)?.name ?? rel.typeId : '';
+      const ariaLabel = `${nameOf(e.fromNodeId)} → ${nameOf(e.toNodeId)}${typeName ? ` (${typeName})` : ''}${rel?.name ? ` «${rel.name}»` : ''}`;
       // Misma arista del modelo y misma selección: el mismo objeto (las de secuencia se decoran de nuevo cada vez).
-      if (!seq.active && old && (old.data as { edge?: unknown }).edge === e && old.selected === selected) { next.set(e.id, old); return old; }
+      if (!seq.active && old && (old.data as { edge?: unknown }).edge === e && old.selected === selected && old.ariaLabel === ariaLabel) { next.set(e.id, old); return old; }
       const base: Edge = {
         id: e.id, type: 'relation', source: e.fromNodeId, target: e.toNodeId,
         sourceHandle: e.fromPortId ?? '', targetHandle: e.toPortId ?? '',
-        data: { edge: e }, selected,
+        data: { edge: e }, selected, ariaLabel,
       };
       const out = seq.active ? seq.decorateEdge(e, base) : base;
       next.set(e.id, out);
@@ -214,7 +233,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     });
     edgeCache.current = next;
     return out;
-  }, [edgesVersion, store, viewId, rfNodes, selection.edges, seq]);
+  }, [edgesVersion, store, registry, viewId, rfNodes, selection.edges, seq, elementsVersion]);
 
   // ---------------------------------------------------------------- cambio de vista
   /**
@@ -236,9 +255,12 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     ro.observe(el);
     return () => ro.disconnect();
   }, [shared, size, !!viewId && !!view]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** ¿Se ve el minimapa? (en móvil no): el encuadre le deja sitio abajo para que no tape nodos. */
+  const minimapShown = () => !wrapper.current?.closest('.ad-editor--mobile');
+  // Vista vacía: 100 % en el origen, sin encuadre automático (con `fitView`, el primer nodo soltado se encuadraba al 400 %).
   const initialViewport = useMemo(() => {
     if (!viewId || !size) return undefined;
-    return shared.viewports.get(viewId) ?? (size.w && size.h ? fitViewport(rfNodes, size.w, size.h) : undefined);
+    return shared.viewports.get(viewId) ?? (size.w && size.h ? fitViewport(rfNodes, size.w, size.h, minimapShown()) : undefined) ?? EMPTY_VIEWPORT;
   }, [viewId, size]); // eslint-disable-line react-hooks/exhaustive-deps -- solo al abrir la vista
   const onMoveEnd = useCallback((_: unknown, vp: Viewport) => { if (viewId) shared.viewports.set(viewId, vp); }, [viewId, shared]);
 
@@ -247,10 +269,14 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
   const nodeEnv = useMemo<NodeEnv>(() => ({ registry, readOnly, dark: effectiveTheme === 'dark', lowDetail: lowZoom, run, setRenaming }), [registry, readOnly, effectiveTheme, lowZoom, run, setRenaming]);
 
   // ---------------------------------------------------------------- API del lienzo para otros paneles
+  const fitOptions = useCallback(() => {
+    const el = wrapper.current;
+    return { duration: 300, padding: fitPadding(el?.clientWidth ?? 0, el?.clientHeight ?? 0, minimapShown()), maxZoom: FIT_MAX_ZOOM };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const fitNodes = useCallback((nodeIds?: string[]) => {
     if (nodeIds?.length) rf.fitView({ nodes: nodeIds.map(id => ({ id })), duration: 300, padding: 0.4, maxZoom: 1.5 });
-    else rf.fitView({ duration: 300, padding: 0.1 });
-  }, [rf]);
+    else rf.fitView(fitOptions());
+  }, [rf, fitOptions]);
   const selectAll = useCallback(() => {
     if (!viewId) return;
     select({ nodes: indexOf(store).nodesOfView(viewId).filter(n => n.visualType !== 'core:cell').map(n => n.id), edges: indexOf(store).edgesOfView(viewId).map(e => e.id) });
@@ -260,7 +286,8 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
       fitView: fitNodes,
       zoomIn: () => rf.zoomIn({ duration: 150 }),
       zoomOut: () => rf.zoomOut({ duration: 150 }),
-      resetZoom: () => { const v = rf.getViewport(); rf.setViewport({ ...v, zoom: 1 }, { duration: 150 }); },
+      // 100 % alrededor del centro de lo que se ve (antes conservaba la traslación y el contenido podía salir de pantalla).
+      resetZoom: () => { const el = wrapper.current; rf.setViewport(zoomAroundCenter(rf.getViewport(), el?.clientWidth ?? 0, el?.clientHeight ?? 0, 1), { duration: 150 }); },
       selectAll,
       focus: () => wrapper.current?.focus(),
     };
@@ -370,33 +397,58 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     void node;
   }, [store, registry, rf, run, readOnly, seq]);
 
+  /** Nodo desde el que se empezó a arrastrar: es siempre el origen (en modo `loose` React Flow puede darle la vuelta). */
+  const connectFrom = useRef<string | null>(null);
+  const onConnectStart = useCallback<OnConnectStart>((_, p) => { connectFrom.current = p.nodeId; }, []);
+
   const isValidConnection = useCallback<IsValidConnection>((c) => {
-    const opts = relationOptions(c);
-    return opts.length > 0;
+    const flip = connectFrom.current !== null && c.target === connectFrom.current && c.source !== connectFrom.current;
+    const oriented = flip ? { source: c.target, target: c.source, sourceHandle: c.targetHandle ?? null, targetHandle: c.sourceHandle ?? null } : c;
+    return relationOptions(oriented).length > 0;
   }, [store, registry]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function relationOptions(c: Connection | Edge): string[] {
+  /** Relaciones posibles; con `detail`, también las que la matriz permitía antes de las reglas de pools de BPMN. */
+  function relationOptions(c: Connection | Edge, detail?: { matrix: string[] }): string[] {
     const a = store.get('nodes', c.source), b = store.get('nodes', c.target);
     const ea = a?.elementId ? store.get('elements', a.elementId) : undefined;
     const eb = b?.elementId ? store.get('elements', b.elementId) : undefined;
     if (!ea || !eb) return [];
     let opts = registry.allowedRelations(ea.typeId, eb.typeId);
-    if (c.sourceHandle || c.targetHandle) {
+    const viaPorts = !!(c.sourceHandle || c.targetHandle);
+    if (viaPorts) {
       const pa = c.sourceHandle ? allPorts(ea, registry.fieldsOf(ea.typeId)).find(p => p.id === c.sourceHandle) : undefined;
       const pb = c.targetHandle ? allPorts(eb, registry.fieldsOf(eb.typeId)).find(p => p.id === c.targetHandle) : undefined;
       const compat = compatibleRelationTypes(registry.allPacks().flatMap(p => p.portRules ?? []), pa?.portTypeId, pb?.portTypeId);
       if (compat) { const set = new Set(compat); const filtered = opts.filter(o => set.has(o)); opts = filtered.length ? filtered : compat; }
     }
+    // Entre tipos de una notación con matriz, las genéricas (enlace, traza…) no salvan una relación que la matriz prohíbe.
+    opts = pruneBridges(registry, ea.typeId, eb.typeId, opts, viaPorts);
+    if (detail) detail.matrix = opts;
     // BPMN: flujo de secuencia solo dentro de la misma pool; flujo de mensaje solo entre pools distintas.
     return filterBpmnConnections(store, c.source, c.target, opts);
   }
 
   const onConnectEnd = useCallback<OnConnectEnd>((event, state: FinalConnectionState) => {
-    if (readOnly || !state.isValid || !state.fromNode || !state.toNode || !viewId) return;
-    if (seq.active && seq.connect(state)) return;
-    const c: Connection = { source: state.fromNode.id, target: state.toNode.id, sourceHandle: state.fromHandle?.id ?? null, targetHandle: state.toHandle?.id ?? null };
-    const opts = relationOptions(c);
-    if (!opts.length) return;
+    const from = connectFrom.current; connectFrom.current = null;
+    if (readOnly || !state.fromNode || !viewId) return;
+    // Secuencia: los manejadores de la línea de vida ya ocupan toda su altura; sin manejador válido no se conecta.
+    if (seq.active) { if (!state.isValid || !state.toNode || seq.connect(state)) return; }
+    // Soltar sobre el cuerpo del nodo (no solo junto a un manejador) también conecta: el destino es el nodo bajo el
+    // puntero. Si React Flow ya resolvió un manejador válido, manda ese (pines).
+    const pt = pointOf(event);
+    const sourceId = from ?? state.fromNode.id;
+    const byHandle = state.isValid && state.toNode && state.toNode.id !== sourceId ? state.toNode.id : undefined;
+    const targetId = byHandle ?? (pt ? nodeAtPoint(pt.x, pt.y, sourceId) : undefined);
+    if (!targetId || isCellId(targetId) || !store.get('nodes', targetId)?.elementId) return;
+    const fromHandle = state.fromHandle && state.fromNode.id === sourceId ? state.fromHandle.id ?? null : null;
+    const c: Connection = { source: sourceId, target: targetId, sourceHandle: fromHandle || null, targetHandle: byHandle ? state.toHandle?.id || null : null };
+    const detail = { matrix: [] as string[] };
+    const opts = relationOptions(c, detail);
+    if (!opts.length) {
+      const ea = store.get('elements', store.get('nodes', sourceId)?.elementId ?? ''), eb = store.get('elements', store.get('nodes', targetId)?.elementId ?? '');
+      if (ea && eb) { const why = explainNoRelation(registry, t, ea.typeId, eb.typeId, detail.matrix.length > 0); toast.warning(why.title, { description: why.description, id: 'ad-connect-invalid' }); }
+      return;
+    }
     const create = (typeId: string) => {
       const a = store.get('nodes', c.source)!, b = store.get('nodes', c.target)!;
       const rel = makeRelation(typeId, { elementId: a.elementId!, portId: c.sourceHandle || undefined }, { elementId: b.elementId!, portId: c.targetHandle || undefined });
@@ -404,13 +456,11 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
       run({ type: 'connect', relation: rel, edge: makeEdge(viewId, undefined, a.id, b.id, { fromPortId: c.sourceHandle || undefined, toPortId: c.targetHandle || undefined }) });
       setPicker(null);
     };
+    const ea = store.get('elements', store.get('nodes', sourceId)!.elementId!)!;
     const def = view ? registry.pack(view.notationId)?.defaultRelation : undefined;
     if (opts.length === 1) create(opts[0]!);
-    else {
-      const me = event as globalThis.MouseEvent;
-      setPicker({ x: me.clientX, y: me.clientY, options: def && opts.includes(def) ? [def, ...opts.filter(o => o !== def)] : opts, onPick: create });
-    }
-  }, [store, registry, run, viewId, view, readOnly, seq]); // eslint-disable-line react-hooks/exhaustive-deps
+    else setPicker({ x: pt?.x ?? 0, y: pt?.y ?? 0, groups: groupRelationOptions(registry, opts, ea.typeId, def), onPick: create });
+  }, [store, registry, run, viewId, view, readOnly, seq, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------- soltar desde la paleta
   const onDragOver = useCallback((e: DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }, []);
@@ -572,6 +622,48 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     if (mod && key === 'y') { e.preventDefault(); ed.history.redo(); }
   }, [selection, store, run, select, readOnly, ed.history, ed.canvas, copy, pasteFromClipboard, duplicate, selectAll, fitNodes, rf, setRenaming, nudge, t]);
 
+  // Si desaparece el elemento que tenía el foco (nodo quitado, pegado deshecho, menú o edición cerrados), el foco
+  // vuelve al lienzo: si no, se queda en <body> y Ctrl+Z, Ctrl+V o Ctrl+D dejan de responder.
+  useEffect(() => {
+    const el = wrapper.current; if (!el) return;
+    let last: globalThis.Element | null = null;
+    const restore = () => {
+      if (last && !last.isConnected && (!document.activeElement || document.activeElement === document.body)) { last = null; el.focus({ preventScroll: true }); }
+    };
+    const onIn = (e: FocusEvent) => { last = e.target as globalThis.Element; };
+    // Foco que sale a otro sitio (clic en un panel): no hay nada que devolver.
+    const onOut = (e: FocusEvent) => { const target = e.target as globalThis.Element; queueMicrotask(() => { if (target.isConnected && last === target) last = null; else restore(); }); };
+    const mo = new MutationObserver(restore);
+    el.addEventListener('focusin', onIn); el.addEventListener('focusout', onOut);
+    mo.observe(el, { childList: true, subtree: true });
+    return () => { el.removeEventListener('focusin', onIn); el.removeEventListener('focusout', onOut); mo.disconnect(); };
+  }, [viewId, !!view]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // La selección no guarda ids que ya no existen (deshacer un pegado, quitar desde otro panel o desde otra persona).
+  useEffect(() => {
+    const nodes = selection.nodes.filter(id => store.get('nodes', id));
+    const edges = selection.edges.filter(id => store.get('edges', id));
+    if (nodes.length !== selection.nodes.length || edges.length !== selection.edges.length) select({ nodes, edges });
+  }, [nodesVersion, edgesVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Textos de accesibilidad de React Flow en el idioma de la interfaz (controles, minimapa, descripciones de nodo y arista).
+  const ariaLabelConfig = useMemo<Partial<AriaLabelConfig>>(() => {
+    const dirs: Record<string, string> = { up: t('hacia arriba'), down: t('hacia abajo'), left: t('a la izquierda'), right: t('a la derecha') };
+    return {
+      'node.a11yDescription.default': t('Pulsa Intro o Espacio para seleccionar un nodo. Supr lo quita de esta vista y Escape cancela.'),
+      'node.a11yDescription.keyboardDisabled': t('Pulsa Intro o Espacio para seleccionar un nodo; después, las flechas lo mueven. Supr lo quita de esta vista y Escape cancela.'),
+      'node.a11yDescription.ariaLiveMessage': ({ direction, x, y }) => t('Nodo movido {dir}. Nueva posición: x {x}, y {y}', { dir: dirs[direction] ?? direction, x, y }),
+      'edge.a11yDescription.default': t('Pulsa Intro o Espacio para seleccionar una relación. Supr la quita de esta vista y Escape cancela.'),
+      'controls.ariaLabel': t('Controles del lienzo'),
+      'controls.zoomIn.ariaLabel': t('Acercar'),
+      'controls.zoomOut.ariaLabel': t('Alejar'),
+      'controls.fitView.ariaLabel': t('Ajustar a la vista'),
+      'controls.interactive.ariaLabel': t('Bloquear o desbloquear la edición'),
+      'minimap.ariaLabel': t('Minimapa'),
+      'handle.ariaLabel': t('Punto de conexión'),
+    };
+  }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** Doble clic sobre una arista: inserta un bendpoint en el tramo más cercano. */
   const onEdgeDoubleClick = useCallback((e: MouseEvent, edge: Edge) => {
     if (readOnly) return;
@@ -634,7 +726,26 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     setPaneMenu({ x: e.clientX, y: e.clientY, flow: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }) });
   }, [rf]);
 
+  /** Coloca el elemento raíz de la vista (vista de detalle recién creada en otra dimensión) y lo selecciona. */
+  const placeRoot = useCallback((elementId: string) => {
+    if (readOnly || !viewId) return;
+    const el = store.get('elements', elementId); if (!el) return;
+    const type = registry.elementType(el.typeId);
+    const sz = defaultSize(type?.shape, !!type?.container, el.typeId);
+    const node = makeNode(viewId, el.id, { x: 40, y: 40, w: sz.w, h: sz.h }, { style: { showPorts: false } });
+    run({ type: 'set', collection: 'nodes', id: node.id, value: node });
+    select({ nodes: [node.id], edges: [] });
+  }, [readOnly, viewId, store, registry, run, select]);
+
   if (!viewId || !view) return <div className="ad-canvas ad-canvas--empty">{t('Elige o crea una vista')}</div>;
+
+  // Vista vacía: qué hacer (y, si es la vista de detalle de un elemento de otra dimensión, colocarlo con un clic).
+  const isEmpty = view.kind !== 'grid' && !rfNodes.some(n => !isCellId(n.id) && !n.id.startsWith('hdr:'));
+  const root = isEmpty && view.rootElementId ? store.get('elements', view.rootElementId) : undefined;
+  const pack = registry.pack(view.notationId);
+  const example = isEmpty && pack ? exampleType(pack)?.name : undefined;
+
+  const minimapColor = (n: Node) => { const vn = (n.data as { node?: ViewNode }).node; const el = vn?.elementId ? store.get('elements', vn.elementId) : undefined; return (el && registry.elementType(el.typeId)?.color) || (effectiveTheme === 'dark' ? '#3a4150' : '#dddddd'); };
 
   const paneItems: PaneMenuItem[] = paneMenu ? [
     ...(!readOnly ? [
@@ -663,7 +774,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         onNodesChange={onNodesChange}
         onEdgesChange={(chs) => { const sel = new Set(selection.edges); let c = false; for (const ch of chs) if (ch.type === 'select') { c = true; if (ch.selected) sel.add(ch.id); else sel.delete(ch.id); } if (c) select({ nodes: selection.nodes, edges: [...sel] }); }}
         onNodeDragStart={onNodeDragStart} onNodeDragStop={onNodeDragStop}
-        isValidConnection={isValidConnection} onConnectEnd={onConnectEnd}
+        isValidConnection={isValidConnection} onConnectStart={onConnectStart} onConnectEnd={onConnectEnd}
         onDrop={onDrop} onDragOver={onDragOver}
         onNodeDoubleClick={onNodeDoubleClick} onNodeContextMenu={onNodeContextMenu} onEdgeDoubleClick={onEdgeDoubleClick} onEdgeContextMenu={onEdgeContextMenu}
         onPaneContextMenu={onPaneContextMenu}
@@ -676,22 +787,35 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         colorMode={effectiveTheme}
         proOptions={{ hideAttribution: true }}
         connectionRadius={24}
-        connectionMode={seq.active ? ConnectionMode.Loose : ConnectionMode.Strict}
+        connectionMode={ConnectionMode.Loose}
+        ariaLabelConfig={ariaLabelConfig}
       >
         <Background gap={16} />
-        <Controls showInteractive={false} />
-        <MiniMap pannable zoomable nodeColor={(n) => { const vn = (n.data as { node?: ViewNode }).node; const el = vn?.elementId ? store.get('elements', vn.elementId) : undefined; return (el && registry.elementType(el.typeId)?.color) || (effectiveTheme === 'dark' ? '#3a4150' : '#ddd'); }} />
+        <Controls showInteractive={false} showFitView={false}>
+          <ControlButton className="react-flow__controls-fitview" onClick={() => fitNodes()} title={t('Ajustar a la vista')} aria-label={t('Ajustar a la vista')}><Icon name="fit" size={12} /></ControlButton>
+        </Controls>
+        {/* Minimapa más pequeño y translúcido (opaco al pasar el puntero); las figuras blancas llevan borde. */}
+        <MiniMap pannable zoomable className="ad-minimap" style={{ width: MINIMAP.w, height: MINIMAP.h }}
+          bgColor={effectiveTheme === 'dark' ? 'rgba(22,26,34,.72)' : 'rgba(255,255,255,.72)'}
+          nodeColor={(n) => minimapColor(n)} nodeStrokeColor={(n) => darken(minimapColor(n), 0.35)} nodeStrokeWidth={2} />
         {peers.length > 0 && <PeerCursors peers={peers} viewId={viewId} />}
         <CommentLayer />
       </ReactFlow>}
       </NodeEnvContext.Provider>
       <AlignBar />
-      {picker && (
-        <div className="ad-popover" style={{ left: picker.x, top: picker.y }}>
-          <div className="ad-popover__title">{t('Tipo de relación')}</div>
-          {picker.options.map(o => <button key={o} className="ad-popover__item" onClick={() => picker.onPick(o)}>{registry.relationType(o)?.name ?? o} <small>{registry.notationOf(o)}</small></button>)}
+      {isEmpty && (
+        <div className="ad-canvas-hint" role="note">
+          {root ? <>
+            <p className="ad-canvas-hint__title">{t('Vista «{view}» de «{name}»', { view: pack?.name ?? view.notationId, name: root.name || registry.elementType(root.typeId)?.name || '' })}</p>
+            <p>{t('Describe aquí «{name}» con esta notación: arrastra tipos de la paleta (por ejemplo, {example}) y conéctalos.', { name: root.name || '', example: example ?? '' })}</p>
+            {!readOnly && <button type="button" className="ad-btn ad-btn--primary" onClick={() => placeRoot(root.id)}>{t('Colocar «{name}» en esta vista', { name: root.name || registry.elementType(root.typeId)?.name || '' })}</button>}
+          </> : <>
+            <p className="ad-canvas-hint__title">{t('Vista vacía')}</p>
+            <p>{readOnly ? t('Esta vista aún no tiene elementos.') : t('Arrastra aquí un tipo de la paleta (por ejemplo, {example}) o pulsa Ctrl+K para buscar.', { example: example ?? '' })}</p>
+          </>}
         </div>
       )}
+      {picker && <RelationPicker picker={picker} title={t('Tipo de relación')} bridgeTitle={t('Trazabilidad')} nameOf={o => registry.relationType(o)?.name ?? o} docOf={o => registry.relationType(o)?.doc} />}
       {menu && <NodeMenu x={menu.x} y={menu.y} nodeId={menu.nodeId} onClose={() => setMenu(null)} />}
       {paneMenu && <PaneMenu x={paneMenu.x} y={paneMenu.y} items={paneItems} onClose={() => setPaneMenu(null)} />}
       {edgeMenu && edgeItems.length > 0 && <PaneMenu x={edgeMenu.x} y={edgeMenu.y} items={edgeItems} onClose={() => setEdgeMenu(null)} />}
@@ -716,9 +840,81 @@ function PeerCursors({ peers, viewId }: { peers: Peer[]; viewId: string }) {
   );
 }
 
+/**
+ * Selector «Tipo de relación»: las de la notación (la habitual primero) y, bajo «Trazabilidad», las genéricas. Con
+ * nombres traducidos (no ids), el foco en la primera opción y dentro de la ventana aunque se suelte cerca del borde.
+ */
+function RelationPicker({ picker, title, bridgeTitle, nameOf, docOf }: { picker: Picker; title: string; bridgeTitle: string; nameOf: (id: string) => string; docOf: (id: string) => string | undefined }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: picker.x, top: picker.y });
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos({ left: Math.max(8, Math.min(picker.x, window.innerWidth - r.width - 8)), top: Math.max(8, Math.min(picker.y, window.innerHeight - r.height - 8)) });
+    el.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+  }, [picker]);
+  const item = (o: string) => <button key={o} type="button" role="menuitem" className="ad-popover__item" title={docOf(o)} data-relation={o} onClick={() => picker.onPick(o)}>{nameOf(o)}</button>;
+  return (
+    <div ref={ref} className="ad-popover ad-relpicker" role="menu" aria-label={title} style={pos}>
+      <div className="ad-popover__title">{title}</div>
+      {picker.groups.native.map(item)}
+      {picker.groups.bridge.length > 0 && <div className="ad-popover__section">{bridgeTitle}</div>}
+      {picker.groups.bridge.map(item)}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- utilidades
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 4;
+/** El encuadre automático (al abrir una vista o «Ajustar a la vista») no amplía por encima del 100 %. */
+export const FIT_MAX_ZOOM = 1;
+const EMPTY_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 };
+export const MINIMAP = { w: 168, h: 112 } as const;
+
+/** Margen del encuadre en px; con minimapa, abajo se reserva su alto para que no tape los nodos de la esquina. */
+export function fitPadding(width: number, height: number, minimap: boolean): { top: `${number}px`; right: `${number}px`; bottom: `${number}px`; left: `${number}px` } {
+  const m = Math.round(Math.max(16, Math.min(48, Math.min(width, height) * 0.06)));
+  const bottom = minimap && height > 420 ? Math.max(m, MINIMAP.h + 24) : m;
+  return { top: `${m}px`, right: `${m}px`, bottom: `${bottom}px`, left: `${m}px` };
+}
+
+/** Encuadre con otro zoom alrededor del centro de lo que se ve (Ctrl+0). */
+export function zoomAroundCenter(vp: Viewport, width: number, height: number, zoom: number): Viewport {
+  const cx = (width / 2 - vp.x) / vp.zoom, cy = (height / 2 - vp.y) / vp.zoom;
+  return { x: width / 2 - cx * zoom, y: height / 2 - cy * zoom, zoom };
+}
+
+/**
+ * Tipo de ejemplo para la pista de la vista vacía: uno "de contenido" (no pool, lane, grupo ni pseudoestado) que pueda
+ * ser origen de la relación habitual de la notación (BPMN: Tarea, no Proceso; estados: Estado, no Inicial).
+ */
+export function exampleType(pack: { elementTypes: ElementType[]; validity?: Record<string, Record<string, string[]>>; defaultRelation?: string }): ElementType | undefined {
+  const content = pack.elementTypes.filter(x => !x.abstract && !['pool', 'lane', 'group', 'label', 'circle', 'double-circle', 'bar', 'diamond'].includes(x.shape ?? ''));
+  const local = (id: string) => id.slice(id.indexOf(':') + 1);
+  const def = pack.defaultRelation;
+  const origin = def && pack.validity ? content.find(x => Object.values(pack.validity![local(x.id)] ?? {}).some(rels => rels.includes(def))) : undefined;
+  return origin ?? content[0] ?? pack.elementTypes[0];
+}
+
+/** Punto (pantalla) donde terminó un arrastre, con ratón o con el dedo. */
+function pointOf(e: globalThis.MouseEvent | globalThis.TouchEvent): { x: number; y: number } | undefined {
+  if ('changedTouches' in e) { const t = e.changedTouches[0]; return t ? { x: t.clientX, y: t.clientY } : undefined; }
+  return { x: e.clientX, y: e.clientY };
+}
+
+/** Nodo (de elemento) más alto bajo el punto; `undefined` si el primero es el propio origen o no hay ninguno. */
+function nodeAtPoint(x: number, y: number, exclude: string): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  for (const el of document.elementsFromPoint(x, y)) {
+    const n = (el as HTMLElement).closest?.<HTMLElement>('.react-flow__node');
+    if (!n) continue;
+    const id = n.dataset.id;
+    if (!id || isCellId(id) || id.startsWith('hdr:')) continue;
+    return id === exclude ? undefined : id;
+  }
+  return undefined;
+}
 const NO_RULE: RuleStyle = {};
 const NO_PORTS: Port[] = [];
 
@@ -741,7 +937,7 @@ function sameRfNode(a: Node, b: Node): boolean {
 }
 
 /** Encuadre de los nodos (padres antes que hijos) en un lienzo de `width`×`height`, igual que `fitView` (margen 0,1). */
-function fitViewport(nodes: Node[], width: number, height: number): Viewport | undefined {
+export function fitViewport(nodes: Node[], width: number, height: number, minimap = false): Viewport | undefined {
   if (!nodes.length) return undefined;
   const abs = new Map<string, { x: number; y: number }>();
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -752,7 +948,7 @@ function fitViewport(nodes: Node[], width: number, height: number): Viewport | u
     x0 = Math.min(x0, x); y0 = Math.min(y0, y);
     x1 = Math.max(x1, x + (n.width ?? 0)); y1 = Math.max(y1, y + (n.height ?? 0));
   }
-  return getViewportForBounds({ x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) }, width, height, MIN_ZOOM, MAX_ZOOM, 0.1);
+  return getViewportForBounds({ x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) }, width, height, MIN_ZOOM, FIT_MAX_ZOOM, fitPadding(width, height, minimap));
 }
 
 function cellOf(cellNodeId: string): { layerId: string; stageId: string } {
@@ -763,6 +959,8 @@ export function defaultSize(shape: string | undefined, container: boolean, typeI
   if (container) return { w: 320, h: 220 };
   // Persona C4: cabeza y cuerpo con el texto dentro (no el monigote pequeño con la etiqueta debajo)
   if (shape === 'actor' && typeId?.startsWith('c4:')) return { w: 160, h: 150 };
+  // Almacén DFD: dos líneas con el nombre entre ellas (no la barra de bifurcación)
+  if (typeId === 'dfd:DataStore') return { w: 160, h: 44 };
   switch (shape) {
     case 'circle': case 'double-circle': return { w: 40, h: 40 };
     case 'diamond': return { w: 60, h: 60 };

@@ -15,6 +15,7 @@ import type { SearchAction } from './search';
 import { useT, useLang } from '@all-draw/i18n';
 import { Icon } from './icons';
 import { inLayer } from './ui/layer';
+import { isContextMenuKey, openContextMenuFor } from './ui/menu';
 import { mountUiLayer } from './ui/toast';
 import './ui/dialog';
 import './editor.css';
@@ -124,10 +125,15 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
       if (e.key === '?' && !typing && !mod) { e.preventDefault(); setKeysOpen(o => !o); setSearchOpen(false); }
       // F2 renombra el único nodo seleccionado aunque el foco no esté en el lienzo (p. ej. tras la paleta de comandos)
       if (e.key === 'F2' && !typing && !readOnly && selection.nodes.length === 1) { e.preventDefault(); setRenaming(selection.nodes[0]!); }
+      // Shift+F10 / tecla Menú: menú contextual de lo seleccionado, con el foco en el lienzo (o perdido tras borrar).
+      if (isContextMenuKey(e) && !typing) {
+        const a = document.activeElement;
+        if ((!a || a === document.body || !!a.closest('.ad-canvas')) && openContextMenuFor(selection)) e.preventDefault();
+      }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [readOnly, selection.nodes, setRenaming, setKeysOpen]);
+  }, [readOnly, selection, setRenaming, setKeysOpen]);
 
   const actions = useMemo<SearchAction[]>(() => {
     const packs = registry.allPacks().filter(p => p.id !== 'core');
@@ -159,17 +165,11 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
     else if (id === 'shortcuts') setKeysOpen(true);
   }, [registry, run, openView, onRequestLayout, canvas, setTheme, effectiveTheme, openWorkspacePanel, t, setKeysOpen]);
 
-  // En la hoja "Añadir" del móvil no hay arrastre: un toque sobre un elemento de la paleta lo suelta en el centro del lienzo
-  // reutilizando el mismo `dragstart`/`drop` que en escritorio (DataTransfer sintético), sin tocar la paleta ni el lienzo.
+  // En la hoja "Añadir" del móvil, tocar un elemento de la paleta lo añade (lo hace la propia paleta, igual que un
+  // clic en escritorio) y la hoja se cierra para ver el resultado.
   const tapToAdd = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
     const item = (e.target as HTMLElement).closest<HTMLElement>('.ad-pal__item[draggable]');
     if (!item || (e.target as HTMLElement).closest('button, input, a')) return;
-    const pane = document.querySelector<HTMLElement>('.ad-canvas .react-flow__pane');
-    if (!pane || typeof DataTransfer === 'undefined' || typeof DragEvent === 'undefined') return;
-    const dt = new DataTransfer();
-    item.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-    const r = pane.getBoundingClientRect();
-    pane.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
     setSheet(null);
   }, []);
 
@@ -200,7 +200,8 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
       )}
       {mobile && sheet && (
         <BottomSheet title={sheetTitle[sheet]} onClose={() => setSheet(null)}>
-          {sheet === 'views' && <ViewsPanel />}
+          {/* Elegir (o crear) una vista cierra la hoja para ver el lienzo */}
+          {sheet === 'views' && <ViewsPanel onOpen={() => setSheet(null)} />}
           {sheet === 'add' && <div className="ad-sheet__pal" onClick={tapToAdd}><div className="ad-hint">{t('Toca un elemento para añadirlo al centro del lienzo.')}</div><Palette /></div>}
           {sheet === 'inspector' && <Inspector />}
           {sheet === 'more' && (

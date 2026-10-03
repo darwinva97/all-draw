@@ -3,7 +3,7 @@
 ## What it is and when to use it {#que-es}
 
 A mind map starts from a **central idea** and develops it in **branches**: main topics around it and,
-from each one, ever more specific subtopics. It is the quickest way to organise ideas without worrying
+from each one, ever more specific subtopics. It is the quickest way to organize ideas without worrying
 about a formal structure yet.
 
 Use it for brainstorming, preparing a meeting or a presentation, summarising a document or making a
@@ -49,7 +49,7 @@ Only one: the **Branch**, a line without an arrowhead from parent to child.
 ## Common mistakes {#errores-comunes}
 
 - **Branch isn't offered in the picker** (only the core relations appear): you are probably going from
-  child to parent. Always connect from the node closer to the centre.
+  child to parent. Always connect from the node closer to the center.
 - **Long sentences in the nodes**: a mind map works with keywords; the rest goes in **Notes**.
 - **Several central ideas**: if you end up with two, maybe they are two maps, or two topics of a more
   general idea.

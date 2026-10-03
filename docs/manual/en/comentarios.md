@@ -52,13 +52,13 @@ On touch screens, right-click is replaced by a **long press**.
 - Dates are shown in relative form ("5 min ago", "yesterday"); hover over them to see the exact
   date and time.
 - The button with the name of the commented item at the top of each thread (**Go to the commented
-  item**) opens the right view, selects the element or line and centres the canvas on it.
+  item**) opens the right view, selects the element or line and centers the canvas on it.
 
 > [!NOTE]
 > **Who signs.** Today all-draw does not use your account name for comments: in a server workspace
 > you sign with the same name shown in presence ("Anonymous" followed by a number, which changes
 > every time you open the workspace) and in a local workspace, simply "Anonymous". Because the app
-> recognises "your" comments by that name, you may no longer be able to edit or delete the ones you
+> recognizes "your" comments by that name, you may no longer be able to edit or delete the ones you
 > wrote on another day. If people need to know who you are, sign inside the text or mention
 > yourself (see below).
 
@@ -141,8 +141,8 @@ delete it.
 |---|---|---|
 | Local workspace (in your browser) | You | You |
 | Server workspace, **owner** role | Yes | Yes |
-| Server workspace, **editor** role (or edit link) | Yes | Yes |
-| Server workspace, **viewer** role (or read-only link) | Yes | No |
+| Server workspace, **can edit** role (or edit link) | Yes | Yes |
+| Server workspace, **read-only** role (or read-only link) | Yes | No |
 
 Roles are explained in [sharing and collaborating](compartir-y-colaborar.md).
 
@@ -159,7 +159,7 @@ Roles are explained in [sharing and collaborating](compartir-y-colaborar.md).
 
 - **"I can't see the comment I just wrote."** Check the filters: you may be on **Resolved**, or the
   thread may belong to another view while **This view only** is on.
-- **"I don't get the Comment option."** You are in read-only mode (viewer role or read-only link).
+- **"I don't get the Comment option."** You are in read-only mode (**read-only** role or read-only link).
   Ask the owner for an edit link.
 - **"I comment on an element and the comment shows up in other views."** That is expected if you
   commented from the inspector: the thread belongs to the element. To keep it to this view, use

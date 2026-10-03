@@ -120,8 +120,8 @@ botón derecho → **Abrir en otra dimensión**. Ver [modelo y vistas](modelo-y-
 
 ### ¿Por qué no puedo editar nada? {#solo-lectura}
 
-Estás en **solo lectura**: tienes rol *viewer* o has entrado con un enlace de lectura. Pide a la
-persona dueña un enlace de edición. Ver [compartir y colaborar](compartir-y-colaborar.md).
+Estás en **solo lectura**: tienes ese rol en el espacio o has entrado con un enlace de lectura. Pide
+al propietario un enlace de edición. Ver [compartir y colaborar](compartir-y-colaborar.md).
 
 ### ¿Cómo dejo comentarios a mis compañeros? {#comentar}
 
@@ -144,7 +144,7 @@ su ciclo de vida como máquina de estados. Ver [dimensiones](conceptos.md#dimens
 
 ### ¿Cómo invito a alguien? {#invitar}
 
-En un espacio del servidor del que seas dueño, pulsa **Compartir** → **Nuevo enlace de edición** (o
+En un espacio del servidor del que seas propietario, pulsa **Compartir** → **Nuevo enlace de edición** (o
 **Nuevo enlace de lectura**) → **Copiar enlace**, y envía el enlace. Quien lo abra no necesita
 cuenta. Lo puedes **revocar** cuando quieras. Ver [invitar](compartir-y-colaborar.md#invitar).
 
@@ -198,9 +198,12 @@ cámbiala en **Cuenta → Cambiar contraseña**.
 
 ### ¿Cómo cambio la contraseña o cierro sesión en todos mis dispositivos? {#cambiar-contrasena}
 
-En **Cuenta** (enlace "claves API" junto a tu nombre en el inicio): **Cambiar contraseña** cierra
-además tus otras sesiones; **Cerrar todas las sesiones** cierra todas, incluida la actual. Una
-sesión que no usas en 30 días caduca sola.
+En **Cuenta** (menú de tu nombre, arriba a la derecha → **Cuenta y claves API**): **Cambiar
+contraseña** cierra además tus otras sesiones; **Cerrar todas las sesiones** cierra todas, incluida la
+actual. En los dos casos los espacios abiertos en esos navegadores se desconectan al momento y, si
+dejas marcada la casilla **Revocar también las claves API**, tus claves dejan de funcionar. Para
+salir solo de este navegador, usa **Cerrar sesión** en el menú de tu nombre. Una sesión que no usas
+en 30 días caduca sola. Ver [qué pasa al cerrar sesiones](compartir-y-colaborar.md#cerrar-sesiones).
 
 ### ¿Cómo cambio mi nombre o mi correo? {#cambiar-nombre}
 

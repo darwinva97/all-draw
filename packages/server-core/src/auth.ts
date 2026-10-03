@@ -11,7 +11,7 @@
  * - Principal: sesión (cookie o Bearer), API key (Bearer `adk_…`) o enlace compartido (`?token=` / Bearer `lnk_…`).
  */
 import type { Role, Session, ShareLink, User, WorkspaceStore } from './store/types';
-import type { ConnIdentity } from './docs';
+import { sessionIdOf, type ConnIdentity } from './docs';
 
 export const PBKDF2_ITERATIONS = 100_000;
 const subtle = globalThis.crypto.subtle;
@@ -92,7 +92,7 @@ export function makeHasher(secret: string | null): Hasher {
 
 // ---------------------------------------------------------------- Principal
 export type Principal =
-  | { kind: 'user'; user: User; via: 'session' | 'apikey'; sessionHash?: string; session?: Session }
+  | { kind: 'user'; user: User; via: 'session' | 'apikey'; sessionHash?: string; session?: Session; keyId?: string }
   | { kind: 'link'; link: ShareLink };
 
 export interface AuthContext { store: WorkspaceStore; hash: Hasher }
@@ -106,7 +106,7 @@ export async function resolveToken(ctx: AuthContext, token: string | null | unde
     const user = await ctx.store.getUser(key.userId);
     if (!user) return null;
     void ctx.store.touchApiKey(key.id).catch(() => { /* no importa */ });
-    return { kind: 'user', user, via: 'apikey' };
+    return { kind: 'user', user, via: 'apikey', keyId: key.id };
   }
   if (token.startsWith(LINK_PREFIX)) {
     const link = await ctx.store.resolveShareLink(token);
@@ -179,7 +179,9 @@ export async function roleFor(store: WorkspaceStore, p: Principal | null, worksp
 }
 
 /** Identidad de una conexión a partir de su principal (para poder cerrarla al revocar ese acceso). */
-export const identityOf = (p: Principal): ConnIdentity => (p.kind === 'link' ? { userId: null, linkToken: p.link.token } : { userId: p.user.id, linkToken: null });
+export const identityOf = (p: Principal): ConnIdentity => (p.kind === 'link'
+  ? { userId: null, linkToken: p.link.token }
+  : { userId: p.user.id, linkToken: null, sessionId: p.sessionHash ? sessionIdOf(p.sessionHash) : null, keyId: p.via === 'apikey' ? p.keyId ?? null : null });
 
 /**
  * Identifica y autoriza una conexión (WebSocket) a un espacio; devuelve el código de cierre si no procede.
@@ -198,14 +200,25 @@ export const SAFE_ID = /^[A-Za-z0-9_\-:.]{1,120}$/;
 export class RateLimiter {
   private hits = new Map<string, number[]>();
   constructor(private max = 10, private windowMs = 15 * 60_000) {}
-  /** true si se permite. */
+  /** true si se permite (y lo cuenta). */
   check(key: string): boolean {
+    if (this.blocked(key)) return false;
+    this.hit(key);
+    return true;
+  }
+  /** ¿Ya se llegó al máximo en la ventana? (no cuenta nada). */
+  blocked(key: string): boolean {
+    const from = Date.now() - this.windowMs;
+    const list = (this.hits.get(key) ?? []).filter(x => x > from);
+    if (list.length) this.hits.set(key, list); else this.hits.delete(key);
+    return list.length >= this.max;
+  }
+  /** Cuenta un intento (p. ej. sólo los fallidos). */
+  hit(key: string): void {
     const t = Date.now(), from = t - this.windowMs;
     const list = (this.hits.get(key) ?? []).filter(x => x > from);
-    if (list.length >= this.max) { this.hits.set(key, list); return false; }
     list.push(t); this.hits.set(key, list);
     if (this.hits.size > 10_000) for (const [k, v] of this.hits) if (!v.some(x => x > from)) this.hits.delete(k);
-    return true;
   }
   reset(key: string) { this.hits.delete(key); }
 }

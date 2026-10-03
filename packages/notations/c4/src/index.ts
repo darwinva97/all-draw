@@ -30,7 +30,7 @@ const technology: FieldDef = { key: 'technology', label: 'Tecnología', kind: 't
 
 export const C4_ELEMENT_TYPES: ElementType[] = [
   el('Person', 'Persona', CAT.people, {
-    shape: 'actor', color: C4_COLORS.person, icon: '👤',
+    shape: 'actor', color: C4_COLORS.person, icon: '☺',
     doc: 'Usuario humano del sistema (rol, persona, actor).',
     fields: [external],
     meta: { externalColor: C4_COLORS.external },
@@ -46,7 +46,7 @@ export const C4_ELEMENT_TYPES: ElementType[] = [
     doc: 'Aplicación o almacén de datos desplegable por separado. Contiene componentes.',
     fields: [
       technology,
-      { key: 'kind', label: 'Clase', kind: 'select', options: 'app,database,queue,filesystem,browser,mobile,microservice' },
+      { key: 'kind', label: 'Tipo de contenedor', kind: 'select', options: 'app,database,queue,filesystem,browser,mobile,microservice', optionLabels: { app: 'Aplicación', database: 'Base de datos', queue: 'Cola', filesystem: 'Sistema de ficheros', browser: 'Navegador', mobile: 'App móvil', microservice: 'Microservicio' } },
     ],
     meta: { level: 2 },
   }),
@@ -59,18 +59,18 @@ export const C4_ELEMENT_TYPES: ElementType[] = [
   el('Code', 'Código', CAT.static, {
     shape: 'rect', color: C4_COLORS.code, icon: '{ }',
     doc: 'Clase, interfaz, módulo o función. Nivel 4, opcional.',
-    fields: [{ key: 'kind', label: 'Clase', kind: 'select', options: 'class,interface,module,function,enum' }],
+    fields: [{ key: 'kind', label: 'Tipo de elemento de código', kind: 'select', options: 'class,interface,module,function,enum', optionLabels: { class: 'Clase', interface: 'Interfaz', module: 'Módulo', function: 'Función', enum: 'Enumeración' } }],
     meta: { level: 4 },
   }),
   el('DeploymentNode', 'Nodo de despliegue', CAT.deployment, {
-    shape: 'rect', container: true, color: C4_COLORS.deployment, icon: 'deployment-node',
+    shape: 'rect', container: true, color: C4_COLORS.deployment, icon: '▦',
     doc: 'Infraestructura donde se despliegan contenedores: servidor, VM, contenedor Docker, cloud. Se anidan.',
     fields: [technology, { key: 'instances', label: 'Instancias', kind: 'number' }],
   }),
   el('Boundary', 'Límite', CAT.static, {
     shape: 'group', container: true, color: C4_COLORS.boundary, icon: '▢',
     doc: 'Límite visual (empresa, sistema, contenedor) para agrupar elementos en una vista.',
-    fields: [{ key: 'kind', label: 'Clase', kind: 'select', options: 'enterprise,system,container,group' }],
+    fields: [{ key: 'kind', label: 'Tipo de límite', kind: 'select', options: 'enterprise,system,container,group', optionLabels: { enterprise: 'Empresa', system: 'Sistema', container: 'Contenedor', group: 'Grupo' } }],
     meta: { borderStyle: 'dashed' },
   }),
 ];

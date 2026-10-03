@@ -39,7 +39,7 @@ The server creates snapshots without you doing anything:
 - **Before every restore**: the state just before restoring is saved as an automatic snapshot, so
   a restore can be undone.
 
-## Creating a labelled snapshot {#crear}
+## Creating a labeled snapshot {#crear}
 
 Before a big change, it is a good idea to leave a named marker:
 
@@ -49,7 +49,7 @@ Before a big change, it is a good idea to leave a named marker:
 3. Click **Create snapshot**. You will see the message "Snapshot created".
 
 If you leave the label empty, the snapshot is still created but treated as automatic (see
-[limits](#limites)). **Labelled snapshots are never deleted automatically.**
+[limits](#limites)). **Labeled snapshots are never deleted automatically.**
 
 ## Restoring a snapshot {#restaurar}
 
@@ -86,7 +86,7 @@ and cannot be undone.
 
 ## Who can do what {#permisos}
 
-| Action | viewer (read-only) | editor | owner |
+| Action | read-only | can edit | owner |
 |---|:---:|:---:|:---:|
 | See the list | ✓ | ✓ | ✓ |
 | Download JSON | ✓ | ✓ | ✓ |
@@ -100,8 +100,8 @@ See [sharing and collaborating](compartir-y-colaborar.md) for roles.
 
 - Each workspace keeps at most **100 snapshots**. Beyond that, the server deletes the **oldest
   automatic ones** (those without a label).
-- **Labelled** snapshots are never deleted automatically; only the owner deletes them. If a
-  workspace piles up many labelled ones, they take up part of those 100 and leave less room for
+- **Labeled** snapshots are never deleted automatically; only the owner deletes them. If a
+  workspace piles up many labeled ones, they take up part of those 100 and leave less room for
   automatic ones.
 - If the **workspace is deleted**, all its snapshots are deleted too.
 
@@ -133,7 +133,7 @@ workspaces) and keeps them for **30 days**. They are not the same as snapshots:
 | What for | Going back to a version of **one** workspace | Recovering the whole service after a disaster (disk failure, serious error) |
 | Who uses them | You, from **History** | Only whoever runs the server |
 | Frequency | Every 30 min of activity, before restoring and whenever you want | Once a day |
-| How long | Up to 100 per workspace; labelled ones, indefinitely | 30 days |
+| How long | Up to 100 per workspace; labeled ones, indefinitely | 30 days |
 
 You cannot restore a server backup yourself. If you have lost something that is not in the history,
 write to whoever runs the service (see [privacy](privacidad.md)) as soon as possible, giving the
@@ -146,7 +146,7 @@ lose, keep your own `.alldraw.json` as well.
 
 - **"I can't see the History button."** You are in a local workspace. Only server workspaces have
   history.
-- **"I can't create or restore."** You have the read-only (viewer) role. You can view and download,
+- **"I can't create or restore."** You have the **read-only** role. You can view and download,
   but not change the workspace.
 - **"I restored and lost today's work."** No: just before restoring, an automatic snapshot with
   today's state was created. Restore it.

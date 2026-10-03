@@ -14,8 +14,8 @@ import { setCookie, deleteCookie } from 'hono/cookie';
 import { bodyLimit } from 'hono/body-limit';
 import { CommandSchema, Workspace as WorkspaceSchema, type Command, type NotationPack, type Workspace } from '@all-draw/core';
 import type { DocHost } from './host';
-import type { ConnMatch } from './docs';
-import { WS_REVOKED, WS_ROLE_CHANGED } from './ysync';
+import { sessionIdOf, type ConnMatch } from './docs';
+import { WS_REVOKED, WS_ROLE_CHANGED, WS_SESSION_CLOSED } from './ysync';
 import { ALL_PACKS, describePacks } from './notations';
 import { CommandError, DOC_TOO_LARGE, formatBytes, normalizeCommand } from './ops';
 import { jsonLogger, redactPath, redactTokens, truncateIp, type Logger } from './log';
@@ -95,6 +95,12 @@ export interface ApiDeps {
    * En Node escribe en las copias de seguridad del VPS; si lanza, la cuenta no se borra.
    */
   archiveWorkspace?: (a: WorkspaceArchive) => Promise<void>;
+  /**
+   * IP real del cliente para los límites anti-abuso y el log (Node: socket + `TRUSTED_PROXIES`; Cloudflare:
+   * `CF-Connecting-IP`). Sin ella todas las peticiones cuentan como la misma IP (`unknown`): nunca se lee
+   * `X-Forwarded-For` sin saber si quien la pone es de confianza.
+   */
+  clientIp?: (c: Context) => string;
 }
 type Env = { Variables: { principal: Principal | null } };
 
@@ -105,15 +111,18 @@ const UserOut = z.object({ id: z.string(), email: z.string(), name: z.string(), 
 const AuthOut = z.object({ user: UserOut, token: z.string().describe('Token de sesión (también va en la cookie)') });
 const KeyOut = z.object({ id: z.string(), name: z.string(), prefix: z.string(), createdAt: z.string(), lastUsedAt: z.string().nullable() });
 const WorkspaceOut = z.object({ id: z.string(), name: z.string(), ownerId: z.string(), createdAt: z.string(), updatedAt: z.string(), role: RoleSchema }).meta({ id: 'WorkspaceInfo' });
-const MemberOut = z.object({ userId: z.string(), role: MemberRoleSchema, createdAt: z.string(), user: z.object({ id: z.string(), email: z.string(), name: z.string() }).nullable() });
+const MemberOut = z.object({ userId: z.string(), role: MemberRoleSchema, createdAt: z.string(), user: z.object({ id: z.string(), email: z.string().optional().describe('Solo para cuentas con acceso; con un enlace compartido no se envía'), name: z.string() }).nullable() });
 const LinkOut = z.object({ token: z.string(), url: z.string(), workspaceId: z.string(), role: MemberRoleSchema, createdAt: z.string(), expiresAt: z.string().nullable() });
 const ErrorOut = z.object({ error: z.string(), issues: z.array(z.unknown()).optional() }).meta({ id: 'Error' });
-const SnapshotOut = z.object({ id: z.string(), workspaceId: z.string(), createdAt: z.string(), authorId: z.string().nullable(), author: z.object({ id: z.string(), name: z.string() }).nullable(), label: z.string().nullable(), size: z.number() }).meta({ id: 'Snapshot' });
+const SnapshotOut = z.object({ id: z.string(), workspaceId: z.string(), createdAt: z.string(), authorId: z.string().nullable(), author: z.object({ id: z.string(), name: z.string() }).nullable(), label: z.string().nullable().describe('`null` = automática (se poda); `""` = manual sin etiqueta'), size: z.number() }).meta({ id: 'Snapshot' });
 const SafeId = z.string().regex(SAFE_ID, 'id no válido');
 const Id = z.object({ id: SafeId });
 const SnapshotParams = Id.extend({ sid: SafeId });
 const Email = z.string().trim().toLowerCase().email().max(200);
-const Password = z.string().min(8).max(200);
+/** Contraseña nueva: 8+ caracteres sin contar los espacios de los extremos (ocho espacios no valen). */
+const Password = z.string().min(8).max(200).refine(p => p.trim().length >= 8, { message: 'La contraseña necesita al menos 8 caracteres que no sean espacios' });
+/** `?revokeKeys=true`: revocar también las API keys del usuario. */
+const RevokeKeysQuery = z.object({ revokeKeys: z.enum(['true', 'false']).optional().describe('`true` revoca además todas las API keys (y cierra los WebSockets abiertos con ellas)') });
 const jsonBody = <T extends z.ZodTypeAny>(schema: T, description?: string) => ({ required: true, content: { 'application/json': { schema } }, ...(description ? { description } : {}) });
 const jsonRes = <T extends z.ZodTypeAny>(schema: T, description: string) => ({ description, content: { 'application/json': { schema } } });
 const errors = {
@@ -124,8 +133,51 @@ const errors = {
 };
 const bearer: Record<string, string[]>[] = [{ bearerAuth: [] }, { cookieAuth: [] }];
 
+/**
+ * Código estable (`code`) de cada error con texto fijo, para que el cliente lo traduzca al idioma de quien usa la
+ * interfaz; `error` sigue en español (compatibilidad). Los errores con variables pasan su `code` (y las variables) en `extra`.
+ */
+const ERROR_CODES: Record<string, string> = {
+  'Cuerpo demasiado grande': 'body_too_large',
+  'Identifícate: cookie de sesión o Authorization: Bearer <token>': 'unauthenticated',
+  'Esta operación requiere una cuenta, no un enlace compartido': 'account_required',
+  'El espacio no existe': 'workspace_not_found',
+  'No tienes acceso a este espacio': 'no_access',
+  'Identifícate para acceder al espacio': 'login_required',
+  'Solo administradores': 'admin_only',
+  'Demasiados informes de error; gracias, ya tenemos bastantes': 'too_many_reports',
+  'Demasiados registros desde esta dirección; espera un rato': 'too_many_registrations',
+  'Registro rechazado': 'registration_rejected',
+  'El registro está cerrado': 'registration_closed',
+  'Código de invitación incorrecto': 'bad_invite_code',
+  'Ese email ya está registrado': 'email_taken',
+  'Demasiados intentos; espera unos minutos': 'too_many_attempts',
+  'Email o contraseña incorrectos': 'bad_credentials',
+  'Para cambiar el email escribe tu contraseña actual': 'password_required',
+  'La contraseña no es correcta': 'wrong_password',
+  'No se pudo guardar la copia final de un espacio; no se ha borrado nada. Inténtalo más tarde.': 'archive_failed',
+  'La contraseña actual no es correcta': 'wrong_current_password',
+  'Usuario desconocido': 'user_not_found',
+  'Tiene que quedar al menos un administrador': 'admin_required',
+  'No existe esa clave': 'key_not_found',
+  'initial no es un Workspace válido': 'invalid_workspace',
+  'Un enlace compartido no puede cambiar el dueño': 'link_cannot_change_owner',
+  'ownerId no existe': 'owner_not_found',
+  'El dueño no necesita rol': 'owner_has_no_role',
+  'Demasiados enlaces creados; espera unos minutos': 'too_many_links',
+  'No existe ese enlace': 'link_not_found',
+  'La vista no existe': 'view_not_found',
+  'No existe esa instantánea': 'snapshot_not_found',
+  // Mismo código que `requireSession`: el texto dice qué operación (el cliente lo traduce por el texto).
+  'Cambia el email desde una sesión, no con una API key': 'session_required',
+  'Borra la cuenta desde una sesión, no con una API key': 'session_required',
+  'Cambia administradores desde una sesión, no con una API key': 'session_required',
+  'Restablece contraseñas desde una sesión, no con una API key': 'session_required',
+  'Crea las API keys desde una sesión, no con otra API key': 'session_required',
+};
+
 const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 429 | 500 | 501 | 503, error: string, extra: Record<string, unknown> = {}) =>
-  new HTTPException(status, { res: Response.json({ error, ...extra }, { status }) });
+  new HTTPException(status, { res: Response.json({ error, ...(ERROR_CODES[error] ? { code: ERROR_CODES[error] } : {}), ...extra }, { status }) });
 
 const publicUser = (u: User) => ({ id: u.id, email: u.email, name: u.name, isAdmin: u.isAdmin, createdAt: u.createdAt });
 
@@ -144,7 +196,7 @@ const ClientError = z.object({
   count: z.number().int().min(1).max(10_000).optional().describe('Veces que se repitió (deduplicado en el cliente)'),
 });
 
-export function createApi({ store, docs, hash, config, notations = ALL_PACKS, logger = jsonLogger(), build = {}, onIdentity, archiveWorkspace }: ApiDeps) {
+export function createApi({ store, docs, hash, config, notations = ALL_PACKS, logger = jsonLogger(), build = {}, onIdentity, archiveWorkspace, clientIp: getClientIp }: ApiDeps) {
   const maxWorkspaces = config.maxWorkspacesPerUser ?? DEFAULT_MAX_WORKSPACES_PER_USER;
   const maxDocBytes = config.maxDocBytes ?? DEFAULT_MAX_DOC_BYTES;
   const registerMinMs = config.registerMinMs ?? DEFAULT_REGISTER_MIN_MS;
@@ -155,10 +207,22 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   };
   const app = new OpenAPIHono<Env>({
     defaultHook: (result, c) => {
-      if (!result.success) return c.json({ error: 'validación', issues: result.error.issues }, 400);
+      if (!result.success) {
+        // Qué campo está mal y por qué (no sólo «validación»): `fields` para que el cliente lo señale y traduzca.
+        const fields = [...new Set(result.error.issues.map(i => i.path.map(String).join('.') || 'body'))];
+        const detail = result.error.issues.slice(0, 5).map(i => `${i.path.map(String).join('.') || 'body'}: ${i.message}`).join('; ');
+        return c.json({ error: `Datos no válidos (${detail})`, code: 'validation', fields, issues: result.error.issues }, 400);
+      }
     },
   });
+  // Login: sólo cuentan los intentos fallidos. Por IP+correo (10), por IP (30) y por correo desde cualquier IP (100):
+  // alguien no puede bloquear la cuenta de otra persona desde una sola dirección.
   const loginLimiter = new RateLimiter(10, 15 * 60_000);
+  const loginIpLimiter = new RateLimiter(30, 15 * 60_000);
+  const loginEmailLimiter = new RateLimiter(100, 15 * 60_000);
+  /** Hash de una contraseña al azar: el login con un correo que no existe cuesta lo mismo que con uno que sí (fallo 53). */
+  let dummyHash: Promise<string> | null = null;
+  const burnPasswordCheck = async (password: string) => { await verifyPassword(password, await (dummyHash ??= hashPassword(randomToken('', 16)))); return false; };
   const registerLimiter = new RateLimiter(10, 60 * 60_000);
   const passwordLimiter = new RateLimiter(10, 15 * 60_000);
   const linkLimiter = new RateLimiter(30, 15 * 60_000);
@@ -189,7 +253,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     const url = new URL(c.req.url);
     const cred = credentialsFromRequest(c.req.raw.headers, url);
     if (cred.source === 'cookie' && !SAFE_METHODS.has(c.req.method) && !isTrustedOrigin(c.req.raw.headers, url)) {
-      throw fail(403, `Petición con cookie desde otro origen rechazada (CSRF): añade la cabecera ${CSRF_HEADER}: ${CSRF_VALUE} o usa Authorization: Bearer`);
+      throw fail(403, `Petición con cookie desde otro origen rechazada (CSRF): añade la cabecera ${CSRF_HEADER}: ${CSRF_VALUE} o usa Authorization: Bearer`, { code: 'csrf' });
     }
     const p = await resolveToken(auth, cred.token);
     if (p?.kind === 'user' && p.session && p.sessionHash && sessionNeedsRenewal(p.session)) {
@@ -208,14 +272,23 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     if (p.kind !== 'user') throw fail(403, 'Esta operación requiere una cuenta, no un enlace compartido');
     return p;
   };
-  const requireRole = async (c: { get(k: 'principal'): Principal | null }, workspaceId: string, min: Role) => {
+  const requireRole = async (c: { get(k: 'principal'): Principal | null; req: { raw: Request; url: string } }, workspaceId: string, min: Role) => {
     const ws = await store.getWorkspace(workspaceId);
     if (!ws) throw fail(404, 'El espacio no existe');
     const p = c.get('principal');
     const role = await roleFor(store, p, workspaceId);
+    if (!role && !p) await explainBadLink(c, workspaceId);
     if (!role) throw fail(p ? 403 : 401, p ? 'No tienes acceso a este espacio' : 'Identifícate para acceder al espacio');
-    if (!atLeast(role, min)) throw fail(403, `Se requiere rol ${min} (tienes ${role})`);
+    if (!atLeast(role, min)) throw fail(403, `Se requiere rol ${min} (tienes ${role})`, { code: 'role_required', required: min, role });
     return { ws, role, principal: p! };
+  };
+  /** Se entró con un enlace que no vale: decir si caducó (y cuándo) o si ya no existe, en vez de «identifícate». */
+  const explainBadLink = async (c: { req: { raw: Request; url: string } }, workspaceId: string) => {
+    const { token } = credentialsFromRequest(c.req.raw.headers, new URL(c.req.url));
+    if (!token?.startsWith(LINK_PREFIX)) return;
+    const link = (await store.listShareLinks(workspaceId)).find(l => l.token === token);
+    if (link?.expiresAt && Date.parse(link.expiresAt) <= Date.now()) throw fail(401, `Este enlace caducó el ${link.expiresAt.slice(0, 10)}: pide uno nuevo a quien te lo compartió`, { code: 'link_expired', expiresAt: link.expiresAt });
+    throw fail(401, 'Este enlace ya no es válido: lo han revocado o está incompleto. Pide uno nuevo a quien te lo compartió', { code: 'link_invalid' });
   };
   /**
    * Cierra las conexiones WebSocket abiertas con un acceso que acaba de cambiar (4401 revocado, 4205 cambio de rol).
@@ -228,8 +301,32 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     } catch (e) { logger.error('no se pudieron cerrar las conexiones revocadas', { workspace: workspaceId, code, err: e }); }
   };
   const cookieSecure = (c: { req: { header(n: string): string | undefined } }) => config.cookieSecure || c.req.header('x-forwarded-proto') === 'https';
-  const clientIp = (c: { req: { header(n: string): string | undefined } }) => c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'local';
-  const requireAdmin = (c: { get(k: 'principal'): Principal | null }) => { const p = requireUser(c); if (!p.user.isAdmin) throw fail(403, 'Sólo administradores'); return p; };
+  const clientIp = (c: unknown): string => (getClientIp ? getClientIp(c as Context) : 'unknown');
+  /** Sólo desde una sesión: una API key no puede cerrar sesiones ni cambiar la contraseña (fallo 54). */
+  const requireSession = (c: { get(k: 'principal'): Principal | null }, what: string) => {
+    const p = requireUser(c);
+    if (p.via !== 'session') throw fail(403, `${what} desde una sesión, no con una API key`, { code: 'session_required' });
+    return p;
+  };
+  /** Espacios en los que el usuario puede tener un WebSocket abierto (un admin entra en todos). */
+  const reachableWorkspaces = async (u: User) => (u.isAdmin ? await store.listAllWorkspaces() : await store.listWorkspaces(u.id)).map(w => w.id);
+  /** Cierra las conexiones de ese usuario que casen con `match` en todos los espacios a los que llega. */
+  const kickUser = async (u: User, match: ConnMatch, code: number, reason: string) => {
+    await Promise.all((await reachableWorkspaces(u)).map(id => kick(id, match, code, reason)));
+  };
+  /**
+   * Tras cerrar sesiones (todas, al cambiar la contraseña o al restablecerla): revoca las API keys si se pide y corta
+   * al momento los WebSockets afectados (los de las sesiones cerradas y, con `revokeKeys`, también los de las claves).
+   */
+  const afterSessionsClosed = async (u: User, opts: { revokeKeys: boolean; exceptSessionHash?: string; reason: string }) => {
+    let keys = 0;
+    if (opts.revokeKeys) for (const k of await store.listApiKeys(u.id)) if (await store.deleteApiKey(u.id, k.id)) keys++;
+    const except = opts.exceptSessionHash ? { exceptSessionId: sessionIdOf(opts.exceptSessionHash) } : {};
+    await kickUser(u, { userId: u.id, ...(opts.revokeKeys ? {} : { sessionsOnly: true }), ...except }, WS_SESSION_CLOSED, opts.reason);
+    logger.info('sesiones cerradas', { user: u.id, reason: opts.reason, keysRevoked: keys });
+    return keys;
+  };
+  const requireAdmin = (c: { get(k: 'principal'): Principal | null }) => { const p = requireUser(c); if (!p.user.isAdmin) throw fail(403, 'Solo administradores'); return p; };
   /** Estado del registro para `GET /api/auth/config` y para `register`. */
   const registrationState = async (): Promise<'open' | 'invite' | 'closed'> => {
     const n = (await store.countUsers()) - ((await store.getUserByEmail(LEGACY_EMAIL)) ? 1 : 0);
@@ -371,10 +468,16 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     responses: { 200: jsonRes(AuthOut, 'Sesión iniciada'), 400: errors[400], 401: errors[401], 429: jsonRes(ErrorOut, 'Demasiados intentos') },
   }), async c => {
     const { email, password } = c.req.valid('json');
-    if (!loginLimiter.check(`ip:${clientIp(c)}`) || !loginLimiter.check(`email:${email}`)) throw fail(429, 'Demasiados intentos; espera unos minutos');
+    const ip = clientIp(c), pairKey = `email:${email}|ip:${ip}`;
+    if (loginLimiter.blocked(pairKey) || loginIpLimiter.blocked(`ip:${ip}`) || loginEmailLimiter.blocked(`email:${email}`)) throw fail(429, 'Demasiados intentos; espera unos minutos');
     const user = await store.getUserByEmail(email);
-    if (!user || !user.passwordHash || !(await verifyPassword(password, user.passwordHash))) throw fail(401, 'Email o contraseña incorrectos');
-    loginLimiter.reset(`email:${email}`);
+    // Se verifica siempre una contraseña (la real o una de relleno): el tiempo no delata si el correo tiene cuenta.
+    const ok = user?.passwordHash ? await verifyPassword(password, user.passwordHash) : await burnPasswordCheck(password);
+    if (!user || !ok) {
+      loginLimiter.hit(pairKey); loginIpLimiter.hit(`ip:${ip}`); loginEmailLimiter.hit(`email:${email}`);
+      throw fail(401, 'Email o contraseña incorrectos');
+    }
+    loginLimiter.reset(pairKey);
     // Migración transparente de hashes heredados (scrypt) al esquema actual (PBKDF2/WebCrypto).
     if (needsRehash(user.passwordHash)) { try { await store.setPasswordHash(user.id, await hashPassword(password)); } catch (e) { console.error('no se pudo re-hashear', e); } }
     const token = await startSession(c, user);
@@ -386,17 +489,24 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     responses: { 204: { description: 'Sesión cerrada' } },
   }), async c => {
     const p = c.get('principal');
-    if (p?.kind === 'user' && p.sessionHash) await store.deleteSession(p.sessionHash);
+    if (p?.kind === 'user' && p.sessionHash) {
+      await store.deleteSession(p.sessionHash);
+      // Los espacios abiertos en este navegador dejan de sincronizar al momento (los de otros navegadores, no).
+      await kickUser(p.user, { sessionId: sessionIdOf(p.sessionHash) }, WS_SESSION_CLOSED, 'sesión cerrada');
+    }
     deleteCookie(c, SESSION_COOKIE, { path: '/' });
     return c.body(null, 204);
   });
 
   app.openapi(createRoute({
-    method: 'delete', path: '/api/auth/sessions', tags: ['auth'], summary: 'Cerrar todas mis sesiones (en todos los navegadores)', security: bearer,
+    method: 'delete', path: '/api/auth/sessions', tags: ['auth'],
+    summary: 'Cerrar todas mis sesiones (en todos los navegadores, desde una sesión); sus WebSockets se cierran con 4402. Con `revokeKeys=true` revoca también mis API keys',
+    security: bearer, request: { query: RevokeKeysQuery },
     responses: { 204: { description: 'Sesiones cerradas' }, 401: errors[401], 403: errors[403] },
   }), async c => {
-    const p = requireUser(c);
+    const p = requireSession(c, 'Cierra las sesiones');
     await store.deleteUserSessions(p.user.id);
+    await afterSessionsClosed(p.user, { revokeKeys: c.req.valid('query').revokeKeys === 'true', reason: 'todas las sesiones cerradas' });
     deleteCookie(c, SESSION_COOKIE, { path: '/' });
     return c.body(null, 204);
   });
@@ -405,6 +515,15 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     method: 'get', path: '/api/auth/me', tags: ['auth'], summary: 'Quién soy y mis cuotas', security: bearer,
     responses: { 200: jsonRes(z.object({ user: UserOut, via: z.enum(['session', 'apikey']), quotas: QuotasOut }), 'Usuario'), 401: errors[401], 403: errors[403] },
   }), async c => { const p = requireUser(c); return c.json({ user: publicUser(p.user), via: p.via, quotas: await quotasFor(p.user) }, 200); });
+
+  app.openapi(createRoute({
+    method: 'get', path: '/api/auth/session', tags: ['auth'], summary: '¿Hay sesión? Como `GET /api/auth/me` pero responde 200 con `user: null` si no la hay (la app web lo consulta en cada carga)', security: bearer,
+    responses: { 200: jsonRes(z.object({ user: UserOut.nullable(), via: z.enum(['session', 'apikey']).nullable() }), 'Usuario o null') },
+  }), c => {
+    const p = c.get('principal');
+    c.header('cache-control', 'no-store');
+    return c.json(p?.kind === 'user' ? { user: publicUser(p.user), via: p.via } : { user: null, via: null }, 200);
+  });
 
   app.openapi(createRoute({
     method: 'patch', path: '/api/auth/me', tags: ['auth'], summary: 'Cambiar mi nombre o mi email (el email exige la contraseña actual y una sesión)', security: bearer,
@@ -527,17 +646,18 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   });
 
   app.openapi(createRoute({
-    method: 'post', path: '/api/auth/password', tags: ['auth'], summary: 'Cambiar mi contraseña (actual + nueva); cierra las demás sesiones', security: bearer,
-    request: { body: jsonBody(z.object({ current: z.string().min(1), password: Password })) },
+    method: 'post', path: '/api/auth/password', tags: ['auth'], summary: 'Cambiar mi contraseña (actual + nueva, distinta); cierra las demás sesiones y sus WebSockets (4402). Con `revokeKeys: true` revoca también mis API keys', security: bearer,
+    request: { body: jsonBody(z.object({ current: z.string().min(1), password: Password, revokeKeys: z.boolean().optional().describe('Revocar también todas mis API keys') })) },
     responses: { 200: jsonRes(z.object({ ok: z.literal(true) }), 'Cambiada'), 400: errors[400], 401: errors[401], 403: errors[403], 429: jsonRes(ErrorOut, 'Demasiados intentos') },
   }), async c => {
-    const p = requireUser(c);
-    if (p.via !== 'session') throw fail(403, 'Cambia la contraseña desde una sesión, no con una API key');
+    const p = requireSession(c, 'Cambia la contraseña');
     if (!passwordLimiter.check(`user:${p.user.id}`)) throw fail(429, 'Demasiados intentos; espera unos minutos');
-    const { current, password } = c.req.valid('json');
+    const { current, password, revokeKeys } = c.req.valid('json');
     if (!p.user.passwordHash || !(await verifyPassword(current, p.user.passwordHash))) throw fail(403, 'La contraseña actual no es correcta');
+    if (password === current) throw fail(400, 'La contraseña nueva tiene que ser distinta de la actual', { code: 'password_same', fields: ['password'] });
     await store.setPasswordHash(p.user.id, await hashPassword(password));
     await store.deleteUserSessions(p.user.id, p.sessionHash);
+    await afterSessionsClosed(p.user, { revokeKeys: !!revokeKeys, ...(p.sessionHash ? { exceptSessionHash: p.sessionHash } : {}), reason: 'contraseña cambiada' });
     passwordLimiter.reset(`user:${p.user.id}`);
     return c.json({ ok: true as const }, 200);
   });
@@ -568,9 +688,9 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   });
 
   app.openapi(createRoute({
-    method: 'post', path: '/api/admin/users/{id}/reset', tags: ['admin'], summary: 'Restablecer la contraseña de un usuario: devuelve una temporal y cierra sus sesiones (admin, desde sesión)', security: bearer,
-    request: { params: Id },
-    responses: { 200: jsonRes(z.object({ password: z.string() }), 'Contraseña temporal (sólo se muestra aquí)'), 401: errors[401], 403: errors[403], 404: errors[404] },
+    method: 'post', path: '/api/admin/users/{id}/reset', tags: ['admin'], summary: 'Restablecer la contraseña de un usuario: devuelve una temporal, cierra sus sesiones y sus WebSockets (4402); con `revokeKeys=true` revoca también sus API keys (admin, desde sesión)', security: bearer,
+    request: { params: Id, query: RevokeKeysQuery },
+    responses: { 200: jsonRes(z.object({ password: z.string() }), 'Contraseña temporal (solo se muestra aquí)'), 401: errors[401], 403: errors[403], 404: errors[404] },
   }), async c => {
     const p = requireAdmin(c);
     if (p.via !== 'session') throw fail(403, 'Restablece contraseñas desde una sesión, no con una API key');
@@ -580,6 +700,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     const password = randomToken('', 16);
     await store.setPasswordHash(u.id, await hashPassword(password));
     await store.deleteUserSessions(u.id);
+    await afterSessionsClosed(u, { revokeKeys: c.req.valid('query').revokeKeys === 'true', reason: 'contraseña restablecida' });
     return c.json({ password }, 200);
   });
 
@@ -594,7 +715,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   });
 
   app.openapi(createRoute({
-    method: 'post', path: '/api/keys', tags: ['auth'], summary: 'Crear API key (el secreto sólo se devuelve aquí)', security: bearer,
+    method: 'post', path: '/api/keys', tags: ['auth'], summary: 'Crear API key (el secreto solo se devuelve aquí)', security: bearer,
     request: { body: jsonBody(z.object({ name: z.string().trim().min(1).max(80).default('API key') })) },
     responses: { 201: jsonRes(KeyOut.extend({ key: z.string() }), 'Clave creada'), 400: errors[400], 401: errors[401] },
   }), async c => {
@@ -610,7 +731,9 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     responses: { 204: { description: 'Revocada' }, 401: errors[401], 404: errors[404] },
   }), async c => {
     const p = requireUser(c);
-    if (!(await store.deleteApiKey(p.user.id, c.req.valid('param').id))) throw fail(404, 'No existe esa clave');
+    const keyId = c.req.valid('param').id;
+    if (!(await store.deleteApiKey(p.user.id, keyId))) throw fail(404, 'No existe esa clave');
+    await kickUser(p.user, { keyId }, WS_REVOKED, 'clave revocada'); // los agentes conectados con ella, fuera
     return c.body(null, 204);
   });
 
@@ -662,7 +785,8 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   }), async c => {
     const id = c.req.valid('param').id, body = c.req.valid('json');
     const { role, principal } = await requireRole(c, id, body.ownerId !== undefined ? 'owner' : 'editor');
-    if (principal.kind !== 'user') throw fail(403, 'Un enlace compartido no puede cambiar la meta');
+    // Un enlace de edición puede renombrar (el nombre también se cambia en el editor); cambiar el dueño, no.
+    if (principal.kind !== 'user' && body.ownerId !== undefined) throw fail(403, 'Un enlace compartido no puede cambiar el dueño');
     if (body.ownerId !== undefined && !(await store.getUser(body.ownerId))) throw fail(400, 'ownerId no existe');
     const prevOwner = (await store.getWorkspace(id))?.ownerId;
     const row = await store.updateMeta(id, body);
@@ -691,9 +815,11 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     responses: { 200: jsonRes(z.object({ ownerId: z.string(), members: z.array(MemberOut) }), 'Miembros'), ...errors },
   }), async c => {
     const id = c.req.valid('param').id;
-    const { ws } = await requireRole(c, id, 'viewer');
+    const { ws, principal } = await requireRole(c, id, 'viewer');
     const members = await store.listMembers(id);
-    return c.json({ ownerId: ws.ownerId, members: members.map(({ workspaceId: _w, ...m }) => m) }, 200);
+    // Con un enlace compartido (quizá de lectura y sin cuenta) se ven los nombres, no los correos.
+    const withEmail = principal.kind === 'user';
+    return c.json({ ownerId: ws.ownerId, members: members.map(({ workspaceId: _w, user, ...m }) => ({ ...m, user: user ? (withEmail ? user : { id: user.id, name: user.name }) : null })) }, 200);
   });
 
   app.openapi(createRoute({
@@ -737,6 +863,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   }), async c => {
     const id = c.req.valid('param').id; const body = c.req.valid('json');
     const { principal } = await requireRole(c, id, 'owner');
+    if (body.expiresAt !== undefined && Date.parse(body.expiresAt) <= Date.now()) throw fail(400, 'La fecha de caducidad ya ha pasado: elige una futura', { code: 'link_expires_past', fields: ['expiresAt'] });
     if (!linkLimiter.check(principal.kind === 'user' ? `user:${principal.user.id}` : `ip:${clientIp(c)}`)) throw fail(429, 'Demasiados enlaces creados; espera unos minutos');
     const link = await store.createShareLink({ workspaceId: id, role: body.role, createdBy: principal.kind === 'user' ? principal.user.id : 'link', token: randomToken(LINK_PREFIX), expiresAt: body.expiresAt ?? null });
     return c.json({ ...link, url: linkUrl(c, id, link.token) }, 201);
@@ -846,7 +973,8 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   }), async c => {
     const id = c.req.valid('param').id;
     const { principal } = await requireRole(c, id, 'editor');
-    const meta = await docs.createSnapshot(id, principal.kind === 'user' ? principal.user.id : null, c.req.valid('json').label ?? null);
+    // Sin etiqueta = `""` (manual), no `null` (automática): se distingue en el historial y no se poda (fallo 50).
+    const meta = await docs.createSnapshot(id, principal.kind === 'user' ? principal.user.id : null, c.req.valid('json').label ?? '');
     return c.json(await authorOf(meta), 201);
   });
 

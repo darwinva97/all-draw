@@ -7,11 +7,12 @@ import { LANGS, useLang, useT, type Lang } from '@all-draw/i18n';
 import { CHAPTERS, GROUPS, chapterOf, editUrl, loadChapter, type ChapterDef, type LoadedChapter } from './chapters';
 import { docHref, isDocSlug, parseDocsHash, type DocSlug } from './links';
 import { headingsOf, highlight, inlineText, parseMarkdown, renderBlocks, uniqueIds, type Block } from './markdown';
-import { buildIndex, search, termsOf, type Hit } from './search';
+import { buildIndex, search, termsOf, tooShort, type Hit } from './search';
 import { NotationIndex, NotationRef } from './NotationRef';
 import { ApiRef } from './ApiRef';
 import { Icon } from './icons';
 import { createRegistry } from '../registry';
+import { useDocumentTitle } from '../title';
 import './docs.css';
 
 const THEME_KEY = 'alldraw:theme';
@@ -48,6 +49,9 @@ function useDocsTheme(): { mode: ThemeMode; dark: boolean; cycle: () => void } {
   return { mode, dark, cycle };
 }
 
+/** Ancho en el que la barra lateral es un cajón (mismo corte que `docs.css`). */
+const NAV_DRAWER = '(max-width: 959px)';
+
 const titleOf = (t: (s: string) => string, c: ChapterDef | undefined, slug: string) => (c ? t(c.title) : slug);
 
 // ---------------------------------------------------------------- Pantalla
@@ -57,25 +61,49 @@ export default function DocsScreen({ hash }: { hash: string }) {
   const route = parseDocsHash(hash) ?? { slug: '', anchor: null, q: null };
   const { mode, dark, cycle } = useDocsTheme();
   const [navOpen, setNavOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLElement>(null);
+  const menuRef = useRef<HTMLButtonElement>(null);
+  /** Cierra el índice móvil y devuelve el foco al botón del menú (Escape, velo). */
+  const closeNav = useCallback(() => { setNavOpen(false); menuRef.current?.focus(); }, []);
 
-  useEffect(() => { setNavOpen(false); }, [route.slug, route.anchor]);
+  useEffect(() => {
+    setNavOpen(false);
+    // Si se navegó desde el índice móvil, el enlace pulsado queda oculto: el foco pasa al contenido.
+    // (`main` aún es `inert` hasta que se limpie el efecto del cajón: se le quita antes de enfocarlo.)
+    const main = mainRef.current;
+    if (main && navRef.current?.contains(document.activeElement) && matchMedia(NAV_DRAWER).matches) { main.inert = false; main.focus({ preventScroll: true }); }
+  }, [route.slug, route.anchor]);
   useEffect(() => {
     if (!navOpen) return;
-    navRef.current?.querySelector<HTMLElement>('a[aria-current="page"], a')?.focus();
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setNavOpen(false); };
-    addEventListener('keydown', h);
-    return () => removeEventListener('keydown', h);
-  }, [navOpen]);
+    const mq = matchMedia(NAV_DRAWER);
+    if (!mq.matches) { setNavOpen(false); return; }
+    // Foco en el capítulo actual (o en el primer enlace si no hay ninguno marcado).
+    const nav = navRef.current;
+    (nav?.querySelector<HTMLElement>('a[aria-current="page"]') ?? nav?.querySelector<HTMLElement>('a'))?.focus();
+    // Con el cajón abierto, lo de detrás no es tabulable: todo `inert` salvo el botón del menú y el propio índice.
+    const root = rootRef.current;
+    const behind = root ? [...root.querySelectorAll<HTMLElement>('.docs-skip, .docs-header > :not(.docs-header__menu), .docs-main')] : [];
+    behind.forEach(el => { el.inert = true; });
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); closeNav(); } };
+    const onMq = () => { if (!mq.matches) setNavOpen(false); };
+    addEventListener('keydown', onKey);
+    mq.addEventListener('change', onMq);
+    return () => {
+      behind.forEach(el => { el.inert = false; });
+      removeEventListener('keydown', onKey);
+      mq.removeEventListener('change', onMq);
+    };
+  }, [navOpen, closeNav]);
   useEffect(() => () => { document.title = 'all-draw'; }, []);
 
   const themeLabel = mode === 'system' ? t('Tema: sistema') : mode === 'light' ? t('Tema: claro') : t('Tema: oscuro');
   return (
-    <div className={`docs ${dark ? 'docs--dark' : 'docs--light'} ${navOpen ? 'is-nav-open' : ''}`}>
+    <div ref={rootRef} className={`docs ${dark ? 'docs--dark' : 'docs--light'} ${navOpen ? 'is-nav-open' : ''}`}>
       <button type="button" className="docs-skip" onClick={() => mainRef.current?.focus()}>{t('Saltar al contenido')}</button>
       <header className="docs-header">
-        <button type="button" className="docs-iconbtn docs-header__menu" aria-expanded={navOpen} aria-controls="docs-nav" onClick={() => setNavOpen(o => !o)} aria-label={navOpen ? t('Cerrar el índice') : t('Abrir el índice')}>
+        <button ref={menuRef} type="button" className="docs-iconbtn docs-header__menu" aria-expanded={navOpen} aria-controls="docs-nav" onClick={() => setNavOpen(o => !o)} aria-label={navOpen ? t('Cerrar el índice') : t('Abrir el índice')}>
           <Icon name={navOpen ? 'close' : 'menu'} />
         </button>
         <a className="docs-brand" href="#/" title={t('Volver a la aplicación')}>
@@ -95,7 +123,7 @@ export default function DocsScreen({ hash }: { hash: string }) {
         </div>
       </header>
       <div className="docs-layout">
-        <div className="docs-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />
+        <div className="docs-scrim" onClick={closeNav} aria-hidden="true" />
         <nav id="docs-nav" ref={navRef} className="docs-sidebar" aria-label={t('Capítulos del manual')}>
           <Sidebar current={route.slug} lang={lang} />
         </nav>
@@ -162,7 +190,8 @@ function ChapterList() {
 
 function IndexPage() {
   const t = useT();
-  useEffect(() => { document.title = `${t('Documentación')} | all-draw`; window.scrollTo(0, 0); }, [t]);
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+  useDocumentTitle(`${t('Documentación')} | all-draw`);
   return (
     <div className="docs-index">
       <header className="docs-index__hero">
@@ -181,7 +210,7 @@ function IndexPage() {
 
 function NotFound({ slug }: { slug: string }) {
   const t = useT();
-  useEffect(() => { document.title = `${t('Página no encontrada')} | all-draw`; }, [t]);
+  useDocumentTitle(`${t('Página no encontrada')} | all-draw`);
   return (
     <article className="docs-article">
       <h1 className="docs-h docs-h1">{t('Página no encontrada')}</h1>
@@ -311,7 +340,7 @@ function SearchBox({ lang }: { lang: Lang }) {
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [active, setActive] = useState(0);
   useEffect(() => {
-    if (!q.trim()) { setHits(null); return; }
+    if (!q.trim() || tooShort(q)) { setHits(null); return; }
     let alive = true;
     const timer = setTimeout(() => {
       buildIndex(lang).then(sections => { if (alive) { setHits(search(sections, q)); setActive(0); } }).catch(() => { if (alive) setHits([]); });
@@ -329,6 +358,7 @@ function SearchBox({ lang }: { lang: Lang }) {
   }, []);
   const go = (h: Hit | undefined) => { if (!h) return; location.hash = hitHref(h, q); setOpen(false); setQ(''); input.current?.blur(); };
   const terms = termsOf(q);
+  const short = tooShort(q);
   const show = open && q.trim().length > 0;
   const chapterTitle = (slug: string, fallback: string) => { const c = chapterOf(slug); return c ? t(c.title) : fallback; };
   return (
@@ -337,8 +367,8 @@ function SearchBox({ lang }: { lang: Lang }) {
       <label htmlFor={`${id}-q`} className="visually-hidden">{t('Buscar en la documentación')}</label>
       <input
         ref={input} id={`${id}-q`} type="search" autoComplete="off" spellCheck={false}
-        placeholder={t('Buscar en la documentación')}
-        role="combobox" aria-expanded={show} aria-controls={`${id}-list`} aria-autocomplete="list"
+        placeholder={t('Buscar…')}
+        role="combobox" aria-expanded={show} aria-controls={show ? `${id}-list` : undefined} aria-autocomplete="list"
         aria-activedescendant={show && hits?.length ? `${id}-o${active}` : undefined}
         value={q}
         onChange={e => { setQ(e.target.value); setOpen(true); }}
@@ -354,9 +384,10 @@ function SearchBox({ lang }: { lang: Lang }) {
       {show && (
         <div className="docs-search__pop">
           <ul id={`${id}-list`} role="listbox" aria-label={t('Resultados de la búsqueda')}>
-            {hits === null && <li className="docs-search__msg" role="presentation">{t('Buscando…')}</li>}
-            {hits?.length === 0 && <li className="docs-search__msg" role="presentation">{t('Nada coincide con «{q}». Prueba con otra palabra o mira el glosario.', { q })}</li>}
-            {hits?.map((h, i) => (
+            {short && <li className="docs-search__msg" role="presentation">{t('Escribe al menos 2 letras para buscar.')}</li>}
+            {!short && hits === null && <li className="docs-search__msg" role="presentation">{t('Buscando…')}</li>}
+            {!short && hits?.length === 0 && <li className="docs-search__msg" role="presentation">{t('Nada coincide con «{q}». Prueba con otra palabra o mira el glosario.', { q })}</li>}
+            {!short && hits?.map((h, i) => (
               <li key={`${h.section.slug}#${h.section.id ?? ''}`} id={`${id}-o${i}`} role="option" aria-selected={i === active} className={i === active ? 'is-active' : undefined}
                 onMouseEnter={() => setActive(i)} onMouseDown={e => { if (e.button === 0) { e.preventDefault(); go(h); } }}>
                 <a href={hitHref(h, q)} tabIndex={-1}>

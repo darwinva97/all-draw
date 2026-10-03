@@ -3,6 +3,7 @@ import { Handle, NodeResizer, Position, type NodeProps, type Node } from '@xyflo
 import type { Element, ElementType, Port, RuleStyle, ViewNode } from '@all-draw/core';
 import { textInset, figureOf, showsIcon } from '@all-draw/notation-archimate';
 import { shapeStyle, shapeColors, ShapeSvg, figureFor, personGeometry, readable } from './shapes';
+import { compartmentsOf, compartmentLayout, type CompartmentLayout } from './compartments';
 import { ArchimateFigure, archimateBox } from './ArchimateFigure';
 import { InlineEdit } from './InlineEdit';
 import { useNodeEnv } from './env';
@@ -51,6 +52,8 @@ export function elementNodePropsEqual(a: NodeProps<ElementRFNode>, b: NodeProps<
 }
 
 const SMALL_SHAPES = new Set(['circle', 'double-circle', 'diamond', 'bar', 'actor']);
+/** Opacidad de `.ad-node.is-dimmed` (editor.css). */
+export const DIMMED_OPACITY = 0.45;
 
 /** Nodo genérico: pinta cualquier elemento según su tipo (forma, color, icono), las reglas de estilo y sus puertos. */
 export const ElementNode = memo(function ElementNode({ data, selected }: NodeProps<ElementRFNode>) {
@@ -64,6 +67,11 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   // Las figuras SVG reciben el relleno y el trazo reales (la caja CSS de esas figuras es transparente).
   const colors = shapeColors(type, vn, rule, dark);
   const figure = figureFor(element.typeId, shape);
+  // Clase, interfaz, enumeración, entidad: compartimentos con una fila por atributo (y su pin a esa altura).
+  const cmp = archimate ? undefined : compartmentsOf(element, type);
+  const layout = cmp ? compartmentLayout(cmp) : undefined;
+  if (layout) css.height = Math.max(vn.h, layout.height);
+  if (figure === 'store') css.color = rule.text ?? vn.style.text ?? readable(colors.fill);
   if (figure === 'person') {
     // Persona C4: el texto va dentro del cuerpo, bajo la cabeza, con el color legible sobre el del tipo.
     css.color = rule.text ?? vn.style.text ?? readable(colors.fill);
@@ -71,6 +79,8 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
     css.paddingBottom = 4;
   }
   const label = vn.text ?? (element.name || (type?.name ?? ''));
+  // Sin nombre, la etiqueta ya es el nombre del tipo: no se repite debajo ("Tarea / Tarea").
+  const showType = !!type && !lowDetail && label !== type.name;
   // Figuras de Archi: el fondo lo pinta `ArchimateFigure` (path + icono) y el texto se centra en la zona útil.
   const archiFill = css.background as string, archiStroke = css.borderColor as string;
   // Rectángulo y redondeado sólidos de 1 px: los pinta la caja CSS (sin SVG); el resto, `ArchimateFigure`.
@@ -84,6 +94,14 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   }
   const icon = archimate || SMALL_SHAPES.has(shape) ? undefined : ((rule.icon ?? type?.icon) || undefined);
   const editing = !!data.editing;
+  // Atenuado (otra notación o fuera del viewpoint) con una opacidad propia: se combinan (la clase sola daría .45 fijo).
+  if (data.dimmed && css.opacity !== undefined) css.opacity = Number(css.opacity) * DIMMED_OPACITY;
+  // Posición de la etiqueta que guardan los importadores (como el SVG): `top` arriba (contenedores de Archi con hijos),
+  // `bottom` fuera, bajo la figura (objetos y almacenes de datos BPMN). Las figuras con etiqueta debajo ya la llevan ahí.
+  const labelPos = !layout && !SMALL_SHAPES.has(shape) ? vn.style.labelPosition : undefined;
+  const labelBelow = labelPos === 'bottom';
+  const rowKeys = layout ? new Set(layout.sections.flatMap(sec => sec.rows.map(r => r.portKey))) : undefined;
+  const loose = rowKeys ? visible.filter(p => !rowKeys.has(p.key)) : visible;
   if (data.remoteColor && !selected) { css.outline = `2px solid ${data.remoteColor}`; css.outlineOffset = 2; }
 
   const onLabelDoubleClick = (e: MouseEvent) => {
@@ -98,28 +116,38 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   };
 
   return (
-    <div className={`ad-node ad-shape-${figure}${archimate ? ' ad-node--archimate' : ''}${type?.container ? ' is-container' : ''}${selected ? ' is-selected' : ''}${data.dimmed ? ' is-dimmed' : ''}${rule.bold ? ' r-bold' : ''}${rule.strike ? ' r-strike' : ''}`} style={css} title={element.doc || undefined}>
+    <div className={`ad-node ad-shape-${figure}${layout ? ' ad-node--cls' : ''}${labelPos === 'top' || labelBelow ? ` ad-node--label-${labelPos}` : ''}${archimate ? ' ad-node--archimate' : ''}${type?.container ? ' is-container' : ''}${selected ? ' is-selected' : ''}${data.dimmed ? ' is-dimmed' : ''}${rule.bold ? ' r-bold' : ''}${rule.strike ? ' r-strike' : ''}`} style={css} title={element.doc || undefined}>
       {/* El redimensionador (8 controles) solo existe con el nodo seleccionado. */}
-      {!readOnly && selected && !editing && <NodeResizer minWidth={24} minHeight={16} lineClassName="ad-resizer__line" handleClassName="ad-resizer__handle" />}
+      {!readOnly && selected && !editing && <NodeResizer minWidth={24} minHeight={layout?.height ?? 16} lineClassName="ad-resizer__line" handleClassName="ad-resizer__handle" />}
       {boxRadius !== undefined && <div className="ad-archi-box" style={archimateBoxStyle(vn.w, vn.h, boxRadius, dark && archiFill === '#fff' ? '#1c2230' : archiFill, archiStroke)} />}
       {archimate
         ? <ArchimateFigure typeId={element.typeId} figure={vn.style.figure} w={vn.w} h={vn.h} fill={archiFill} stroke={archiStroke} strokeWidth={rule.borderWidth ?? 1} borderStyle={rule.borderStyle} box={boxRadius !== undefined} lowDetail={lowDetail} />
-        : <ShapeSvg shape={figure} fill={colors.fill} stroke={colors.stroke} figure={vn.style.figure} w={vn.w} h={vn.h} />}
+        : <ShapeSvg shape={figure} fill={colors.fill} stroke={colors.stroke} figure={vn.style.figure} w={vn.w} h={vn.h} dark={dark} />}
       {/* Manejadores del cuerpo: React Flow los necesita para situar las aristas (aunque sean flotantes). */}
       <Handle type="target" position={Position.Top} id="" className="ad-handle ad-handle--body" />
       <Handle type="source" position={Position.Bottom} id="" className="ad-handle ad-handle--body" />
+      {layout && cmp ? (
+        <Classifier layout={layout} cmp={cmp} label={label} ports={data.ports} lowDetail={lowDetail}
+          name={editing ? <InlineEdit value={element.name} onCommit={rename} onCancel={() => setRenaming(null)} /> : <span className="ad-node__label" onDoubleClick={onLabelDoubleClick}>{label}</span>}
+          dupTitle={t('Nombre repetido')} pkTitle={t('Clave primaria')} />
+      ) : (
+      <>
+      {labelBelow && icon && <span className="ad-node__icon ad-node__icon--alone">{icon}</span>}
       <div className="ad-node__body">
-        {icon && <span className="ad-node__icon">{icon}</span>}
+        {icon && !labelBelow && <span className="ad-node__icon">{icon}</span>}
         {editing
           ? <InlineEdit value={element.name} onCommit={rename} onCancel={() => setRenaming(null)} />
           : <span className="ad-node__label" onDoubleClick={onLabelDoubleClick}>{label}</span>}
         {rule.badge && <span className="ad-node__badge" style={{ background: rule.badge }}>{rule.badgeText}</span>}
-        {type && !lowDetail && <span className="ad-node__type">{type.name}</span>}
+        {showType && !labelBelow && <span className="ad-node__type">{type?.name}</span>}
       </div>
-      {visible.length > 0 && (
+      </>
+      )}
+      {layout && rule.badge && <span className="ad-node__badge" style={{ background: rule.badge }}>{rule.badgeText}</span>}
+      {loose.length > 0 && (
         <div className="ad-ports">
-          {visible.map((p, i) => (
-            <div key={p.id} className={`ad-port ad-port--${p.direction}`} style={{ top: `${((i + 1) / (visible.length + 1)) * 100}%` }}>
+          {loose.map((p, i) => (
+            <div key={p.id} className={`ad-port ad-port--${p.direction}`} style={{ top: `${((i + 1) / (loose.length + 1)) * 100}%` }}>
               {p.direction !== 'out' && <Handle type="target" position={Position.Left} id={p.id} className="ad-handle ad-handle--port" />}
               <span className="ad-port__label" title={`${p.key}${p.dataType ? ` · ${p.dataType}` : ''}`}>{p.label ?? p.key}</span>
               {p.direction !== 'in' && <Handle type="source" position={Position.Right} id={p.id} className="ad-handle ad-handle--port" />}
@@ -131,6 +159,43 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
     </div>
   );
 }, elementNodePropsEqual);
+
+/**
+ * Cuerpo de un clasificador: cabecera («estereotipo» y nombre, en cursiva si es abstracto) y una sección por campo. Las
+ * filas que son pines llevan sus manejadores (entrada a la izquierda, salida a la derecha) a la altura de la fila.
+ */
+function Classifier({ layout, cmp, name, label, ports, lowDetail, dupTitle, pkTitle }: { layout: CompartmentLayout; cmp: NonNullable<ReturnType<typeof compartmentsOf>>; name: React.ReactNode; label: string; ports: Port[]; lowDetail: boolean; dupTitle: string; pkTitle: string }) {
+  const byKey = new Map(ports.map(p => [p.key, p] as const));
+  return (
+    <>
+      <div className="ad-cls__head" style={{ height: layout.headerH }} title={label}>
+        {cmp.stereotype && <span className="ad-cls__stereo">«{cmp.stereotype}»</span>}
+        <span className={`ad-cls__name${cmp.italic ? ' is-abstract' : ''}`}>{name}</span>
+      </div>
+      {layout.sections.map((sec, i) => (
+        <div key={i} className="ad-cls__sec" style={{ top: sec.y, height: sec.h }}>
+          {!lowDetail && sec.rows.map(r => (
+            <div key={r.portKey} className={`ad-cls__row${r.pk ? ' is-pk' : ''}${r.dup ? ' is-dup' : ''}`} style={{ top: r.cy - sec.y }} title={r.dup ? dupTitle : undefined}>
+              {r.pk && <span className="ad-cls__pk" title={pkTitle}>PK</span>}
+              <span className="ad-cls__text">{r.text}</span>
+              {r.detail && <span className="ad-cls__detail">{r.detail}</span>}
+            </div>
+          ))}
+        </div>
+      ))}
+      {layout.sections.flatMap(sec => sec.rows).map(r => {
+        const p = byKey.get(r.portKey);
+        if (!p) return null;
+        return (
+          <span key={`h-${r.portKey}`}>
+            {p.direction !== 'out' && <Handle type="target" position={Position.Left} id={p.id} className="ad-handle ad-handle--port ad-handle--row" style={{ top: r.cy }} />}
+            {p.direction !== 'in' && <Handle type="source" position={Position.Right} id={p.id} className="ad-handle ad-handle--port ad-handle--row" style={{ top: r.cy }} />}
+          </span>
+        );
+      })}
+    </>
+  );
+}
 
 /**
  * Caja, trazo y radio que ocuparía el SVG de una figura rectangular o redondeada de Archi (`.ad-archi-box`). El SVG va

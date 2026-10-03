@@ -1,0 +1,24 @@
+stateDiagram-v2
+    [*] --> Inactivo
+    Inactivo --> Cargando : buscar [query no vacía] / limpiar
+    Cargando --> Mostrando : ok
+    Cargando --> Error : fallo
+    Error --> Cargando : reintentar
+    state Mostrando {
+        [*] --> Lista
+        Lista --> Detalle : seleccionar
+        Detalle --> Lista : volver
+    }
+    state elegir <<choice>>
+    Mostrando --> elegir
+    elegir --> Inactivo : vacío
+    elegir --> [*] : cerrar
+    state Paralelo {
+        A1 --> A2
+        --
+        B1 --> B2
+    }
+    state f <<fork>>
+    Inactivo --> f
+    f --> Paralelo
+    note right of Inactivo : una nota

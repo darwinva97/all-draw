@@ -1,7 +1,7 @@
 /** Configuración por variables de entorno (ver README). */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_MAX_DOC_BYTES, DEFAULT_MAX_WORKSPACES_PER_USER, DEFAULT_REGISTER_MIN_MS, parseLogLevel, type ApiConfig, type LogLevel } from '@all-draw/server-core';
+import { DEFAULT_MAX_DOC_BYTES, DEFAULT_MAX_WORKSPACES_PER_USER, DEFAULT_REGISTER_MIN_MS, DEFAULT_TRUSTED_PROXIES, parseLogLevel, type ApiConfig, type LogLevel } from '@all-draw/server-core';
 
 export interface Config extends ApiConfig {
   host: string;
@@ -32,6 +32,11 @@ export interface Config extends ApiConfig {
   maxWorkspacesPerUser: number;
   maxDocBytes: number;
   registerMinMs: number;
+  /**
+   * `TRUSTED_PROXIES`: de quién se cree `X-Forwarded-For` / `CF-Connecting-IP` para saber la IP real del cliente (límites
+   * anti-abuso y log). IPs, redes CIDR y `loopback`, `private`, `cloudflare`; por defecto `loopback,cloudflare`; vacío = nadie.
+   */
+  trustedProxies: string;
 }
 
 const int = (v: string | undefined, fallback: number): number => {
@@ -63,5 +68,6 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
     maxWorkspacesPerUser: int(env.MAX_WORKSPACES_PER_USER, DEFAULT_MAX_WORKSPACES_PER_USER),
     maxDocBytes: int(env.MAX_DOC_BYTES, DEFAULT_MAX_DOC_BYTES),
     registerMinMs: int(env.REGISTER_MIN_MS, DEFAULT_REGISTER_MIN_MS),
+    trustedProxies: env.TRUSTED_PROXIES ?? DEFAULT_TRUSTED_PROXIES,
   };
 }

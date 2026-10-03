@@ -18,6 +18,7 @@ import { STATECHART_PACK } from '@all-draw/notation-statechart';
 import { buildXml, attrs, type XmlNode } from './xml';
 import { shapeOf, edgeHeads, ER_RELATION_HEADS } from './mermaid';
 import type { TextExport } from './archimate';
+import { tr } from './i18n';
 
 const SHAPE_STYLE: Record<string, string> = {
   rect: 'rounded=0;whiteSpace=wrap;html=1;', rounded: 'rounded=1;whiteSpace=wrap;html=1;', ellipse: 'ellipse;whiteSpace=wrap;html=1;',
@@ -54,7 +55,7 @@ function relStyle(ws: Workspace, typeId: string | undefined): { line?: LineStyle
 export function exportDrawio(ws: Workspace, viewId: string): TextExport {
   const warnings: string[] = [];
   const view = ws.views[viewId];
-  if (!view) throw new Error(`No existe la vista ${viewId}`);
+  if (!view) throw new Error(tr('No existe la vista {view}', { view: viewId }));
   const nodes = Object.values(ws.nodes).filter(n => n.viewId === viewId);
   const nodeById = new Map(nodes.map(n => [n.id, n]));
   const cells: XmlNode[] = [attrs({ id: '0' }), attrs({ id: '1', parent: '0' })];
@@ -99,7 +100,7 @@ export function exportDrawio(ws: Workspace, viewId: string): TextExport {
     if (n.parentNodeId && nodeById.has(n.parentNodeId)) emit(nodeById.get(n.parentNodeId)!);
     emitted.add(n.id);
     const el = n.elementId ? ws.elements[n.elementId] : undefined;
-    if (n.elementId && !el) warnings.push(`El nodo ${n.id} apunta al elemento inexistente ${n.elementId}; se exporta vacío`);
+    if (n.elementId && !el) warnings.push(tr('El nodo {node} apunta al elemento inexistente {element}; se exporta vacío', { node: n.id, element: n.elementId }));
     const label = el ? el.name : n.text ?? '';
     const shape = shapeOf(ws, el) ?? (n.visualType === 'core:note' ? 'note' : n.visualType === 'core:group' ? 'group' : n.visualType === 'core:label' ? 'label' : 'rounded');
     const hasKids = nodes.some(k => k.parentNodeId === n.id);
@@ -121,7 +122,7 @@ export function exportDrawio(ws: Workspace, viewId: string): TextExport {
   // ---- aristas
   for (const e of Object.values(ws.edges)) {
     if (e.viewId !== viewId) continue;
-    if (!nodeById.has(e.fromNodeId) || !nodeById.has(e.toNodeId)) { warnings.push(`La arista ${e.id} une nodos inexistentes; se omite`); continue; }
+    if (!nodeById.has(e.fromNodeId) || !nodeById.has(e.toNodeId)) { warnings.push(tr('La arista {id} une nodos inexistentes; se omite', { id: e.id })); continue; }
     const rel = e.relationId ? ws.relations[e.relationId] : undefined;
     const rs = relStyle(ws, rel?.typeId);
     const line = e.style.line ?? rs.line ?? 'solid';

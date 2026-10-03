@@ -82,11 +82,33 @@ describe(`worker: revocar accesos cierra los WebSockets (${env.DB ? 'D1' : 'Regi
     expect((await within(e.closed)).code).toBe(4401);
   });
 
+  it('cerrar sesión corta ese navegador (4402); cerrar todas, las demás; la API key sólo con revokeKeys (QA 8 y 9)', async () => {
+    const ana = await register('rv-ses');
+    const id = (await ana.api.post('/api/workspaces', { name: 'Sesiones' })).body.id as string;
+    const me = (await ana.api.get('/api/auth/me')).body.user as { email: string };
+    const login = async () => (await client().post('/api/auth/login', { email: me.email, password: 'contraseña-larga' })).body.token as string;
+    const t2 = await login(), t3 = await login();
+    const key = (await ana.api.post('/api/keys', { name: 'agente' })).body.key as string;
+    const s1 = await openWs(id, ana.token), s2 = await openWs(id, t2), k = await openWs(id, key);
+    expect((await ana.api.post('/api/auth/logout')).status).toBe(204);
+    expect(await within(s1.closed)).toEqual({ code: 4402, reason: 'sesión cerrada' });
+    await tick();
+    expect(s2.isClosed()).toBe(false);
+    expect((await client(key).del('/api/auth/sessions')).status).toBe(403); // una API key no cierra sesiones
+    expect((await client(t3).del('/api/auth/sessions')).status).toBe(204);
+    expect((await within(s2.closed)).code).toBe(4402);
+    await tick();
+    expect(k.isClosed()).toBe(false);
+    expect((await client(await login()).del('/api/auth/sessions?revokeKeys=true')).status).toBe(204);
+    expect((await within(k.closed)).code).toBe(4402);
+    expect((await client(key).get('/api/auth/me')).status).toBe(401);
+  });
+
   it('la identidad la pone el worker: una cabecera x-alldraw-user del cliente no sirve para escapar de la revocación', async () => {
     const owner = await register('rv-own4');
     const id = (await owner.api.post('/api/workspaces', { name: 'Cabeceras' })).body.id as string;
     const tok = (await owner.api.post(`/api/workspaces/${id}/links`, { role: 'editor' })).body.token as string;
-    const a = await openWs(id, tok, { 'x-alldraw-user': 'usr_inventado', 'x-alldraw-link': 'lnk_otro' });
+    const a = await openWs(id, tok, { 'x-alldraw-user': 'usr_inventado', 'x-alldraw-link': 'lnk_otro', 'x-alldraw-session': 'inventada', 'x-alldraw-key': 'key_x' });
     expect((await owner.api.del(`/api/workspaces/${id}/links/${tok}`)).status).toBe(204);
     expect((await within(a.closed)).code).toBe(4401);
   });

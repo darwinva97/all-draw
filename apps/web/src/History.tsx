@@ -32,7 +32,9 @@ export function HistoryDialog({ id, role, onClose }: { id: string; role: Role; o
     if (!(await confirmDialog({ title: t('¿Borrar esta instantánea?'), message: describe(s), danger: true }))) return;
     void run(async () => { await api.deleteSnapshot(id, s.id); toast.success(t('Instantánea borrada')); await refresh(); }, t('No se pudo borrar la instantánea'));
   };
-  const describe = (s: SnapshotInfo) => `${s.label ?? t('Automática')} · ${new Date(s.createdAt).toLocaleString()}`;
+  /** `null` = automática (cada 30 min de actividad o antes de restaurar); `""` = guardada a mano sin etiqueta. */
+  const kindOf = (s: SnapshotInfo) => (s.label === null ? t('Automática') : s.label === '' ? t('Manual, sin etiqueta') : s.label);
+  const describe = (s: SnapshotInfo) => `${kindOf(s)} · ${new Date(s.createdAt).toLocaleString()}`;
   return (
     <div className="modal" onClick={onClose}>
       <div ref={box} className="modal__box" role="dialog" aria-modal="true" aria-labelledby="history-title" tabIndex={-1} onClick={e => e.stopPropagation()}>
@@ -48,7 +50,7 @@ export function HistoryDialog({ id, role, onClose }: { id: string; role: Role; o
           {items?.length === 0 && <li className="list-empty">{t('Todavía no hay instantáneas. Crea una antes de un cambio grande para poder volver.')}</li>}
           {items?.map(s => <li key={s.id} className="row">
             <span className="share__what" style={{ display: 'block' }}>
-              <strong>{s.label ?? <em>{t('Automática')}</em>}</strong> <small>{new Date(s.createdAt).toLocaleString()}</small><br />
+              <strong>{s.label ? s.label : <em>{kindOf(s)}</em>}</strong> <small>{new Date(s.createdAt).toLocaleString()}</small><br />
               <small>{s.author ? s.author.name : t('sistema')} · {fmtSize(s.size)}</small>
             </span>
             {canEdit && <button className="btn" disabled={busy} aria-label={t('Restaurar {what}', { what: describe(s) })} onClick={() => void restore(s)}><Icon name="replay" size={14} />{t('Restaurar')}</button>}

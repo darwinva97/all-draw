@@ -3,7 +3,7 @@
 ## What it is and when to use it {#que-es}
 
 ArchiMate is The Open Group's **enterprise architecture** language. In a single drawing it tells what
-the organisation does (business), which applications it uses to do it (application) and what
+the organization does (business), which applications it uses to do it (application) and what
 infrastructure they run on (technology), plus strategy, motivation (goals, requirements) and change
 projects.
 
@@ -16,7 +16,7 @@ The all-draw pack is generated from the files of the Archi tool, so it follows t
 closely: **61 elements** (the 60 of ArchiMate 3.2 plus *Junction*), **11 relations**, the complete
 validity matrix and **25 viewpoints**.
 
-![ArchiMate view of the demo in the editor](../../img/03-editor-archimate.png)
+![ArchiMate view of the demo in the editor (Spanish interface)](../../img/03-editor-archimate.png)
 
 ## Key elements {#elementos-clave}
 
@@ -25,7 +25,7 @@ The palette groups elements by layer (*Strategy*, *Business*, *Application*, *Te
 
 | Element | Layer | What it represents |
 |---|---|---|
-| **Business Actor** | Business | A specific person or organisation: "Customer", "Risk department" |
+| **Business Actor** | Business | A specific person or organization: "Customer", "Risk department" |
 | **Business Role** | Business | A role someone plays: "Account manager" |
 | **Business Process** | Business | A sequence of work with an outcome: "Customer onboarding" |
 | **Business Service** | Business | What the business offers to the outside: "Onboarding service" |
@@ -34,7 +34,7 @@ The palette groups elements by layer (*Strategy*, *Business*, *Application*, *Te
 | **Application Service** | Application | What an application offers to others: "KYC check" |
 | **Data Object** | Application | Data handled by an application: "Customer file" |
 | **Node** | Technology | Infrastructure where software runs: "Kubernetes cluster" |
-| **Capability**, **Goal**, **Work Package** | Strategy, motivation, implementation | What the organisation is able to do, what it wants to achieve and the projects to get there |
+| **Capability**, **Goal**, **Work Package** | Strategy, motivation, implementation | What the organization is able to do, what it wants to achieve and the projects to get there |
 
 Two special elements: **Grouping** (groups anything) and **Location** (where something is) accept any
 child; **Junction** joins or splits relations (*and*/*or*).
@@ -94,7 +94,7 @@ onboarding"):
 
 ## Import and export {#importar-exportar}
 
-- **Archi** (`.archimate`): import and export, with views, folders, properties, colours and bend points.
+- **Archi** (`.archimate`): import and export, with views, folders, properties, colors and bend points.
   See [Import and export](../importar-exportar.md#archi).
 - **ArchiMate Open Exchange** (`.oef.xml`): the standard exchange format, for Archi, BiZZdesign, Sparx and
   other tools.

@@ -37,7 +37,7 @@ export const DFD_ELEMENT_TYPES: ElementType[] = [
   el('External', 'Entidad externa', {
     shape: 'rect', color: '#FFE6CC', icon: '▢',
     doc: 'Origen o destino de datos fuera del sistema (persona, organización, otro sistema).',
-    fields: [{ key: 'kind', label: 'Clase', kind: 'select', options: 'person,organization,system' }],
+    fields: [{ key: 'kind', label: 'Tipo de entidad', kind: 'select', options: 'person,organization,system', optionLabels: { person: 'Persona', organization: 'Organización', system: 'Sistema' } }],
   }),
 ];
 

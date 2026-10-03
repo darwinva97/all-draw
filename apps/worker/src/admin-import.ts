@@ -43,7 +43,7 @@ async function authorize(request: Request, deps: ImportDeps): Promise<Response |
   if (cred.source === 'cookie' && !isTrustedOrigin(request.headers, url)) return json({ error: 'Petición con cookie desde otro origen rechazada (CSRF)' }, 403);
   const p = await resolveToken(deps, cred.token);
   if (!p) return json({ error: 'Identifícate: Authorization: Bearer <token de admin> o X-Import-Secret' }, 401);
-  if (p.kind !== 'user' || !p.user.isAdmin) return json({ error: 'Sólo administradores' }, 403);
+  if (p.kind !== 'user' || !p.user.isAdmin) return json({ error: 'Solo administradores' }, 403);
   return null;
 }
 

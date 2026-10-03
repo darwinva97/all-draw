@@ -41,12 +41,12 @@ the model even if it is drawn in several views.
 ### Type {#tipo}
 
 The kind of an element or relationship within a notation (for example *Business Process* in
-ArchiMate or *Task* in BPMN). It decides its shape, colour, fields and what it can connect to.
+ArchiMate or *Task* in BPMN). It decides its shape, color, fields and what it can connect to.
 
 ### Category {#categoria}
 
 A grouping of types in the palette (for example *Activities* or *Events* in BPMN). It only serves
-to organise the palette.
+to organize the palette.
 
 ### Field {#campo}
 
@@ -171,9 +171,9 @@ The alternative shape of an ArchiMate element (for example the cylinder of a dat
 stick figure of an actor), instead of the rectangle with an icon. You choose it in the inspector.
 See [ArchiMate](notaciones/archimate.md).
 
-### Diagram catalogue {#catalogo}
+### Diagram catalog {#catalogo}
 
-A list of more than 160 diagram types common in IT organisations (capability map, value stream map,
+A list of more than 160 diagram types common in IT organizations (capability map, value stream map,
 application architecture…) that says which all-draw notation each one is drawn with. It helps you
 pick the diagram type when creating a view. See [notations](notaciones.md).
 
@@ -244,7 +244,7 @@ its instances.
 
 ### Rule {#regla}
 
-A condition plus a style: "if the *status* field is *obsolete*, paint the node grey". It changes
+A condition plus a style: "if the *status* field is *obsolete*, paint the node gray". It changes
 the appearance, not the model.
 
 ### Person {#persona}
@@ -286,7 +286,7 @@ It can be revoked at any time. See [inviting](compartir-y-colaborar.md#invitar).
 ### Role {#rol}
 
 What you can do in a server workspace: **owner** (everything, including sharing and deleting),
-**editor** (edit) or **viewer** (view only). See
+**can edit** or **read-only** (view only). In the API they are called `owner`, `editor` and `viewer`. See
 [sharing and collaborating](compartir-y-colaborar.md).
 
 ### Presence {#presencia}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { relationsOfElement, viewsOfElement, type Element, type FieldDef, type KeyValue, type Relation, type ViewNode } from '@all-draw/core';
-import { useT } from '@all-draw/i18n';
+import { tn, useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { ElementTraces } from './WorkspaceTraces';
 import { CommentsSection } from './Comments';
@@ -9,6 +9,7 @@ import { useRecord, usePorts, useAnyChange, useCollection } from '../hooks';
 import { assignmentsTo, suggestedRoles, newAssignment } from './workspace-helpers';
 import { Icon } from '../icons';
 import { deleteSelection } from '../delete-selection';
+import { TabList, tabPanelProps, useTabIds } from '../ui/tabs';
 
 /** Inspector: lo seleccionado (nodo→elemento, arista→relación) o la vista. */
 export function Inspector() {
@@ -20,7 +21,7 @@ export function Inspector() {
   return <aside className="ad-insp"><ViewInspector viewId={viewId} /></aside>;
 }
 
-function NodeInspector({ nodeId }: { nodeId: string }) {
+export function NodeInspector({ nodeId }: { nodeId: string }) {
   const t = useT();
   const { store, registry, run, readOnly, openView } = useEditor();
   const vn = useRecord('nodes', nodeId);
@@ -28,6 +29,7 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
   const ports = usePorts(el);
   useAnyChange();
   const [tab, setTab] = useState<'data' | 'ports' | 'where' | 'style'>('data');
+  const tabIds = useTabIds();
   if (!vn) return null;
   if (!el) return <VisualInspector vn={vn} />;
   const type = registry.elementType(el.typeId);
@@ -42,13 +44,13 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
         <input className="ad-input ad-input--title" aria-label={t('Nombre')} value={el.name} disabled={readOnly} onChange={e => patchEl({ name: e.target.value })} placeholder={type?.name} />
         <div className="ad-insp__meta">{type?.name ?? el.typeId} · {registry.pack(registry.notationOf(el.typeId))?.name ?? registry.notationOf(el.typeId)}{nodeCount > 1 && <> · {t('en {n} vistas', { n: nodeCount })}</>}</div>
       </header>
-      <div className="ad-tabs">
-        <button className={tab === 'data' ? 'is-active' : ''} onClick={() => setTab('data')}>{t('Datos')}</button>
-        <button className={tab === 'ports' ? 'is-active' : ''} onClick={() => setTab('ports')}>{t('Pines')} {ports.length ? `(${ports.length})` : ''}</button>
-        <button className={tab === 'where' ? 'is-active' : ''} onClick={() => setTab('where')}>{t('Dónde')}</button>
-        <button className={tab === 'style' ? 'is-active' : ''} onClick={() => setTab('style')}>{t('Estilo')}</button>
-      </div>
-      <div className="ad-insp__scroll">
+      <TabList ids={tabIds} label={t('Secciones del inspector')} value={tab} onChange={setTab} tabs={[
+        { id: 'data', label: t('Datos') },
+        { id: 'ports', label: <>{t('Pines')} {ports.length ? `(${ports.length})` : ''}</> },
+        { id: 'where', label: t('Dónde') },
+        { id: 'style', label: t('Estilo') },
+      ]} />
+      <div className="ad-insp__scroll" {...tabPanelProps(tabIds, tab)}>
         {tab === 'data' && <>
           <label className="ad-field"><span>{t('Documentación')}</span><textarea className="ad-input" rows={3} value={el.doc} disabled={readOnly} onChange={e => patchEl({ doc: e.target.value })} /></label>
           {defs.map(d => <FieldEditor key={d.key} def={d} value={el.fields[d.key]} disabled={readOnly} onChange={v => patchEl({ fields: { [d.key]: v } })} />)}
@@ -180,7 +182,7 @@ function EdgeInspector({ edgeId }: { edgeId: string }) {
 
 function ViewInspector({ viewId }: { viewId: string | null }) {
   const t = useT();
-  const { registry, run, readOnly, store } = useEditor();
+  const { registry, run, readOnly, store, share } = useEditor();
   const view = useRecord('views', viewId);
   useAnyChange();
   if (!view) return <div className="ad-empty">{t('Nada seleccionado')}</div>;
@@ -190,7 +192,7 @@ function ViewInspector({ viewId }: { viewId: string | null }) {
   const n = store.list('nodes').filter(x => x.viewId === view.id).length;
   return <>
     <header className="ad-insp__head"><input className="ad-input ad-input--title" aria-label={t('Nombre')} disabled={readOnly} value={view.name} onChange={e => patch({ name: e.target.value })} />
-      <div className="ad-insp__meta">{t('Vista')} · {pack?.name ?? view.notationId} · {t('{n} nodos', { n })}{root && <> · {t('detalle de')} <b>{root.name}</b></>}</div></header>
+      <div className="ad-insp__meta">{t('Vista')} · {pack?.name ?? view.notationId} · {tn('{n} nodo', '{n} nodos', n)}{root && <> · {t('detalle de')} <b>{root.name}</b></>}</div></header>
     <div className="ad-insp__scroll">
       <label className="ad-field"><span>{t('Descripción')}</span><textarea className="ad-input" rows={3} disabled={readOnly} value={view.doc} onChange={e => patch({ doc: e.target.value })} /></label>
       {pack && pack.viewpoints.length > 0 && <label className="ad-field"><span>{t('Viewpoint')}</span><select className="ad-input" disabled={readOnly} value={view.viewpointId ?? ''} onChange={e => patch({ viewpointId: e.target.value || undefined })}>
@@ -198,7 +200,9 @@ function ViewInspector({ viewId }: { viewId: string | null }) {
       <label className="ad-field"><span>{t('Elemento raíz')}</span><select className="ad-input" disabled={readOnly} value={view.rootElementId ?? ''} onChange={e => patch({ rootElementId: e.target.value || undefined })}>
         <option value="">{t('(ninguno)')}</option>{store.list('elements').filter(e => !e.template).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></label>
       {view.kind === 'grid' && <GridEditor viewId={view.id} grid={normalizeGrid(view.grid)} />}
-      <label className="ad-field ad-field--inline"><input type="checkbox" disabled={readOnly} checked={!!view.public} onChange={e => patch({ public: e.target.checked })} /> <span>{t('Pública (solo lectura con enlace)')}</span></label>
+      {!readOnly && (share
+        ? <button type="button" className="ad-link ad-insp__share" onClick={share}><Icon name="link" size={14} />{t('Compartir en solo lectura…')}</button>
+        : <div className="ad-hint ad-insp__share">{t('Para enseñar esta vista a alguien en solo lectura, usa el botón Compartir de la barra superior (espacios del servidor).')}</div>)}
       <CommentsSection anchors={[{ kind: 'view', id: view.id }, { kind: 'point', viewId: view.id }]} newAnchor={{ kind: 'view', id: view.id, viewId: view.id }} />
       <div className="ad-hint">{t('Arrastra tipos desde la paleta. Conecta arrastrando desde el borde inferior de un nodo, o desde un pin. Botón derecho para cambiar de dimensión.')}</div>
     </div>
@@ -276,7 +280,13 @@ export function FieldEditor({ def, value, onChange, disabled }: { def: FieldDef;
     case 'checkbox': input = <input type="checkbox" disabled={disabled} checked={!!value} onChange={e => onChange(e.target.checked)} />; break;
     case 'date': input = <input {...common} type="date" value={String(value ?? '')} onChange={e => onChange(e.target.value)} />; break;
     case 'url': input = <input {...common} type="url" value={String(value ?? '')} onChange={e => onChange(e.target.value)} />; break;
-    case 'select': input = <select {...common} value={String(value ?? '')} onChange={e => onChange(e.target.value)}><option value="">—</option>{(def.options ?? '').split(',').map(o => o.trim()).filter(Boolean).map(o => <option key={o} value={o}>{o}</option>)}</select>; break;
+    case 'select': {
+      // Se guarda el valor interno (`businessRule`); se muestra su nombre legible traducido. Un valor que ya no está entre las opciones se conserva.
+      const opts = (def.options ?? '').split(',').map(o => o.trim()).filter(Boolean);
+      const cur = String(value ?? '');
+      const name = (o: string) => (def.optionLabels?.[o] ? t(def.optionLabels[o]!) : o);
+      input = <select {...common} value={cur} onChange={e => onChange(e.target.value)}><option value="">—</option>{cur && !opts.includes(cur) && <option value={cur}>{cur}</option>}{opts.map(o => <option key={o} value={o}>{name(o)}</option>)}</select>; break;
+    }
     case 'list': input = <ListEditor value={Array.isArray(value) ? value as string[] : []} onChange={onChange} disabled={disabled} />; break;
     case 'keyvalue': input = <KeyValueEditor value={Array.isArray(value) ? value as KeyValue[] : []} onChange={onChange} disabled={disabled} labels={def.options} />; break;
     default: input = <input {...common} value={String(value ?? '')} onChange={e => onChange(e.target.value)} />;

@@ -6,7 +6,7 @@ The classic flowchart (ISO 5807) draws a **step-by-step procedure**: where it st
 questions are answered (yes/no) and where it ends. It is the diagram almost everybody can read.
 
 Use it for algorithms, instructions, simple internal procedures or the logic of a function. If several
-roles take part, messages are exchanged between organisations or you want to run it in a process engine,
+roles take part, messages are exchanged between organizations or you want to run it in a process engine,
 use [BPMN](bpmn.md).
 
 ## Key elements {#elementos-clave}

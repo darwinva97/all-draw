@@ -35,6 +35,8 @@ Al abrir la aplicación ves una frase de presentación, tres botones y, debajo, 
 | **Importar…** | Crea un espacio a partir de un fichero: `.drawer`, `.alldraw.json`, `.archimate` (Archi), Open Exchange, BPMN 2.0 XML, Structurizr, XState, Mermaid u OpenAPI. Ver [Importar y exportar](importar-exportar.md). |
 
 En la misma fila, a la derecha, aparece **Entrar / registrarse** si el servidor de cuentas está disponible.
+La primera vez, mientras no tengas ningún espacio ni sesión, en lugar del inicio verás la portada de all-draw; allí
+el botón para iniciar sesión se llama **Entrar**.
 En la parte superior de la pantalla está el **selector de idioma**.
 
 Un **espacio** (en inglés, *workspace*) es la unidad de trabajo: contiene el modelo, todas sus vistas, las
@@ -43,8 +45,8 @@ puedes guardarla en marcadores.
 
 La lista de espacios se divide en dos secciones:
 
-- **En el servidor**: solo aparece con la sesión iniciada. Muestra cada espacio con tu papel (`owner`,
-  `editor` o `viewer`) y la fecha del último cambio. El dueño ve un botón **Borrar**.
+- **En el servidor**: solo aparece con la sesión iniciada. Muestra cada espacio con tu papel (**propietario**,
+  **puede editar** o **solo lectura**) y la fecha del último cambio. El propietario ve un botón **Borrar**.
 - **En este navegador**: los espacios locales. Cada uno tiene **Borrar** y, con la sesión iniciada,
   **Subir al servidor**.
 
@@ -63,7 +65,7 @@ navegador. Con una cuenta puedes guardar espacios **en el servidor** y compartir
 | Funciona sin conexión | Siempre | Sí: guarda en local y sincroniza al volver la conexión |
 | Se puede compartir | No (primero hay que subirlo) | Sí: enlaces de edición y de lectura, edición a la vez |
 | Historial de versiones | No | Sí (ver [Historial](historial.md)) |
-| Se pierde si… | Borras los datos del navegador o cambias de ordenador | Lo borra su dueño |
+| Se pierde si… | Borras los datos del navegador o cambias de ordenador | Lo borra su propietario |
 
 > [!WARNING]
 > Un espacio local **no** se copia solo a ningún sitio. Si borras los datos de navegación, usas una ventana
@@ -81,7 +83,7 @@ Más detalles en [Conceptos → Espacios](conceptos.md#espacios).
 Necesitas cuenta para guardar espacios en el servidor, compartirlos, ver su historial y crear claves para
 agentes.
 
-1. En la pantalla de inicio, pulsa **Entrar / registrarse** (arriba a la derecha).
+1. En la pantalla de inicio, pulsa **Entrar / registrarse** (arriba a la derecha; en la portada se llama **Entrar**).
 2. En el diálogo, pulsa **No tengo cuenta**. El título cambia a **Crear cuenta**.
 3. Rellena **Correo**, **Nombre** y **Contraseña** (mínimo 8 caracteres).
 4. Si el servidor pide un **Código de invitación**, escríbelo (te lo da quien administra el servidor).
@@ -97,9 +99,10 @@ Con la sesión iniciada:
 - El primer botón pasa a ser **Nuevo espacio en el servidor** y **Abrir la demo** crea la demo en el
   servidor.
 - Aparece la sección **En el servidor**.
-- Arriba a la derecha ves tu nombre, el enlace **claves API** y **salir**.
+- Arriba a la derecha ves tu nombre. Al pulsarlo se abre el menú de la cuenta, con **Cuenta y claves API** y
+  **Cerrar sesión**.
 
-El enlace **claves API** abre la pantalla **Cuenta**, donde puedes crear claves para agentes (ver
+**Cuenta y claves API** abre la pantalla **Cuenta**, donde puedes crear claves para agentes (ver
 [Agentes y API](agentes-y-api.md)), **Cambiar contraseña** y **Cerrar todas las sesiones**. Si eres
 administrador, ahí también está la lista **Usuarios del servidor**.
 
@@ -183,8 +186,8 @@ servidor, se envía en cuanto hay conexión. El indicador de la barra del editor
 | `◌ conectando…` | Intentando conectar con el servidor. Puedes seguir trabajando. |
 | `○ sin conexión (se sincroniza al volver)` | Sin conexión. Tus cambios se guardan en local y se envían cuando vuelva la red. |
 
-En los espacios del servidor, junto al indicador aparece tu papel (`owner`, `editor` o `viewer`). Si eres
-`viewer`, puedes mirar pero no editar.
+En los espacios del servidor, junto al indicador aparece tu papel (**propietario**, **puede editar** o **solo
+lectura**). Con **solo lectura** puedes mirar pero no editar.
 
 Los espacios del servidor guardan además **instantáneas** automáticas que puedes restaurar desde el botón
 **Historial** (ver [Historial](historial.md)).
@@ -218,7 +221,7 @@ también en la barra del editor (en el móvil, dentro de la hoja **Más**). El c
 
 ## Problemas frecuentes {#problemas-frecuentes}
 
-**No veo el botón "Entrar / registrarse".**
+**No veo el botón "Entrar / registrarse" (o "Entrar" en la portada).**
 Solo aparece si el servidor de cuentas responde. Comprueba tu conexión y recarga la página. Mientras tanto
 puedes trabajar con espacios locales.
 
@@ -240,8 +243,8 @@ Tus cambios no se pierden: siguen en el navegador. Cuando vuelva la conexión se
 mucho, recarga la página.
 
 **No puedo editar nada en un espacio compartido.**
-Mira tu papel junto al indicador: con `viewer` (o un enlace de lectura) solo puedes mirar. Pide al dueño un
-enlace de edición (ver [Compartir y colaborar](compartir-y-colaborar.md)).
+Mira tu papel junto al indicador: con **solo lectura** (o un enlace de lectura) solo puedes mirar. Pide al
+propietario un enlace de edición (ver [Compartir y colaborar](compartir-y-colaborar.md)).
 
 ## Siguientes pasos {#siguientes-pasos}
 

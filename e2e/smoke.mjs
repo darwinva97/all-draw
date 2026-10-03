@@ -43,7 +43,7 @@ await page.screenshot({ path: `${out}/07-grid.png` });
 // Seleccionar el nodo con pines y ver el inspector
 await page.locator('.react-flow__node', { hasText: 'clientes-api' }).first().click();
 await page.waitForTimeout(300);
-await page.getByRole('button', { name: /Pines/ }).click();
+await page.getByRole('tab', { name: /Pines/ }).click();
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${out}/08-inspector-pines.png` });
 // Problemas

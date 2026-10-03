@@ -4,7 +4,7 @@ What has changed in all-draw, newest first, told from the point of view of the p
 
 ## 3 October 2026 {#novedades-2026-10-03}
 
-- **Documentation centre inside the app**, in Spanish and English: the full manual, with search, a
+- **Documentation center inside the app**, in Spanish and English: the full manual, with search, a
   table of contents for each chapter, a reference for every notation, a glossary and frequently
   asked questions, without leaving all-draw.
 - **Your account, in your hands**: in **Account** you can change your name and email, see your
@@ -60,7 +60,7 @@ What has changed in all-draw, newest first, told from the point of view of the p
 
 ## 26 September 2026: accounts and collaboration {#novedades-2026-09-26-cuentas}
 
-- **Accounts** and **server workspaces**, with owner, editor and viewer roles.
+- **Accounts** and **server workspaces**, with owner, can edit and read-only roles.
 - **Share with links** for editing or read-only access, which can be revoked. See
   [sharing and collaborating](compartir-y-colaborar.md).
 - **Presence**: see who is connected and their cursors.
@@ -69,7 +69,7 @@ What has changed in all-draw, newest first, told from the point of view of the p
   OpenAPI and draw.io; export to **SVG**, **PNG** and **self-contained HTML**. See
   [import and export](importar-exportar.md).
 - **New notations**: sequence, entity-relationship, UML class, mind map, flowchart and data flow,
-  plus full BPMN and a catalogue of more than 160 diagram types.
+  plus full BPMN and a catalog of more than 160 diagram types.
 - **Dark theme**, **auto layout**, global search (**Ctrl+K**), rename with **F2**, notes, groups,
   labels and images on the canvas.
 - **API and MCP** so programs and AI assistants can work with your workspaces. See

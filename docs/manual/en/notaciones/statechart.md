@@ -6,11 +6,11 @@ A state machine describes the **life cycle** of a thing: which situations (state
 makes it move from one to another (transitions). For example, an onboarding request is *Pending*, moves
 to *Under verification* when the details arrive and ends up *Active* or *Rejected*.
 
-Use it for orders, accounts, files, tickets, application screens or any object whose behaviour depends
+Use it for orders, accounts, files, tickets, application screens or any object whose behavior depends
 on "where it is". It follows the style of UML statecharts and XState: states can contain states, and
 regions can run in parallel.
 
-![The demo's state machine](../../img/06-estados.png)
+![The demo's state machine (Spanish interface)](../../img/06-estados.png)
 
 ## Key elements {#elementos-clave}
 

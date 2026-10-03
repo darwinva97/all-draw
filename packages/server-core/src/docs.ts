@@ -17,7 +17,11 @@ export const SAVE_DEBOUNCE_MS = 500;
 const IDLE_UNLOAD_MS = 60_000;
 /** Instantáneas por espacio; al pasarse se podan las automáticas (sin etiqueta) más antiguas. */
 export const MAX_SNAPSHOTS = 100;
-/** Instantánea automática cuando llega un cambio y han pasado ≥ 30 min desde la última. */
+/**
+ * Instantánea automática cuando llega un cambio y han pasado ≥ 30 min desde la última **guardada** (se lee del
+ * historial al cargar el doc, así que cuenta aunque el doc se descargue entre medias). Un espacio con contenido y sin
+ * ninguna instantánea guarda la primera con el primer cambio; uno recién creado espera los 30 min.
+ */
 export const AUTO_SNAPSHOT_MS = 30 * 60_000;
 
 /** Lo único que un doc vivo necesita de la persistencia: el estado del doc y sus instantáneas. */
@@ -35,12 +39,29 @@ export function workspaceFromUpdate(update: Uint8Array): Workspace {
 /**
  * Quién abrió una conexión: el usuario (sesión o API key) o el enlace compartido con el que entró. Se guarda al
  * aceptar el WebSocket para poder cerrarla cuando ese acceso se revoca (`revokeConnections`).
+ *
+ * `sessionId` (prefijo del hash de la sesión, `sessionIdOf`) y `keyId` (id de la API key) dicen con qué credencial
+ * entró el usuario: así «Cerrar sesión» cierra sólo los WebSockets de ese navegador y revocar una clave, los suyos.
+ * Ausentes (conexiones aceptadas antes de existir estos campos) = credencial desconocida, se trata como sesión.
  */
-export interface ConnIdentity { userId: string | null; linkToken: string | null }
-/** Qué conexiones cerrar: las de un usuario, las de un enlace, o ambas. */
-export interface ConnMatch { userId?: string; linkToken?: string }
-export const matchesIdentity = (id: ConnIdentity | undefined, m: ConnMatch): boolean =>
-  !!id && ((!!m.userId && id.userId === m.userId) || (!!m.linkToken && id.linkToken === m.linkToken));
+export interface ConnIdentity { userId: string | null; linkToken: string | null; sessionId?: string | null; keyId?: string | null }
+/**
+ * Qué conexiones cerrar: las de un usuario, un enlace, una sesión o una API key (basta con que coincida uno).
+ * `sessionsOnly` deja fuera las abiertas con API key; `exceptSessionId` respeta la sesión desde la que se pide
+ * (cambiar la contraseña no desconecta el navegador que la cambia).
+ */
+export interface ConnMatch { userId?: string; linkToken?: string; sessionId?: string; keyId?: string; sessionsOnly?: boolean; exceptSessionId?: string }
+export function matchesIdentity(id: ConnIdentity | undefined, m: ConnMatch): boolean {
+  if (!id) return false;
+  const hit = (!!m.userId && id.userId === m.userId) || (!!m.linkToken && id.linkToken === m.linkToken)
+    || (!!m.sessionId && id.sessionId === m.sessionId) || (!!m.keyId && id.keyId === m.keyId);
+  if (!hit) return false;
+  if (m.sessionsOnly && id.keyId) return false;
+  if (m.exceptSessionId && id.sessionId === m.exceptSessionId) return false;
+  return true;
+}
+/** Identificador de una sesión en las conexiones (prefijo del hash del token: nunca el token). */
+export const sessionIdOf = (sessionHash: string): string => sessionHash.slice(0, 32);
 
 /** Conexión registrada en un doc: lo que `ysync` y la API necesitan poder hacer con ella. */
 export interface DocConnection { close(code?: number, reason?: string): void; identity?: ConnIdentity }
@@ -84,7 +105,16 @@ export class LiveDoc {
     this.dirty = false;
     this.savedBytes = update?.byteLength ?? 0;
     this.pendingBytes = 0;
-    this.lastSnapshotAt = Date.now();
+    this.lastSnapshotAt = update ? await this.lastSavedSnapshotAt() : Date.now();
+  }
+
+  /** Fecha (ms) de la instantánea más reciente del historial; 0 si no hay ninguna. Si no se puede leer, ahora (no se fuerza una). */
+  private async lastSavedSnapshotAt(): Promise<number> {
+    try {
+      const [last] = await this.persist.listSnapshots(this.id);
+      const at = last ? Date.parse(last.createdAt) : 0;
+      return Number.isFinite(at) ? at : 0;
+    } catch { return Date.now(); }
   }
 
   // ---------------------------------------------------------------- Historial de versiones

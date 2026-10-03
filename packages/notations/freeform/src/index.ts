@@ -27,7 +27,7 @@ export const FREEFORM_ELEMENT_TYPES: ElementType[] = [
   { id: 'freeform:diamond', name: 'Rombo', category: 'shapes', shape: 'diamond', color: soft.diamond, icon: '◇', fields: [] },
   { id: 'freeform:cylinder', name: 'Cilindro', category: 'shapes', shape: 'cylinder', color: soft.cylinder, icon: '⛁', fields: [] },
   { id: 'freeform:actor', name: 'Actor', category: 'shapes', shape: 'actor', color: soft.actor, icon: '☺', fields: [] },
-  { id: 'freeform:note', name: 'Nota', category: 'annotations', shape: 'note', color: soft.note, icon: '🗒', container: false, fields: [] },
+  { id: 'freeform:note', name: 'Nota', category: 'annotations', shape: 'note', color: soft.note, icon: '✎', container: false, fields: [] },
   { id: 'freeform:group', name: 'Grupo', category: 'annotations', shape: 'group', color: soft.group, icon: '▢', container: true, fields: [] },
   { id: 'freeform:text', name: 'Texto', category: 'annotations', shape: 'label', color: soft.text, icon: 'T', fields: [] },
 ];

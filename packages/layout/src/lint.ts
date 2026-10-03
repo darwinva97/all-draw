@@ -18,7 +18,7 @@
  *   notice and this permission notice shall be included in all copies or substantial portions of
  *   the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
  */
-import { indexOf, type Command, type Diagnostic, type NotationRegistry, type Store, type Validator, type ViewEdge, type ViewNode } from '@all-draw/core';
+import { fix, indexOf, say, type Command, type Diagnostic, type NotationRegistry, type Store, type Validator, type ViewEdge, type ViewNode } from '@all-draw/core';
 
 // ---------------------------------------------------------------- Geometría (port de archify)
 export interface Rect { x: number; y: number; width: number; height: number }
@@ -176,7 +176,6 @@ export function linesNeeded(text: string, width: number, charW = CHAR_W): number
 /** Comando marcador: la app lo sustituye por el layout automático real (`layoutView`). */
 export const AUTO_LAYOUT_FIX: Command = { type: 'batch', label: 'layout', commands: [] };
 
-const fix = (label: string, command: Command) => ({ label, command });
 const rectOf = (n: ViewNode): Rect => ({ x: n.x, y: n.y, width: n.w, height: n.h });
 const centerOf = (r: Rect): Point => [r.x + r.width / 2, r.y + r.height / 2];
 
@@ -204,6 +203,8 @@ interface Ctx {
   isContainer: (n: ViewNode) => boolean;
   labelOf: (n: ViewNode) => string;
   shapeOf: (n: ViewNode) => string | undefined;
+  /** Vista de secuencia: las líneas de vida ocupan toda la altura aunque su nodo sea bajo. */
+  isSequence: boolean;
 }
 
 function context(store: Store, reg: NotationRegistry | undefined, viewId: string): Ctx {
@@ -231,7 +232,7 @@ function context(store: Store, reg: NotationRegistry | undefined, viewId: string
     return r;
   };
   nodes.forEach(n => resolve(n));
-  return { store, reg, nodes, edges, byId, parentOf, abs, system, isContainer, labelOf, shapeOf };
+  return { store, reg, nodes, edges, byId, parentOf, abs, system, isContainer, labelOf, shapeOf, isSequence: view?.kind === 'sequence' || (!!view && reg?.pack(view.notationId)?.viewKind === 'sequence') };
 }
 
 /** Diagnósticos geométricos de una vista. */
@@ -258,11 +259,11 @@ function overlaps(ctx: Ctx): Diagnostic[] {
       const rightX = Math.round(a.x + a.w + 8), belowY = Math.round(a.y + a.h + 8);
       out.push({
         code: 'node-overlap', severity: 'warning', subject: { collection: 'nodes', id: b.id },
-        message: `"${ctx.labelOf(b)}" se solapa con "${ctx.labelOf(a)}"`,
+        ...say('"{name}" se solapa con "{other}"', { name: ctx.labelOf(b), other: ctx.labelOf(a) }),
         evidence: { other: a.id, a: rectOf(a), b: rectOf(b) },
         supportedFixes: [
-          fix(`Mover a la derecha de "${ctx.labelOf(a)}"`, { type: 'moveNodes', moves: [{ id: b.id, x: rightX, y: b.y }] }),
-          fix(`Mover debajo de "${ctx.labelOf(a)}"`, { type: 'moveNodes', moves: [{ id: b.id, x: b.x, y: belowY }] }),
+          fix('Mover a la derecha de "{name}"', { type: 'moveNodes', moves: [{ id: b.id, x: rightX, y: b.y }] }, { name: ctx.labelOf(a) }),
+          fix('Mover debajo de "{name}"', { type: 'moveNodes', moves: [{ id: b.id, x: b.x, y: belowY }] }, { name: ctx.labelOf(a) }),
           fix('Layout automático', AUTO_LAYOUT_FIX),
         ],
       });
@@ -273,6 +274,7 @@ function overlaps(ctx: Ctx): Diagnostic[] {
 
 function outsideParent(ctx: Ctx): Diagnostic[] {
   const out: Diagnostic[] = [];
+  if (ctx.isSequence) return out; // activaciones sobre la línea de vida: la línea llega hasta abajo del diagrama
   for (const n of ctx.nodes) {
     const p = ctx.parentOf(n); if (!p) continue;
     const inner = rectOf(n), outer: Rect = { x: 0, y: 0, width: p.w, height: p.h };
@@ -281,7 +283,7 @@ function outsideParent(ctx: Ctx): Diagnostic[] {
     const w = Math.max(p.w, n.x + n.w + 12), h = Math.max(p.h, n.y + n.h + 12);
     out.push({
       code: 'node-outside-parent', severity: 'warning', subject: { collection: 'nodes', id: n.id },
-      message: `"${ctx.labelOf(n)}" se sale de "${ctx.labelOf(p)}"`,
+      ...say('"{name}" se sale de "{parent}"', { name: ctx.labelOf(n), parent: ctx.labelOf(p) }),
       evidence: { parent: p.id, child: inner, parentSize: { w: p.w, h: p.h } },
       supportedFixes: [
         ...(n.w <= p.w && n.h <= p.h ? [fix('Meter dentro del contenedor', { type: 'moveNodes', moves: [{ id: n.id, x, y }] } as Command)] : []),
@@ -329,7 +331,7 @@ function edgesThroughNodes(ctx: Ctx): Diagnostic[] {
       const n = ctx.byId.get(id)!;
       out.push({
         code: 'edge-through-node', severity: 'info', subject: { collection: 'edges', id: e.id },
-        message: `La arista ${ctx.labelOf(a)} → ${ctx.labelOf(b)} atraviesa "${ctx.labelOf(n)}"`,
+        ...say('La arista {from} → {to} atraviesa "{name}"', { from: ctx.labelOf(a), to: ctx.labelOf(b), name: ctx.labelOf(n) }),
         evidence: { node: id, route: pts },
         supportedFixes: [fix('Layout automático', AUTO_LAYOUT_FIX)],
       });
@@ -360,7 +362,7 @@ function labelOverflow(ctx: Ctx): Diagnostic[] {
     const singleW = Math.ceil(label.length * charW + LABEL_PAD_X);
     out.push({
       code: 'label-overflow', severity: 'info', subject: { collection: 'nodes', id: n.id },
-      message: `La etiqueta "${label}" no cabe en "${ctx.labelOf(n)}" (${n.w}×${n.h})`,
+      ...say('La etiqueta "{label}" no cabe en "{name}" ({w}×{h})', { label, name: ctx.labelOf(n), w: n.w, h: n.h }),
       evidence: { lines, needH, longestWord: longest },
       supportedFixes: [
         fix('Ampliar el nodo', { type: 'patch', collection: 'nodes', id: n.id, patch: { w, h } }),
@@ -371,13 +373,18 @@ function labelOverflow(ctx: Ctx): Diagnostic[] {
   return out;
 }
 
+/** Símbolos que son pequeños por notación (pseudoestados, junctions, barras de fork/join, eventos): no son "demasiado pequeños". */
+const SYMBOL_SHAPES = new Set(['circle', 'double-circle', 'bar', 'diamond']);
+
 function tooSmall(ctx: Ctx): Diagnostic[] {
   const out: Diagnostic[] = [];
   for (const n of ctx.nodes) {
     if (n.w >= MIN_W && n.h >= MIN_H) continue;
+    if (SYMBOL_SHAPES.has(ctx.shapeOf(n) ?? '')) continue;
+    if (ctx.isSequence && ctx.parentOf(n)) continue; // activación: rectángulo estrecho por diseño
     out.push({
       code: 'node-too-small', severity: 'warning', subject: { collection: 'nodes', id: n.id },
-      message: `"${ctx.labelOf(n)}" es demasiado pequeño (${n.w}×${n.h})`,
+      ...say('"{name}" es demasiado pequeño ({w}×{h})', { name: ctx.labelOf(n), w: n.w, h: n.h }),
       evidence: { min: { w: MIN_W, h: MIN_H } },
       supportedFixes: [fix('Ampliar al mínimo', { type: 'patch', collection: 'nodes', id: n.id, patch: { w: Math.max(n.w, MIN_W), h: Math.max(n.h, MIN_H) } })],
     });

@@ -9,7 +9,8 @@ import { RulesTab } from './WorkspaceRules';
 import { PeopleTab } from './WorkspacePeople';
 import { TracesTab } from './WorkspaceTraces';
 import { Icon } from '../icons';
-import { inLayer } from '../ui/layer';
+import { useModal } from '../ui/modal';
+import { TabList, tabPanelProps, useTabIds } from '../ui/tabs';
 import { HelpLink } from './HelpLink';
 
 export type WorkspaceTab = 'libraries' | 'rules' | 'people' | 'traces';
@@ -23,26 +24,21 @@ const HELP: Record<WorkspaceTab, [string, string?]> = { libraries: ['librerias-r
 export function WorkspacePanel({ open, onClose, initialTab = 'libraries' }: { open: boolean; onClose: () => void; initialTab?: WorkspaceTab }) {
   const t = useT();
   const [tab, setTab] = useState<WorkspaceTab>(initialTab);
+  const tabIds = useTabIds();
+  // Foco atrapado mientras está abierto, Escape cierra y el foco vuelve al botón (o atajo) que lo abrió.
+  const box = useModal(open, onClose);
   useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !inLayer(e)) { e.stopPropagation(); onClose(); } };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [open, onClose]);
   if (!open) return null;
   return (
     <div className="ad-ws-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="ad-ws-dialog" role="dialog" aria-modal="true" aria-label={t('Espacio de trabajo')}>
+      <div ref={box} className="ad-ws-dialog" role="dialog" aria-modal="true" aria-label={t('Espacio de trabajo')}>
         <header className="ad-ws-head">
           <strong className="ad-ws-title">{t('Espacio')}</strong>
-          <div className="ad-tabs ad-ws-tabs">
-            {TABS.map(tb => <button key={tb.id} className={tab === tb.id ? 'is-active' : ''} onClick={() => setTab(tb.id)}>{t(tb.label)}</button>)}
-          </div>
+          <TabList ids={tabIds} className="ad-tabs ad-ws-tabs" label={t('Secciones del espacio')} value={tab} onChange={setTab} tabs={TABS.map(tb => ({ id: tb.id, label: t(tb.label) }))} />
           <HelpLink slug={HELP[tab][0]} anchor={HELP[tab][1]} className="ad-ws-help" />
           <button className="ad-btn ad-btn--ghost ad-ws-close" onClick={onClose} title={t('Cerrar (Esc)')} aria-label={t('Cerrar')}><Icon name="close" size={14} /></button>
         </header>
-        <div className="ad-ws-body">
+        <div className="ad-ws-body" {...tabPanelProps(tabIds, tab)} tabIndex={-1}>
           {tab === 'libraries' && <LibrariesTab />}
           {tab === 'rules' && <RulesTab />}
           {tab === 'people' && <PeopleTab />}

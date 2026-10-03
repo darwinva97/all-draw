@@ -49,7 +49,7 @@ Después, haz clic en una zona vacía del lienzo para ver la vista en el **inspe
 | **Descripción** | Un texto libre; aparece al pasar el ratón sobre la vista en el panel. |
 | **Viewpoint** | Recorta la paleta a los tipos de un viewpoint (los demás salen atenuados). *(ninguno: todo)* lo desactiva. Ver [Conceptos → Viewpoints](conceptos.md#viewpoints). |
 | **Elemento raíz** | El elemento del que esta vista es el detalle. Ver [El patrón del elemento raíz](modelo-y-vistas.md#patron-elemento-raiz). |
-| **Pública (solo lectura con enlace)** | Solo en espacios del servidor: permite enseñar esta vista con un enlace de lectura. Ver [Compartir y colaborar](compartir-y-colaborar.md). |
+| **Compartir en solo lectura…** | Solo en espacios del servidor: para enseñar la vista sin dejar editarla, crea un **enlace de lectura** con **Compartir** (el enlace abre el espacio entero, en solo lectura). Si no ves el enlace en el inspector, usa el botón **Compartir** de la barra. Ver [Compartir y colaborar](compartir-y-colaborar.md#invitar). |
 
 La cabecera del inspector resume la vista: notación, número de nodos y, si tiene raíz, "detalle de *X*".
 

@@ -13,7 +13,7 @@ without roles or messages, a [flowchart](flow.md) is lighter.
 The pack covers the modellable elements of BPMN 2.0: processes, collaborations, choreographies and
 conversations (36 types and 6 relations).
 
-![BPMN view of the demo, opened from the ArchiMate process](../../img/04-bpmn-detalle.png)
+![BPMN view of the demo, opened from the ArchiMate process (Spanish interface)](../../img/04-bpmn-detalle.png)
 
 ## Key elements {#elementos-clave}
 

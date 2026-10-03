@@ -4,9 +4,10 @@ import { kit, type Tr } from './kit';
 export function archimateTemplate(t: Tr) {
   const k = kit(t('Arquitectura en capas'));
   const v = k.view(t('Arquitectura en capas'), { notationId: 'archimate', viewpointId: 'layered' });
-  k.label(v, t('Negocio'), 0, 58, 110);
-  k.label(v, t('Aplicación'), 0, 228, 110);
-  k.label(v, t('Tecnología'), 0, 398, 110);
+  // Rótulos de capa: 36 px de alto, lo que pide una línea de texto (con 28 el lint avisaba de que no cabía).
+  k.label(v, t('Negocio'), 0, 54, 110, 36);
+  k.label(v, t('Aplicación'), 0, 224, 110, 36);
+  k.label(v, t('Tecnología'), 0, 394, 110, 36);
   const cliente = k.node(v, k.el('archimate:BusinessActor', t('Cliente')), 130, 20, 150, 56);
   const servicio = k.node(v, k.el('archimate:BusinessService', t('Venta online')), 330, 20, 170, 56);
   const proceso = k.node(v, k.el('archimate:BusinessProcess', t('Gestionar pedido')), 330, 110, 170, 56);

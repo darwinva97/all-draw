@@ -6,7 +6,7 @@ import {
   BRIDGE_RELATIONS, suggestTraces, traceMatrix, traceGaps, relationFromSuggestion,
   type Command, type Element, type NotationRegistry, type Relation, type Store, type TraceGap, type TraceSuggestion,
 } from '@all-draw/core';
-import { t } from '@all-draw/i18n';
+import { t, tMsg } from '@all-draw/i18n';
 
 const isBridge = (typeId: string): boolean => (BRIDGE_RELATIONS as readonly string[]).includes(typeId);
 
@@ -56,9 +56,12 @@ export function firstNodeOf(store: Store, elementId: string): { viewId: string; 
   return n ? { viewId: n.viewId, nodeId: n.id } : null;
 }
 
+/** La sugerencia con `reason` en el idioma activo (el núcleo la da en español y con `reasonMsg`). */
+export const localizeSuggestion = (s: TraceSuggestion): TraceSuggestion => ({ ...s, reason: tMsg(s.reasonMsg) });
+
 /** Las `n` mejores sugerencias del elemento. */
 export function topSuggestions(store: Store, reg: NotationRegistry, elementId: string, n = 3): TraceSuggestion[] {
-  return suggestTraces(store, reg, elementId).slice(0, n);
+  return suggestTraces(store, reg, elementId).slice(0, n).map(localizeSuggestion);
 }
 
 /** Comando que crea la relación puente de una sugerencia. */
@@ -88,7 +91,7 @@ export function matrixRows(store: Store, reg: NotationRegistry, a: string, b: st
   const colsSel = colIdx.length ? colIdx : m.cols.map((e, j) => [e, j] as const);
   const rows: MatrixRow[] = rowsSel.map(([element, i]) => ({
     element,
-    cells: colsSel.map(([col, j]) => { const c = m.cells[i]![j]!; return { col, relations: c.relations, suggestion: c.suggestion }; }),
+    cells: colsSel.map(([col, j]) => { const c = m.cells[i]![j]!; return { col, relations: c.relations, suggestion: c.suggestion && localizeSuggestion(c.suggestion) }; }),
   }));
   return { rows, cols: colsSel.map(([e]) => e), totalRows: m.rows.length, totalCols: m.cols.length };
 }
@@ -108,7 +111,7 @@ export function coverage(store: Store, reg: NotationRegistry, a: string, b: stri
 export function gapsBetween(store: Store, reg: NotationRegistry, a: string, b: string): TraceGap[] {
   return traceGaps(store, reg)
     .filter(g => g.notationId === a || g.notationId === b)
-    .map(g => ({ ...g, suggestions: g.suggestions.filter(s => reg.notationOf(s.target.typeId) === (g.notationId === a ? b : a)) }))
+    .map(g => ({ ...g, suggestions: g.suggestions.filter(s => reg.notationOf(s.target.typeId) === (g.notationId === a ? b : a)).map(localizeSuggestion) }))
     .sort((x, y) => x.notationId.localeCompare(y.notationId) || x.element.name.localeCompare(y.element.name));
 }
 

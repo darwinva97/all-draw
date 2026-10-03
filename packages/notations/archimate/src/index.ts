@@ -3,7 +3,7 @@
  * desde los ficheros de Archi con `scripts/generate.mjs`; aquí solo se ensambla el `NotationPack`
  * y se añaden las reglas de anidamiento y un par de ayudantes.
  */
-import type { NotationPack, NestingRule } from '@all-draw/core';
+import type { ElementType, NotationPack, NestingRule, RelationType } from '@all-draw/core';
 import { CATEGORIES, ELEMENTS, RELATIONS, VALIDITY, VIEWPOINTS, SPEC_VERSION } from './generated';
 
 export * from './figures';
@@ -33,6 +33,19 @@ const NESTING: NestingRule[] = [
     .map((e): NestingRule => ({ parent: local(e.id), child: '*', relationTypes: NESTING_RELATIONS })),
 ];
 
+/**
+ * Nombre legible de las opciones `select` de los campos generados (en español; la interfaz lo traduce). Se añade al
+ * ensamblar el pack para no depender de `generated.ts` (que se regenera desde Archi).
+ */
+const OPTION_LABELS: Record<string, Record<string, string>> = {
+  junctionType: { and: 'Y (and-junction)', or: 'O (or-junction)' },
+  accessType: { write: 'Escritura', read: 'Lectura', access: 'Acceso (sin especificar)', readwrite: 'Lectura y escritura' },
+};
+const withOptionLabels = <T extends ElementType | RelationType>(t: T): T =>
+  t.fields?.some(f => f.kind === 'select' && OPTION_LABELS[f.key])
+    ? { ...t, fields: t.fields.map(f => (f.kind === 'select' && OPTION_LABELS[f.key] ? { ...f, optionLabels: OPTION_LABELS[f.key] } : f)) }
+    : t;
+
 export const ARCHIMATE_PACK: NotationPack = {
   id: NS,
   name: SPEC_VERSION,
@@ -41,8 +54,8 @@ export const ARCHIMATE_PACK: NotationPack = {
   color: '#ffffb5',
   viewKind: 'freeform',
   categories: CATEGORIES,
-  elementTypes: ELEMENTS,
-  relationTypes: RELATIONS,
+  elementTypes: ELEMENTS.map(withOptionLabels),
+  relationTypes: RELATIONS.map(withOptionLabels),
   portTypes: [],
   validity: VALIDITY,
   viewpoints: VIEWPOINTS,

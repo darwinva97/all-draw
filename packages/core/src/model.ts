@@ -27,6 +27,8 @@ export const FieldDef = z.object({
   kind: FieldKind,
   /** 'select': opciones separadas por coma. 'keyvalue': "Etiqueta clave|Etiqueta valor". */
   options: z.string().optional(),
+  /** 'select': nombre legible (en español; la interfaz lo traduce) de cada opción, por su valor interno (`businessRule` → 'Regla de negocio'). */
+  optionLabels: z.record(z.string(), z.string()).optional(),
   /** Si el campo genera puertos (pines). Por defecto sí para json/list/keyvalue, no para el resto. */
   port: z.boolean().optional(),
   /** Tipo de puerto que producen sus hojas (para la matriz de compatibilidad). */

@@ -12,7 +12,7 @@ why there are dimensions) is explained with drawings in [Concepts](conceptos.md)
 | **Views** | **Nodes** (where and how an element is drawn in that view) and **edges** (how a relation is drawn) | The same process in the ArchiMate view and in the layers × stages grid |
 
 Golden rule: **what you type in the inspector (name, data) belongs to the element and shows in every view;
-what you do with the mouse on the canvas (move, resize, colours from the Style tab) belongs to that view.**
+what you do with the mouse on the canvas (move, resize, colors from the Style tab) belongs to that view.**
 
 ## Kinds of view {#clases-de-vista}
 
@@ -26,14 +26,14 @@ the notation, the canvas works in one of three ways:
 | **Sequence** | Sequence diagram | Lifelines are columns and messages are horizontal arrows you reorder by dragging them up or down. |
 
 A grid's layers and stages are edited in the view's inspector (**Layers** and **Stages** sections): name,
-colour, height or width, add and remove. More about each notation in [Notations](notaciones.md).
+color, height or width, add and remove. More about each notation in [Notations](notaciones.md).
 
 ## Creating a view {#crear-vista}
 
 **From the Views panel** (the usual way):
 
 1. In the left column, in the **Views** header, press the **+** button (*New view*).
-2. Pick a notation from the list (each with its colour dot).
+2. Pick a notation from the list (each with its color dot).
 3. The view "New *notation* view" is created and opened. If it is a grid, it comes with three layers
    (Business, Application, Technology) and three stages (Start, Process, End) to get you going.
 
@@ -49,13 +49,13 @@ Then click an empty area of the canvas to see the view in the **inspector** and 
 | **Description** | Free text; shown when you hover the view in the panel. |
 | **Viewpoint** | Narrows the palette to a viewpoint's types (the others are dimmed). *(none: everything)* turns it off. See [Concepts → Viewpoints](conceptos.md#viewpoints). |
 | **Root element** | The element this view is the detail of. See [The root element pattern](modelo-y-vistas.md#patron-elemento-raiz). |
-| **Public (read-only via link)** | Server workspaces only: lets you show this view with a read-only link. See [Sharing and collaborating](compartir-y-colaborar.md). |
+| **Share read-only…** | Server workspaces only: to show the view without letting others edit it, create a **read-only link** with **Share** (the link opens the whole workspace, read-only). If the inspector doesn't show the link, use the **Share** button in the top bar. See [Sharing and collaborating](compartir-y-colaborar.md#invitar). |
 
 The inspector header sums up the view: notation, number of nodes and, if it has a root, "detail of *X*".
 
-## Organising, opening and deleting views {#gestionar-vistas}
+## Organizing, opening and deleting views {#gestionar-vistas}
 
-- The **Views** panel groups views **by notation** (with each one's colour dot) and sorts them by name. Click
+- The **Views** panel groups views **by notation** (with each one's color dot) and sorts them by name. Click
   a group's title to collapse it.
 - Views that have a root element show a small diamond (◇) in front.
 - **Click** a view to open it. The workspace remembers the last view you opened and returns to it next time.
@@ -93,7 +93,7 @@ A dimension is a navigation axis: "see this element in BPMN", "see it as states"
 1. In the **Views** panel, expand the **Dimensions** section.
 2. Open the **Add dimension…** drop-down.
 3. Choose a whole notation (for example "BPMN 2.0 (all)") or one of its viewpoints (for example, under C4,
-   "Context"). The dimension is created with the notation's name and colour.
+   "Context"). The dimension is created with the notation's name and color.
 
 **Removing a dimension:** press the **×** next to it. Only the navigation shortcut goes away; the views you
 already created stay.
@@ -107,7 +107,7 @@ already created stay.
 ![Node menu: open in another dimension, appears in, traces (Spanish interface)](../img/05-menu-dimension.png)
 
 1. **Right-click** a node (on touch screens, press and hold for half a second).
-2. The **Open in another dimension** section shows one entry per dimension, with its colour.
+2. The **Open in another dimension** section shows one entry per dimension, with its color.
 3. Choose one:
    - If the element **already has** a detail view in that notation, it opens.
    - If the entry says **(create)**, a new view called "*element* · *dimension*" is created, with that element
@@ -137,7 +137,7 @@ The same menu also has:
 
 When you enter a detail (double-click, **Enter detail** or **Open in another dimension**), the top toolbar
 shows the **view path**: *Arquitectura · Alta de cliente › Alta de cliente · BPMN*, with the current
-notation's colour tag.
+notation's color tag.
 
 - Press **←** (back) to return to the previous view.
 - Press any name in the path to jump straight to that level.

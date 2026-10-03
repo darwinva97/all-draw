@@ -7,7 +7,7 @@
  * El "ámbito" de un nodo es su proceso: la Pool, el `Process` o el subproceso más cercano (según los
  * nodos de las vistas o `features.bpmnParent`); las lanes y los grupos no cuentan.
  */
-import { indexOf, type Diagnostic, type Element, type Relation, type Store, type Validator } from '@all-draw/core';
+import { fix, indexOf, say, type Diagnostic, type Element, type MsgVars, type Relation, type Store, type Validator } from '@all-draw/core';
 
 const SEQ = 'bpmn:SequenceFlow';
 const MSG = 'bpmn:MessageFlow';
@@ -79,8 +79,9 @@ export function indexBpmn(store: Store): BpmnIndex {
   return { elements, flows, incoming: id => inc.get(id) ?? [], outgoing: id => out.get(id) ?? [], scopeOf, scopes, parentOf, get: id => byId.get(id) };
 }
 
-const diag = (code: string, severity: Diagnostic['severity'], collection: 'elements' | 'relations', id: string, message: string, extra: Partial<Diagnostic> = {}): Diagnostic =>
-  ({ code, severity, subject: { collection, id }, message, supportedFixes: [], ...extra });
+/** Diagnóstico con `message` en español y `messageKey` + `vars` para traducirlo (`key` es el texto en español con `{var}`). */
+const diag = (code: string, severity: Diagnostic['severity'], collection: 'elements' | 'relations', id: string, key: string, vars?: MsgVars, extra: Partial<Diagnostic> = {}): Diagnostic =>
+  ({ code, severity, subject: { collection, id }, ...say(key, vars), supportedFixes: [], ...extra });
 
 const label = (e: Element) => e.name || e.id;
 const isNone = (e: Element) => !e.fields.eventDefinition || e.fields.eventDefinition === 'none';
@@ -104,8 +105,8 @@ export const startEventRequired: Validator = {
     const ix = indexBpmn(store);
     return processScopes(ix).filter(s => !s.nodes.some(n => n.typeId === 'bpmn:StartEvent')).map(s =>
       s.owner
-        ? diag('start-event-required', 'error', 'elements', s.owner.id, `El proceso "${label(s.owner)}" no tiene evento de inicio`)
-        : diag('start-event-required', 'error', 'elements', s.nodes[0]!.id, 'El proceso no tiene evento de inicio', { evidence: { scope: 'root' } }));
+        ? diag('start-event-required', 'error', 'elements', s.owner.id, 'El proceso "{name}" no tiene evento de inicio', { name: label(s.owner) })
+        : diag('start-event-required', 'error', 'elements', s.nodes[0]!.id, 'El proceso no tiene evento de inicio', undefined, { evidence: { scope: 'root' } }));
   },
 };
 
@@ -115,8 +116,8 @@ export const endEventRequired: Validator = {
     const ix = indexBpmn(store);
     return processScopes(ix).filter(s => !s.nodes.some(n => n.typeId === 'bpmn:EndEvent')).map(s =>
       s.owner
-        ? diag('end-event-required', 'error', 'elements', s.owner.id, `El proceso "${label(s.owner)}" no tiene evento de fin`)
-        : diag('end-event-required', 'error', 'elements', s.nodes[0]!.id, 'El proceso no tiene evento de fin', { evidence: { scope: 'root' } }));
+        ? diag('end-event-required', 'error', 'elements', s.owner.id, 'El proceso "{name}" no tiene evento de fin', { name: label(s.owner) })
+        : diag('end-event-required', 'error', 'elements', s.nodes[0]!.id, 'El proceso no tiene evento de fin', undefined, { evidence: { scope: 'root' } }));
   },
 };
 
@@ -131,8 +132,8 @@ export const noDisconnected: Validator = {
       if (e.fields.eventDefinition === 'link') continue;
       if (e.typeId === 'bpmn:BoundaryEvent' && (e.fields.attachedTo || e.fields.eventDefinition === 'compensation')) continue;
       if (ix.incoming(e.id).length || ix.outgoing(e.id).length) continue;
-      out.push(diag('no-disconnected', 'error', 'elements', e.id, `"${label(e)}" no está conectado a ningún flujo de secuencia`, {
-        supportedFixes: [{ label: 'Borrar elemento', command: { type: 'deleteElement', id: e.id } }],
+      out.push(diag('no-disconnected', 'error', 'elements', e.id, '"{name}" no está conectado a ningún flujo de secuencia', { name: label(e) }, {
+        supportedFixes: [fix('Borrar elemento', { type: 'deleteElement', id: e.id })],
       }));
     }
     return out;
@@ -146,7 +147,7 @@ export const singleBlankStartEvent: Validator = {
     const out: Diagnostic[] = [];
     for (const [, nodes] of ix.scopes) {
       const blanks = nodes.filter(n => n.typeId === 'bpmn:StartEvent' && isNone(n));
-      if (blanks.length > 1) for (const b of blanks) out.push(diag('single-blank-start-event', 'error', 'elements', b.id, `Hay ${blanks.length} eventos de inicio sin definición en el mismo proceso`, { evidence: { ids: blanks.map(x => x.id) } }));
+      if (blanks.length > 1) for (const b of blanks) out.push(diag('single-blank-start-event', 'error', 'elements', b.id, 'Hay {n} eventos de inicio sin definición en el mismo proceso', { n: blanks.length }, { evidence: { ids: blanks.map(x => x.id) } }));
     }
     return out;
   },
@@ -161,7 +162,7 @@ export const noImplicitSplit: Validator = {
       if (!isFlowNode(e) || GATEWAYS.has(e.typeId)) continue;
       const outgoing = ix.outgoing(e.id);
       if (outgoing.length > 1 && outgoing.some(f => !f.fields.condition))
-        out.push(diag('no-implicit-split', 'warning', 'elements', e.id, `"${label(e)}" divide el flujo sin compuerta: ${outgoing.length} salidas sin condición`, { evidence: { flows: outgoing.map(f => f.id) } }));
+        out.push(diag('no-implicit-split', 'warning', 'elements', e.id, '"{name}" divide el flujo sin compuerta: {n} salidas sin condición', { name: label(e), n: outgoing.length }, { evidence: { flows: outgoing.map(f => f.id) } }));
     }
     return out;
   },
@@ -176,9 +177,9 @@ export const noDuplicateSequenceFlows: Validator = {
     for (const f of ix.flows) {
       const key = `${f.from.elementId}→${f.to.elementId}`;
       const first = seen.get(key);
-      if (first) out.push(diag('no-duplicate-sequence-flows', 'error', 'relations', f.id, `Flujo de secuencia duplicado (${key})`, {
+      if (first) out.push(diag('no-duplicate-sequence-flows', 'error', 'relations', f.id, 'Flujo de secuencia duplicado ({key})', { key }, {
         evidence: { duplicateOf: first.id },
-        supportedFixes: [{ label: 'Borrar duplicado', command: { type: 'deleteRelation', id: f.id } }],
+        supportedFixes: [fix('Borrar duplicado', { type: 'deleteRelation', id: f.id })],
       }));
       else seen.set(key, f);
     }
@@ -188,7 +189,7 @@ export const noDuplicateSequenceFlows: Validator = {
 
 export const labelRequired: Validator = {
   id: 'bpmnlint.label-required',
-  run({ store }) {
+  run({ store, reg }) {
     const ix = indexBpmn(store);
     const out: Diagnostic[] = [];
     const needs = (e: Element): boolean => {
@@ -201,14 +202,14 @@ export const labelRequired: Validator = {
       return false;
     };
     for (const e of ix.elements) if (needs(e) && !e.name.trim())
-      out.push(diag('label-required', 'warning', 'elements', e.id, `Falta la etiqueta de ${e.typeId.slice(5)} (${e.id})`));
+      out.push(diag('label-required', 'warning', 'elements', e.id, 'Falta la etiqueta de {type} ({id})', { type: reg.elementType(e.typeId)?.name ?? e.typeId.slice(5), id: e.id }));
     // Flujos condicionales que salen de compuertas divergentes exclusivas/inclusivas.
     for (const e of ix.elements) {
       if (!CONDITIONAL_GATEWAYS.has(e.typeId)) continue;
       const outgoing = ix.outgoing(e.id);
       if (outgoing.length < 2) continue;
       for (const f of outgoing) if (!f.name.trim() && !f.fields.default)
-        out.push(diag('label-required', 'warning', 'relations', f.id, `Falta la etiqueta del flujo que sale de "${label(e)}"`));
+        out.push(diag('label-required', 'warning', 'relations', f.id, 'Falta la etiqueta del flujo que sale de "{name}"', { name: label(e) }));
     }
     return out;
   },
@@ -220,7 +221,7 @@ export const superfluousGateway: Validator = {
     const ix = indexBpmn(store);
     return ix.elements
       .filter(e => GATEWAYS.has(e.typeId) && ix.incoming(e.id).length === 1 && ix.outgoing(e.id).length === 1)
-      .map(e => diag('superfluous-gateway', 'warning', 'elements', e.id, `La compuerta "${label(e)}" es superflua: una entrada y una salida`));
+      .map(e => diag('superfluous-gateway', 'warning', 'elements', e.id, 'La compuerta "{name}" es superflua: una entrada y una salida', { name: label(e) }));
   },
 };
 
@@ -230,7 +231,7 @@ export const fakeJoin: Validator = {
     const ix = indexBpmn(store);
     return ix.elements
       .filter(e => isFlowNode(e) && !GATEWAYS.has(e.typeId) && e.typeId !== 'bpmn:EndEvent' && ix.incoming(e.id).length > 1)
-      .map(e => diag('fake-join', 'warning', 'elements', e.id, `"${label(e)}" recibe ${ix.incoming(e.id).length} flujos: las entradas no se sincronizan (usa una compuerta)`, { evidence: { flows: ix.incoming(e.id).map(f => f.id) } }));
+      .map(e => diag('fake-join', 'warning', 'elements', e.id, '"{name}" recibe {n} flujos: las entradas no se sincronizan (usa una compuerta)', { name: label(e), n: ix.incoming(e.id).length }, { evidence: { flows: ix.incoming(e.id).map(f => f.id) } }));
   },
 };
 
@@ -244,7 +245,7 @@ export const noInclusiveGatewayWithoutCondition: Validator = {
       const outgoing = ix.outgoing(e.id);
       if (outgoing.length < 2) continue;
       for (const f of outgoing) if (!hasCondition(f))
-        out.push(diag('no-inclusive-gateway-without-condition', 'error', 'relations', f.id, `La salida de la compuerta inclusiva "${label(e)}" no tiene condición ni es la de por defecto`, { evidence: { gateway: e.id } }));
+        out.push(diag('no-inclusive-gateway-without-condition', 'error', 'relations', f.id, 'La salida de la compuerta inclusiva "{name}" no tiene condición ni es la de por defecto', { name: label(e) }, { evidence: { gateway: e.id } }));
     }
     return out;
   },
@@ -278,12 +279,14 @@ export const bpmnPoolRules: Validator = {
       const a = participantOf(ix, r.from.elementId), b = participantOf(ix, r.to.elementId);
       if (r.typeId === SEQ && a !== b) {
         out.push(diag('bpmn-pool-rules', 'error', 'relations', r.id,
-          `El flujo de secuencia de "${name(r.from.elementId)}" a "${name(r.to.elementId)}" cruza de pool (${a ? `"${name(a)}"` : 'ninguna'} → ${b ? `"${name(b)}"` : 'ninguna'}): entre pools distintas usa un flujo de mensaje`,
+          'El flujo de secuencia de "{from}" a "{to}" cruza de pool ({fromPool} → {toPool}): entre pools distintas usa un flujo de mensaje',
+          { from: name(r.from.elementId), to: name(r.to.elementId), fromPool: a ? `"${name(a)}"` : { key: 'ninguna' }, toPool: b ? `"${name(b)}"` : { key: 'ninguna' } },
           { evidence: { rule: 'sequence-flow-same-pool', from: a, to: b } }));
       }
       if (r.typeId === MSG && a && a === b) {
         out.push(diag('bpmn-pool-rules', 'error', 'relations', r.id,
-          `El flujo de mensaje de "${name(r.from.elementId)}" a "${name(r.to.elementId)}" no sale de "${name(a)}": los mensajes van entre pools distintas (dentro de una pool, flujo de secuencia)`,
+          'El flujo de mensaje de "{from}" a "{to}" no sale de "{pool}": los mensajes van entre pools distintas (dentro de una pool, flujo de secuencia)',
+          { from: name(r.from.elementId), to: name(r.to.elementId), pool: name(a) },
           { evidence: { rule: 'message-flow-different-pools', pool: a } }));
       }
     }
@@ -294,7 +297,7 @@ export const bpmnPoolRules: Validator = {
       const nested = !!parent && ACTIVITIES.has(ix.get(parent)?.typeId ?? '');
       const attached = !!host && ACTIVITIES.has(ix.get(host)?.typeId ?? '');
       if (!nested && !attached) {
-        out.push(diag('bpmn-pool-rules', 'error', 'elements', e.id, `El evento de borde "${label(e)}" no está sobre una actividad: suéltalo dentro de la tarea o subproceso al que pertenece`,
+        out.push(diag('bpmn-pool-rules', 'error', 'elements', e.id, 'El evento de borde "{name}" no está sobre una actividad: suéltalo dentro de la tarea o subproceso al que pertenece', { name: label(e) },
           { evidence: { rule: 'boundary-event-in-activity', parent } }));
       }
     }

@@ -1,3 +1,4 @@
+import { readable } from '../nodes/shapes';
 import type { ReactNode } from 'react';
 import { useT } from '@all-draw/i18n';
 import { useEditor, type Theme } from '../context';
@@ -42,9 +43,9 @@ export function Crumbs() {
       {trail.length > 1 && <button className="ad-btn" onClick={back} title={t('Volver (vista anterior)')} aria-label={t('Volver a la vista anterior')}><Icon name="arrowLeft" /></button>}
       {trail.map((id, i) => {
         const v = store.get('views', id);
-        return <span key={id + i} className="ad-crumb">{i > 0 && <span className="ad-crumb__sep"><Icon name="chevronRight" size={12} /></span>}<button className={`ad-link ${i === trail.length - 1 ? 'is-current' : ''}`} aria-current={i === trail.length - 1 ? 'page' : undefined} onClick={() => openView(id)}>{v?.name ?? '?'}</button></span>;
+        return <span key={id + i} className="ad-crumb">{i > 0 && <span className="ad-crumb__sep"><Icon name="chevronRight" size={12} /></span>}<button className={`ad-link ${i === trail.length - 1 ? 'is-current' : ''}`} aria-current={i === trail.length - 1 ? 'page' : undefined} title={v?.name} onClick={() => openView(id)}>{v?.name ?? '?'}</button></span>;
       })}
-      {current && <span className="ad-crumb__notation" style={{ background: registry.pack(current.notationId)?.color ?? '#999' }}>{registry.pack(current.notationId)?.name}</span>}
+      {current && <span className="ad-crumb__notation" style={{ background: registry.pack(current.notationId)?.color ?? '#999', color: readable(registry.pack(current.notationId)?.color ?? '#999') }}>{registry.pack(current.notationId)?.name}</span>}
     </nav>
   );
 }

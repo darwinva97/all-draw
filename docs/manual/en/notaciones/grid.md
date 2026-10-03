@@ -11,7 +11,7 @@ Use it for boards and maps: a customer journey with what happens in each layer, 
 application portfolio by area, a quarterly roadmap. It is also the format diagrams imported from Drawer
 arrive in.
 
-![The demo's layers × stages grid, with visible pins on two microservices](../../img/07-rejilla-pines.png)
+![The demo's layers × stages grid, with visible pins on two microservices (Spanish interface)](../../img/07-rejilla-pines.png)
 
 ## Key elements {#elementos-clave}
 
@@ -21,7 +21,7 @@ specific to this view is its structure:
 
 | Piece | What it is | Where to edit it |
 |---|---|---|
-| **Layer** | A row with name, colour and height | View inspector, **Layers** section (click the canvas background) |
+| **Layer** | A row with name, color and height | View inspector, **Layers** section (click the canvas background) |
 | **Stage** | A column with name and width | View inspector, **Stages** section |
 | **Stage group** | A top band grouping several consecutive stages ("Phase 1") | Comes from importing a `.drawer` file or is defined through the API |
 | **Cell** | Where a layer meets a stage; it holds nodes | Drag a node to another cell to move it |
@@ -62,7 +62,7 @@ This is how the demo's grid view (*Mapa capas × etapas*) is built:
 ## Import and export {#importar-exportar}
 
 - **Drawer** (`.drawer`): each Drawer diagram becomes a layers × stages view, with layers, stages, groups,
-  colours, pins and mappings. See [Import and export](../importar-exportar.md#drawer).
+  colors, pins and mappings. See [Import and export](../importar-exportar.md#drawer).
 - **draw.io** and **Mermaid**: export the cells as containers (in Mermaid, one `subgraph` per layer).
 - **SVG**, **PNG** and **self-contained HTML** draw the grid as it is.
 - ArchiMate, BPMN and Structurizr have no grid: when exporting to them, these views are left out with a

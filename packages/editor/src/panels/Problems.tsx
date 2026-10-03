@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { validate, DEFAULT_VALIDATORS, type Diagnostic } from '@all-draw/core';
-import { useT } from '@all-draw/i18n';
+import { useT, tMsg, tn } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { useAnyChange } from '../hooks';
 import { Icon } from '../icons';
@@ -34,6 +34,7 @@ export function Problems() {
   }, [store, registry, validators, viewId, v]);
   const errors = diags.filter(d => d.severity === 'error').length, warns = diags.filter(d => d.severity === 'warning').length;
   const notes = diags.length - errors - warns;
+  const nErrors = tn('{n} error', '{n} errores', errors), nWarns = tn('{n} aviso', '{n} avisos', warns), nNotes = tn('{n} nota', '{n} notas', notes);
   const goTo = (d: Diagnostic) => {
     if (d.subject.collection === 'nodes') { const n = store.get('nodes', d.subject.id); if (n) { openView(n.viewId); select({ nodes: [n.id], edges: [] }); } }
     else if (d.subject.collection === 'edges') { const e = store.get('edges', d.subject.id); if (e) { openView(e.viewId); select({ nodes: [], edges: [e.id] }); } }
@@ -43,15 +44,15 @@ export function Problems() {
   };
   return (
     <div className={`ad-problems ${open ? 'is-open' : ''}`}>
-      <button className="ad-problems__bar" aria-expanded={open} aria-label={t('Problemas: {errors} errores, {warns} avisos, {notes} notas', { errors, warns, notes })} onClick={() => setOpen(o => !o)}>
-        <span className={`ad-problems__count ${errors ? 'ad-sev-error' : ''}`}><Icon name="error" size={14} />{t('{n} errores', { n: errors })}</span><span className={`ad-problems__count ${warns ? 'ad-sev-warning' : ''}`}><Icon name="warning" size={14} />{t('{n} avisos', { n: warns })}</span><span className="ad-problems__count"><Icon name="info" size={14} />{t('{n} notas', { n: notes })}</span>{computing && <span className="ad-problems__busy" aria-live="polite"> · {t('calculando…')}</span>}
+      <button className="ad-problems__bar" aria-expanded={open} aria-label={t('Problemas: {list}', { list: `${nErrors}, ${nWarns}, ${nNotes}` })} onClick={() => setOpen(o => !o)}>
+        <span className={`ad-problems__count ${errors ? 'ad-sev-error' : ''}`}><Icon name="error" size={14} />{nErrors}</span><span className={`ad-problems__count ${warns ? 'ad-sev-warning' : ''}`}><Icon name="warning" size={14} />{nWarns}</span><span className="ad-problems__count"><Icon name="info" size={14} />{nNotes}</span>{computing && <span className="ad-problems__busy" aria-live="polite"> · {t('calculando…')}</span>}
       </button>
       {open && <div className="ad-problems__list" role="region" aria-label={t('Lista de problemas')}>
         <div className="ad-problems__head"><span>{t('El validador revisa el modelo y la vista actual mientras editas.')}</span><HelpLink slug="editor" /></div>
         {diags.length === 0 && <div className="ad-empty ad-empty--ok"><Icon name="success" size={18} />{t('Sin problemas.')}</div>}
         {diags.map((d, i) => <div key={i} className={`ad-problem ad-sev-${d.severity}`}>
-          <button className="ad-link" onClick={() => goTo(d)}><code>{d.code}</code> {d.message}</button>
-          {!readOnly && d.supportedFixes.map((f, j) => <button key={j} className="ad-btn" onClick={() => run(f.command)}>{f.label}</button>)}
+          <button className="ad-link" onClick={() => goTo(d)}><code>{d.code}</code> {d.messageKey ? tMsg(d.messageKey, d.vars) : d.message}</button>
+          {!readOnly && d.supportedFixes.map((f, j) => <button key={j} className="ad-btn" onClick={() => run(f.command)}>{f.labelKey ? tMsg(f.labelKey, f.vars) : f.label}</button>)}
         </div>)}
       </div>}
     </div>

@@ -64,7 +64,7 @@ vista de quien lo usa.
 
 ## 26 de septiembre de 2026: cuentas y colaboración {#novedades-2026-09-26-cuentas}
 
-- **Cuentas** y **espacios en el servidor**, con roles de dueño, editor y lector.
+- **Cuentas** y **espacios en el servidor**, con roles de propietario, puede editar y solo lectura.
 - **Compartir con enlaces** de edición o de lectura, que se pueden revocar. Ver
   [compartir y colaborar](compartir-y-colaborar.md).
 - **Presencia**: ves quién está conectado y sus cursores.

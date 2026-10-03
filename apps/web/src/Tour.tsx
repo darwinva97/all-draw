@@ -56,6 +56,8 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: () => voi
   const [i, setI] = useState(0);
   const [anchor, setAnchor] = useState<Box | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  /** Pantalla estrecha: la tarjeta va de lado a lado, arriba o abajo según dónde quede el ancla (para no taparla). */
+  const [narrowTop, setNarrowTop] = useState(false);
   const pop = useRef<HTMLDivElement>(null);
   const titleId = useId(), bodyId = useId();
   const step = steps[i]!;
@@ -76,6 +78,7 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: () => voi
   useLayoutEffect(() => {
     const h = pop.current?.offsetHeight ?? 180;
     setPos(place(anchor, h));
+    setNarrowTop(!!anchor && anchor.y + anchor.h / 2 > innerHeight / 2 && anchor.h < innerHeight * 0.6);
   }, [anchor, i]);
 
   // Foco: al abrir y en cada paso, al botón principal. Al cerrar, de vuelta a donde estaba.
@@ -110,7 +113,7 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: () => voi
     <div className="tour" data-tour-step={i + 1}>
       <div className="tour__veil" onMouseDown={e => e.preventDefault()} />
       <div className="tour__spot" style={anchor ? { left: anchor.x, top: anchor.y, width: anchor.w, height: anchor.h } : { left: '50%', top: '50%', width: 0, height: 0 }} />
-      <div ref={pop} className="tour__pop" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={bodyId}
+      <div ref={pop} className={`tour__pop ${narrowTop ? 'tour__pop--top' : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={bodyId}
         style={pos ? { left: pos.left, top: pos.top } : { visibility: 'hidden' }}>
         <div className="tour__step">
           <span className="tour__dots" aria-hidden="true">{steps.map((_, n) => <i key={n} className={n === i ? 'is-on' : ''} />)}</span>
@@ -122,7 +125,7 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: () => voi
           <button type="button" className="btn btn--ghost btn--sm" onClick={finish}>{t('Saltar el recorrido')}</button>
           <span className="spacer" />
           {i > 0 && <button type="button" className="btn btn--sm" onClick={prev}>{t('Anterior')}</button>}
-          <button type="button" className="btn btn--primary btn--sm" data-primary onClick={next}>{last ? t('Terminar') : t('Siguiente')}{!last && <Icon name="arrowRight" size={14} />}</button>
+          <button type="button" className="btn btn--primary btn--sm" data-primary onClick={next}>{last ? t('Finalizar') : t('Siguiente')}{!last && <Icon name="arrowRight" size={14} />}</button>
         </div>
         <button type="button" className="btn btn--ghost btn--icon btn--sm tour__close" aria-label={t('Cerrar el recorrido')} title={t('Cerrar el recorrido')} onClick={finish}><Icon name="close" size={14} /></button>
       </div>
@@ -130,14 +133,25 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: () => voi
   );
 }
 
+/** ¿Pantalla táctil sin ratón? (los pasos hablan de tocar y mantener pulsado en vez de arrastrar y botón derecho). */
+const isTouch = (): boolean => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
+
 /** Los pasos del recorrido del editor (anclas: clases del editor y `data-tour` de la barra). */
-export function editorTourSteps(mode: 'local' | 'server'): TourStep[] {
+export function editorTourSteps(mode: 'local' | 'server', touch = isTouch()): TourStep[] {
   return [
     { anchor: ['.ad-views', '.ad-tabbar__btn:nth-child(1)'], title: 'Vistas', body: 'Cada vista dibuja una parte del modelo en una notación. Ábrelas desde aquí; las de detalle cuelgan de un elemento.' },
-    { anchor: ['.ad-pal', '.ad-tabbar__btn:nth-child(2)'], title: 'Paleta', body: 'Arrastra un tipo al lienzo para crear un elemento. En la pestaña Modelo están los que ya existen, para reutilizarlos en esta vista.' },
-    { anchor: ['.ad-canvas'], title: 'Lienzo', body: 'Mueve, redimensiona y renombra con doble clic. Rueda o pellizco para el zoom; Ctrl+K busca elementos, vistas y acciones.' },
-    { anchor: ['.ad-canvas .react-flow__node:not(.react-flow__node-group)', '.ad-canvas'], title: 'Conectar', body: 'Pasa el puntero por un elemento y arrastra desde uno de sus puntos hasta otro. Solo se ofrecen las relaciones válidas en la notación de la vista.' },
-    { anchor: ['.ad-views__dims', '.ad-views'], title: 'Otra dimensión', body: 'Con el botón derecho sobre un elemento, «Abrir en otra dimensión» lo lleva a una vista BPMN, de estados, C4… Es el mismo elemento en todas.' },
+    touch
+      ? { anchor: ['.ad-tabbar__btn:nth-child(2)', '.ad-pal'], title: 'Paleta', body: 'Toca «Añadir» y elige un tipo para crear un elemento en el lienzo. En la pestaña Modelo están los que ya existen, para reutilizarlos en esta vista.' }
+      : { anchor: ['.ad-pal', '.ad-tabbar__btn:nth-child(2)'], title: 'Paleta', body: 'Arrastra un tipo al lienzo para crear un elemento. En la pestaña Modelo están los que ya existen, para reutilizarlos en esta vista.' },
+    touch
+      ? { anchor: ['.ad-canvas'], title: 'Lienzo', body: 'Arrastra con el dedo para mover elementos y pellizca para el zoom. En «Más» están la búsqueda y el resto de acciones.' }
+      : { anchor: ['.ad-canvas'], title: 'Lienzo', body: 'Mueve, redimensiona y renombra con doble clic. Rueda o pellizco para el zoom; Ctrl+K busca elementos, vistas y acciones.' },
+    touch
+      ? { anchor: ['.ad-canvas .react-flow__node:not(.react-flow__node-group)', '.ad-canvas'], title: 'Conectar', body: 'Toca un elemento y arrastra desde uno de sus puntos hasta otro. Solo se ofrecen las relaciones válidas en la notación de la vista.' }
+      : { anchor: ['.ad-canvas .react-flow__node:not(.react-flow__node-group)', '.ad-canvas'], title: 'Conectar', body: 'Pasa el puntero por un elemento y arrastra desde uno de sus puntos hasta otro. Solo se ofrecen las relaciones válidas en la notación de la vista.' },
+    touch
+      ? { anchor: ['.ad-canvas .react-flow__node:not(.react-flow__node-group)', '.ad-canvas'], title: 'Otra dimensión', body: 'Mantén pulsado un elemento y elige «Abrir en otra dimensión» para llevarlo a una vista BPMN, de estados, C4… Es el mismo elemento en todas.' }
+      : { anchor: ['.ad-views__dims', '.ad-views'], title: 'Otra dimensión', body: 'Con el botón derecho sobre un elemento, «Abrir en otra dimensión» lo lleva a una vista BPMN, de estados, C4… Es el mismo elemento en todas.' },
     { anchor: ['.ad-insp', '.ad-tabbar__btn:nth-child(3)'], title: 'Inspector', body: 'Muestra lo seleccionado: datos, pines, dónde aparece y estilo. Sin selección, las propiedades de la vista.' },
     mode === 'server'
       ? { anchor: ['[data-tour="share"]'], title: 'Compartir', body: 'Crea enlaces de edición o de lectura: quien los abra trabaja contigo en tiempo real. El historial guarda instantáneas.' }

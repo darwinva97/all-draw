@@ -6,7 +6,10 @@
 //   3. ninguna imagen está rota (naturalWidth > 0);
 //   4. no hay errores de página (pageerror / console.error);
 //   5. la búsqueda encuentra "pines" y, al abrir el primer resultado, el término queda resaltado;
-//   6. en móvil (390 px) el menú abre la barra lateral y no hay desbordamiento horizontal.
+//   6. en móvil (390 px) el menú abre la barra lateral y no hay desbordamiento horizontal; al abrirla el foco va al
+//      capítulo actual, lo de detrás es `inert`, y Escape la cierra y devuelve el foco al botón del menú;
+//   7. una consulta de una letra pide más letras (no «nada coincide»), «año» no encuentra «huérfano», y todo
+//      `aria-controls` apunta a un id que existe; «Saltar al contenido» en oscuro tiene contraste ≥ 4.5.
 // En inglés, los capítulos que caen al español (sin traducción) se listan como aviso.
 // Capturas en /tmp/shots/docs-*.png.
 //
@@ -123,6 +126,25 @@ for (const locale of ['es-ES', 'en-US']) {
     }
   }
 
+  // Consultas cortas y ñ.
+  await go(page, '#/docs');
+  await page.fill('.docs-search input', 'a');
+  await page.waitForTimeout(250);
+  const shortMsg = await page.$eval('.docs-search__pop', e => e.textContent).catch(() => '');
+  if (!/2/.test(shortMsg) || /Nada coincide|Nothing matches/i.test(shortMsg)) fail(`[${lang}] búsqueda de una letra: «${shortMsg}»`);
+  if (lang === 'es') {
+    await page.fill('.docs-search input', 'año');
+    await page.waitForTimeout(600);
+    const snips = await page.$$eval('.docs-search [role="option"]', o => o.map(x => x.textContent.toLowerCase()));
+    const bad = snips.filter(t => !t.includes('año'));
+    if (bad.length) fail(`[es] «año» encuentra resultados sin «año»: ${bad[0].slice(0, 80)}`);
+    else console.log(`  ✓ búsqueda "año": ${snips.length} resultados, ninguno por «huérfano»`);
+  }
+  const dangling = await page.evaluate(() => [...document.querySelectorAll('[aria-controls]')].flatMap(e => e.getAttribute('aria-controls').split(/\s+/)).filter(id => !document.getElementById(id)));
+  if (dangling.length) fail(`[${lang}] aria-controls sin destino: ${dangling.join(', ')}`);
+  await page.fill('.docs-search input', '');
+  await page.keyboard.press('Escape');
+
   // Tema oscuro (mismo almacenamiento que el editor) y explorador de la matriz.
   await page.evaluate(() => localStorage.setItem('alldraw:theme', 'dark'));
   await page.goto(`${base}/#/docs/notaciones/archimate`);
@@ -140,6 +162,13 @@ for (const locale of ['es-ES', 'en-US']) {
   await page.goto(`${base}/#/docs/conceptos`);
   await waitChapter(page);
   await page.screenshot({ path: `${SHOTS}/docs-${lang}-dark-conceptos.png` });
+  const skipRatio = await page.$eval('.docs-skip', el => {
+    const rgb = c => c.match(/[\d.]+/g).slice(0, 3).map(Number);
+    const lum = ([r, g, b]) => [r, g, b].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }).reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
+    const cs = getComputedStyle(el), a = lum(rgb(cs.color)), b = lum(rgb(cs.backgroundColor));
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  });
+  if (skipRatio < 4.5) fail(`[${lang}] «Saltar al contenido» en oscuro: contraste ${skipRatio.toFixed(2)}`);
   await page.evaluate(() => localStorage.removeItem('alldraw:theme'));
 
   // Ancla directa (carga completa de la página).
@@ -184,6 +213,31 @@ for (const locale of ['es-ES', 'en-US']) {
   const navVisible = await page.evaluate(() => { const r = document.querySelector('#docs-nav').getBoundingClientRect(); return r.left >= 0 && r.width > 200; });
   if (!navVisible) fail(`[${lang}] móvil: el menú no abre la barra lateral`);
   await page.screenshot({ path: `${SHOTS}/docs-${lang}-mobile-menu.png` });
+  // Foco en el capítulo actual (la última página visitada es agentes-y-api), detrás `inert`, Escape cierra.
+  const drawer = await page.evaluate(() => ({
+    focused: document.activeElement?.getAttribute('aria-current') === 'page' ? document.activeElement.getAttribute('href') : document.activeElement?.textContent,
+    mainInert: document.querySelector('#docs-content').inert,
+    searchInert: document.querySelector('.docs-search').inert,
+    menuInert: document.querySelector('.docs-header__menu').inert,
+  }));
+  if (drawer.focused !== '#/docs/agentes-y-api') fail(`[${lang}] móvil: al abrir el índice el foco va a «${drawer.focused}» y no al capítulo actual`);
+  if (!drawer.mainInert || !drawer.searchInert || drawer.menuInert) fail(`[${lang}] móvil: con el índice abierto lo de detrás no es inert (${JSON.stringify(drawer)})`);
+  for (let i = 0; i < 40; i++) await page.keyboard.press('Tab');
+  const tabbedOut = await page.evaluate(() => { const a = document.activeElement; return !!a && a !== document.body && !a.closest('#docs-nav') && !a.classList.contains('docs-header__menu'); });
+  if (tabbedOut) fail(`[${lang}] móvil: con el índice abierto el tabulador sale al contenido de detrás`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  const afterEsc = await page.evaluate(() => ({ open: document.querySelector('.docs').classList.contains('is-nav-open'), onMenu: document.activeElement?.classList.contains('docs-header__menu'), mainInert: document.querySelector('#docs-content').inert }));
+  if (afterEsc.open || !afterEsc.onMenu || afterEsc.mainInert) fail(`[${lang}] móvil: Escape no cierra el índice o no devuelve el foco al menú (${JSON.stringify(afterEsc)})`);
+  else console.log('  ✓ móvil: foco al capítulo actual, fondo inert, Escape devuelve el foco al menú');
+  // Navegar desde el índice: se cierra y el foco pasa al contenido.
+  await page.click('.docs-header__menu');
+  await page.waitForTimeout(300);
+  await page.click('#docs-nav a[href="#/docs/faq"]');
+  await waitChapter(page);
+  await page.waitForTimeout(200);
+  const afterNav = await page.evaluate(() => ({ open: document.querySelector('.docs').classList.contains('is-nav-open'), inMain: !!document.activeElement?.closest('#docs-content'), inert: !!document.querySelector('.docs-search').inert }));
+  if (afterNav.open || !afterNav.inMain || afterNav.inert) fail(`[${lang}] móvil: tras navegar desde el índice ${JSON.stringify(afterNav)}`);
 
   const relevant = errors.filter(e => !/favicon|manifest|registerSW|\/api\//i.test(e));
   for (const e of relevant) fail(`[${lang}] ${e}`);

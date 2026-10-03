@@ -42,6 +42,8 @@ se cierra con `4403`. Con token de enlace o Bearer se acepta desde cualquier ori
   en el servidor Node y en cada login/registro en ambos runtimes.
 - `DELETE /api/auth/sessions`: cierra **todas** las sesiones del usuario (botón «Cerrar todas las sesiones» en Cuenta).
 - Cambiar la contraseña cierra las demás sesiones; el restablecimiento por admin cierra todas.
+- Desde el 3 de octubre de 2026 las tres, y «Cerrar sesión», **cortan al momento los WebSockets** de las sesiones
+  cerradas y pueden **revocar también las API keys** (ver «Sesiones, API keys y WebSockets (QA2)», más abajo).
 - Migración **v2** (`sqlite.ts`/`postgres.ts` `MIGRATIONS[1]`, `apps/worker/migrations/0002_sessions_expiry.sql`): índice
   `sessions(expires_at)` para la purga. La columna `expires_at NOT NULL` ya existía desde v1.
 
@@ -86,7 +88,8 @@ pendiente, fuera del alcance de esta revisión).
 
 ### 4. Límites y validación
 
-- **Rate limit** (memoria, por proceso): login 10/15 min por IP y por email (ya existía); **registro** 10/hora por IP;
+- **Rate limit** (memoria, por proceso): login por intentos **fallidos** (10/15 min por IP+correo, 30 por IP, 100 por
+  correo desde cualquier IP; ver «IP real del cliente» más abajo); **registro** 10/hora por IP;
   **creación de enlaces** 30/15 min por usuario; **cambio de contraseña** 10 intentos/15 min por usuario.
 - **Tamaño de cuerpo** (`hono/body-limit`, 413): 5 MB para `PUT …/snapshot`, `POST /api/workspaces` (con `initial`) y
   `…/snapshots/:sid/restore`; 1 MB para todo lo demás (comandos incluidos). Se comprueba por `Content-Length` o
@@ -125,8 +128,8 @@ pendiente, fuera del alcance de esta revisión).
 
 - Los hashes de tokens son SHA-256 sin clave si no hay `SESSION_SECRET`: una copia de la BD no revela tokens (son
   aleatorios de 32 bytes), pero con `SESSION_SECRET` ni siquiera un volcado + acceso al código sirve. **Defínelo.**
-- `x-forwarded-for` se confía tal cual para el rate limit por IP: correcto detrás de Caddy (lo sobrescribe), no exponer
-  el puerto 4002 directamente.
+- ~~`x-forwarded-for` se confía tal cual para el rate limit por IP~~: corregido el 3 de octubre de 2026 con
+  `TRUSTED_PROXIES` (ver «IP real del cliente»).
 - El primer usuario registrado es admin: en un despliegue nuevo, registra la cuenta admin antes de publicar el subdominio
   o usa `INVITE_CODE`.
 - Los rate limits viven en memoria del proceso (en el worker, por isolate): suficientes contra fuerza bruta casual, no
@@ -262,9 +265,9 @@ cambia, la API llama a `DocHost.revoke(id, { userId | linkToken }, código, moti
   el cliente) y el DO acepta el socket con etiquetas de hibernación `[rol, "u:<userId>" | "l:<token>"]`; `POST /revoke`
   cierra `ctx.getWebSockets(etiqueta)` (vale también tras hibernar) sin cargar el doc. `webSocketMessage` ignora sockets
   que ya no están abiertos.
-- No cubierto: cerrar sesión, «Cerrar todas las sesiones», cambiar la contraseña o que un admin la restablezca no cortan
-  los WebSockets ya abiertos con esas sesiones (la siguiente petición o reconexión sí falla). Pequeña ventana entre
-  autorizar el upgrade y registrar la conexión.
+- ~~No cubierto: cerrar sesión, «Cerrar todas las sesiones», cambiar la contraseña o que un admin la restablezca no
+  cortan los WebSockets ya abiertos~~: cubierto desde el 3 de octubre de 2026 (código `4402`, ver «Sesiones, API keys y
+  WebSockets (QA2)»). Sigue la pequeña ventana entre autorizar el upgrade y registrar la conexión.
 
 Interfaz: «Cuenta» (`Keys.tsx`) tiene «Perfil» (nombre, email y cuotas) y «Tus datos» (Exportar mis datos; Eliminar
 cuenta… → formulario con la contraseña y botón «Eliminar mi cuenta definitivamente»).
@@ -364,6 +367,7 @@ ejecuta `pnpm audit --prod --audit-level high` como job informativo (`continue-o
 | `REGISTER_MIN_MS` | `2000` | Node, worker | tiempo mínimo del formulario de registro (`0` lo desactiva) |
 | `MAX_WS_PER_IP` / `MAX_WS_PER_WORKSPACE` | `30` / `100` | Node (el segundo también worker) | conexiones WebSocket simultáneas |
 | `BACKUP_DIR` | `~/.alldraw-backups` | Node | ya lo usaba `backup.mjs`; ahora también el servidor (copias finales en `deleted/`) |
+| `TRUSTED_PROXIES` | `loopback,cloudflare` | Node | de quién se creen `X-Forwarded-For` / `CF-Connecting-IP` (ver «IP real del cliente») |
 
 ### Qué debe hacer quien despliega
 
@@ -373,3 +377,89 @@ ejecuta `pnpm audit --prod --audit-level high` como job informativo (`continue-o
    vez o se arranca temporalmente con `REGISTER_MIN_MS=0`. El cron semanal ya está instalado (ver `apps/server/README.md`).
 2. **Cloudflare**: `pnpm --filter @all-draw/worker deploy` (inyecta `ALLDRAW_COMMIT`); `run_worker_first` incluye ahora
    `/.well-known/security.txt`. El registro sigue cerrado (`ALLOW_REGISTRATION=false`).
+
+## Revisión QA2 (3 de octubre de 2026): sesiones, IP real y privacidad
+
+Respuesta a los fallos 8, 9, 30, 31, 32, 50–54 del informe `docs/qa/2026-10-03-informe.md`.
+
+### Sesiones, API keys y WebSockets (QA2)
+
+Cada conexión WebSocket guarda con qué credencial se abrió (`ConnIdentity` en `server-core/src/docs.ts`): usuario o
+enlace y, para un usuario, la **sesión** (`sessionId` = primeros 32 caracteres del hash del token, nunca el token) o la
+**API key** (`keyId`). En Cloudflare viaja del worker al `WorkspaceDO` en `x-alldraw-session` / `x-alldraw-key` (se
+borran las que mande el cliente) y queda en las etiquetas de hibernación `s:<sesión>` / `k:<clave>`.
+
+| Acción | Sesiones | API keys | WebSockets cerrados |
+|---|---|---|---|
+| `POST /api/auth/logout` (Cerrar sesión) | la actual | — | los de esa sesión (`4402`) |
+| `DELETE /api/auth/sessions[?revokeKeys=true]` | todas | con `revokeKeys`, todas | los de todas sus sesiones; con `revokeKeys`, también los de sus claves (`4402`) |
+| `POST /api/auth/password {current, password, revokeKeys?}` | las demás | con `revokeKeys`, todas | los de las demás sesiones (y de las claves con `revokeKeys`); el navegador que la cambia sigue (`4402`) |
+| `POST /api/admin/users/:id/reset[?revokeKeys=true]` | todas las suyas | con `revokeKeys`, todas | los suyos de sesión (y de clave con `revokeKeys`) (`4402`) |
+| `DELETE /api/keys/:id` | — | esa | los abiertos con esa clave (`4401`) |
+
+- Los WebSockets se buscan en todos los espacios a los que llega el usuario (`listWorkspaces`; un admin, todos).
+- `4402` («sesión cerrada») está en el rango 44xx: y-websocket no reconecta. La app muestra «Se ha cerrado tu sesión»
+  con «Entrar» (vuelve a abrir el espacio tras entrar) y el editor queda en solo lectura.
+- En «Cuenta», «Cambiar contraseña», «Cerrar todas las sesiones» y «Restablecer» (admin) llevan la casilla «Revocar
+  también las claves API», **marcada por defecto**: quien cierra sesiones suele sospechar un robo, y una sesión robada
+  puede haberse creado una clave. La API, sin el parámetro, no revoca claves (compatibilidad).
+- **Una API key no puede** cerrar sesiones ni cambiar la contraseña (`403`, `code: session_required`), igual que ya no
+  podía crear claves, cambiar el email ni borrar la cuenta.
+
+### Contraseñas y login
+
+- Contraseña nueva (registro, cambio): 8+ caracteres **sin contar los espacios de los extremos** (ocho espacios no
+  valen) y, al cambiarla, distinta de la actual (`400`, `code: password_same`).
+- **Tiempo constante**: si el correo no existe se verifica igualmente una contraseña contra un hash PBKDF2 de relleno
+  (mismo coste, 100 000 iteraciones): el tiempo de respuesta no dice si hay cuenta.
+- Los límites del login sólo cuentan **fallos** y se cuentan por IP+correo (10/15 min), por IP (30) y por correo desde
+  cualquier IP (100). Desde una sola dirección ya no se puede bloquear la cuenta de otra persona; un ataque repartido
+  entre muchas IP sí acaba bloqueando el correo (a propósito).
+- Errores de validación: `400 {error: "Datos no válidos (email: …)", code: 'validation', fields: ['email', 'name']}`
+  en vez de la palabra «validación»; los formularios de la web dicen qué campo revisar y tienen `maxLength`.
+
+### IP real del cliente (`TRUSTED_PROXIES`)
+
+Antes se tomaba el primer valor de `X-Forwarded-For`: cualquiera lo falseaba (y se saltaba los límites por IP), y en
+producción todos los que pasan por el mismo nodo de Cloudflare compartían «IP». Ahora (`server-core/src/net.ts`):
+
+1. Se parte de la IP del **socket**.
+2. Mientras esa IP sea un proxy de confianza, se retrocede un salto en `X-Forwarded-For` (de **derecha** a izquierda:
+   cada proxy añade al final lo que vio).
+3. Si el salto es un nodo de **Cloudflare** (redes publicadas en cloudflare.com/ips, `cloudflare` en la lista) y la
+   petición trae `CF-Connecting-IP`, esa es la IP del cliente.
+4. El primer salto que no es de confianza es el cliente. Lo que el cliente ponga a la izquierda no se mira nunca.
+
+`TRUSTED_PROXIES` (Node): lista separada por comas de IPs, redes CIDR y `loopback` (127.0.0.0/8, ::1), `private` (redes
+privadas) y `cloudflare`. Por defecto `loopback,cloudflare`; vacía = nadie (vale la IP del socket). Una entrada que no
+se entiende impide arrancar. En el VPS: Cloudflare → Caddy (127.0.0.1) → Node. Caddy, sin `trusted_proxies` propio,
+**reemplaza** el `X-Forwarded-For` entrante por la IP que ve (el nodo de Cloudflare) y deja pasar `CF-Connecting-IP`.
+Quien llame a la IP del VPS saltándose Cloudflare con un `CF-Connecting-IP` inventado no cuela: el salto que ve Caddy
+no es de Cloudflare. Si se añade otro proxy delante, hay que incluir su red.
+
+En el worker la IP es `CF-Connecting-IP` (la pone el borde de Cloudflare; el cliente no puede cambiarla). La API recibe
+la función como `ApiDeps.clientIp`; sin ella todo cuenta como la misma IP (`unknown`): nunca se lee `X-Forwarded-For`
+sin saber quién lo pone. El log de accesos, los límites de WebSocket por IP (`MAX_WS_PER_IP`) y los de la API usan la
+misma IP. Tests: `server-core/test/net.test.ts`.
+
+### Privacidad y enlaces
+
+- `GET /api/workspaces/:id/members` con un **enlace** (de lectura o de edición, con o sin cuenta) devuelve el nombre de
+  los miembros pero **no su correo**; las cuentas con acceso siguen viéndolo.
+- No se pueden crear enlaces ya caducados (`400`, `code: link_expires_past`). Al usar un enlace caducado o revocado,
+  la API responde `401` con `code: link_expired` (y `expiresAt`) o `link_invalid` y un mensaje que lo dice; la app
+  muestra «Este enlace ya no sirve» en vez de «Entra para abrir este espacio».
+- `GET /api/auth/session` responde `200 {user: null}` sin sesión: la app lo usa en cada carga (sin 401 en la consola ni
+  la sonda `HEAD /api/notations`). `GET /api/auth/me` sigue respondiendo 401 sin identidad.
+- Un enlace de **edición** puede renombrar el espacio (`PATCH /api/workspaces/:id {name}`), no cambiar el dueño; el
+  editor llama a esa ruta (con 800 ms de espera) al renombrar un espacio del servidor.
+
+### Historial
+
+- Instantáneas automáticas: la referencia de los 30 minutos es la **última instantánea guardada** (se lee del historial
+  al cargar el doc), no el momento de cargarlo; antes, como el doc se descarga a los 60 s sin conexiones, casi nunca se
+  llegaba a los 30 min. Un espacio con contenido y sin ninguna instantánea guarda la primera con el primer cambio; uno
+  recién creado espera los 30 min. Test con reloj falso en `server-core/test/snapshots.test.ts`.
+- Una instantánea manual sin etiqueta se guarda con `label: ""` (antes `null`, como las automáticas): el historial la
+  muestra como «Manual, sin etiqueta» y la poda (que sólo borra `label IS NULL`) no la toca.
+

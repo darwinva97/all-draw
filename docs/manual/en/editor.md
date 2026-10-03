@@ -4,7 +4,7 @@ The editor is where you draw: you add elements, connect them, arrange them and f
 walks through every part of the screen and the everyday tasks. If you are not yet sure what an *element*, a *view* or
 a *notation* is, take a look at [Concepts](conceptos.md) first.
 
-![Editor: bar at the top, views and palette on the left, canvas in the centre, inspector on the right](../img/03-editor-archimate.png)
+![Editor: bar at the top, views and palette on the left, canvas in the center, inspector on the right (Spanish interface)](../img/03-editor-archimate.png)
 
 ## The areas of the screen {#zonas}
 
@@ -20,7 +20,7 @@ With a wide window (1100 px or more) you see everything at once:
    - **☰**: back to the list of all your workspaces.
    - **Workspace name**: click and type to change it.
    - **View path**: the views you have drilled into (for example `Map › Customer onboarding`). Click any of them to go
-     back to it, or press the **Back** arrow. On the right, a coloured tag shows the notation of the current view.
+     back to it, or press the **Back** arrow. On the right, a colored tag shows the notation of the current view.
    - **Connected people** (server workspaces only), **Comments**, **Search**, **Snap to grid**, **Theme** and
      **Keyboard shortcuts**. If you are not sure what a button does, hover over it: its name appears.
    - **Undo** and **Redo**.
@@ -30,7 +30,7 @@ With a wide window (1100 px or more) you see everything at once:
      the workspace is local), and the language selector.
 2. **Left column**: the **Views** panel at the top (grouped by notation, with the **Dimensions** and a summary of the
    **Model**) and the **Palette** below.
-3. **Canvas** in the centre, with zoom controls and the minimap in the corners. Below it, the **problems** bar.
+3. **Canvas** in the center, with zoom controls and the minimap in the corners. Below it, the **problems** bar.
 4. **Inspector** on the right: shows whatever you have selected (an element, an edge or, if nothing is selected, the
    view).
 
@@ -51,12 +51,13 @@ a **bottom bar** with four buttons appears. Each one opens a **sheet** that slid
 | Button | What it contains |
 |---|---|
 | **Views** | The list of views and dimensions. |
-| **Add** | The palette. **Tap** an item to add it to the centre of the canvas (there is no dragging on a phone). |
+| **Add** | The palette. **Tap** an item to add it in a free spot near the center of the canvas (there is no dragging on a phone). |
 | **Inspector** | The data of the selection. |
 | **More** | The view path, **Workspace**, search, grid, theme, shortcuts, **Fit to view**, **Auto layout** and the app actions (import/export, share, language…). |
 
 To close a sheet, tap outside it, press the close button or drag it down by its handle. On touch screens, **press and
-hold** a node for half a second to open its menu (the equivalent of right-clicking).
+hold** a node for half a second to open its menu (the equivalent of right-clicking), which slides up from the bottom as a
+sheet.
 
 ## The palette {#paleta}
 
@@ -76,7 +77,8 @@ The palette is the drawer you take things from. It has a **Search…** field tha
 ## Adding nodes {#anadir}
 
 1. In the palette, find the type you want (for example *Business Process* in ArchiMate or *Task* in BPMN).
-2. **Drag** it onto the canvas and drop it where you like. On a phone, open **Add** and tap it.
+2. **Drag** it onto the canvas and drop it where you like. A **click** (or **Enter** from the keyboard) adds it in a
+   free spot near the center of the canvas. On a phone, open **Add** and tap it.
 3. The node starts with the type's name. Press **F2** (or double-click the name) and type the real name. **Enter**
    confirms, **Esc** cancels.
 4. Fill in the rest of the data in the **Inspector** (documentation, fields, tags).
@@ -125,7 +127,7 @@ an edge with bend points is selected, the **Remove bend points** button appears 
 per field of its response (`response.customer.email`). They let you say *which data* travels from one place to
 another, not just that two things are related. The full idea is in [Pins](conceptos.md#pines).
 
-![Inspector, Pins tab, on a microservice in the demo](../img/07-rejilla-pines.png)
+![Inspector, Pins tab, on a microservice in the demo (Spanish interface)](../img/07-rejilla-pines.png)
 
 To use them:
 
@@ -219,7 +221,7 @@ The inspector changes depending on what you select.
 | **Data** | Name, documentation, the fields of its type, free properties, **Tags** (comma-separated), the list of **Relations**, the assigned **People** and its comments. |
 | **Pins** | Which pins are shown on this node; see [Pins](#pines). |
 | **Where** | The element's **Detail views**, the views it **Appears in**, which view opens on double-click, and its **Traces** and trace **Suggestions** with other notations. |
-| **Style** | Fill, border, text colour, size, alternate text and figure. It only affects **this occurrence**: to style by data in every view, use [rules](librerias-reglas-personas.md#reglas). |
+| **Style** | Fill, border, text color, size, alternate text and figure. It only affects **this occurrence**: to style by data in every view, use [rules](librerias-reglas-personas.md#reglas). |
 
 **An edge** shows the relationship type, its fields, the routing and the line (see [Editing an edge](#aristas)).
 
@@ -228,7 +230,7 @@ and, in a grid, its layers and stages.
 
 ## Right-click menus {#menus}
 
-![Node menu with "Open in another dimension"](../img/05-menu-dimension.png)
+![Node menu with "Open in another dimension" (Spanish interface)](../img/05-menu-dimension.png)
 
 **On a node** (or press and hold on touch screens):
 
@@ -252,7 +254,7 @@ In a *Layers × stages* view the canvas is a table: rows are **layers** (for exa
 Technology) and columns are the **stages** of a process. It can have a band of stage groups on top.
 
 1. Drop nodes inside a **cell**: they are tied to it and move if the cell moves. You cannot drop outside the cells.
-2. To edit layers and stages, click an empty area and use the view inspector: name, colour, size and order, with the
+2. To edit layers and stages, click an empty area and use the view inspector: name, color, size and order, with the
    **layer** and **stage** buttons to add more.
 3. If you delete a layer or stage, its nodes are left outside the grid until you move them to another cell.
 
@@ -273,7 +275,7 @@ This is the view the `.drawer` importer creates. More in [Grid](notaciones/grid.
 
 ## Problems panel {#problemas}
 
-![Problems panel expanded](../img/08-problemas.png)
+![Problems panel expanded (Spanish interface)](../img/08-problemas.png)
 
 The bar below the canvas sums up how many **errors**, **warnings** and **notes** there are. It is recalculated a
 moment after each change (you will see `computing…`). Click it to expand the list:
@@ -349,7 +351,8 @@ The full list is in [Keyboard shortcuts](atajos.md).
   returning the focus to the button that opened them.
 - Status messages (connection, link copied, problem recalculation) are announced to screen readers.
 - The canvas is graphical; the keyboard alternative is search (**Ctrl+K**) together with the inspector, which shows all
-  the data of the selection in labelled fields. The arrow keys move the selected nodes.
+  the data of the selection in labeled fields. The arrow keys move the selected nodes, and **Shift+F10** (or the
+  **Menu** key) opens their context menu, which you move through with the arrow keys.
 - Text has a contrast of at least 4.5:1 in both light and dark theme, and if your system asks for reduced motion,
   transitions are turned off.
 - On touch screens, buttons have a touch area of at least 44 px.
@@ -361,7 +364,7 @@ The relationship is not allowed between those types (or in that direction). See 
 refused](#conexion-rechazada).
 
 **"I can't see the palette and the inspector is not editable."**
-You are in **read-only** mode (read-only link or `viewer` role). Ask the owner for an edit link; see
+You are in **read-only** mode (read-only link or **read-only** role). Ask the owner for an edit link; see
 [Sharing and collaborating](compartir-y-colaborar.md#roles). On a tablet, also check that you have not hidden the
 panels with the buttons at the ends of the bar.
 

@@ -41,7 +41,7 @@ describe('log de accesos y métricas', () => {
   it('una línea JSON por petición: método, ruta sin tokens, estado, ms, usuario, IP truncada', async () => {
     const s = await start({ logLevel: 'debug' });
     const a = await register(s.url, 'ana@example.com');
-    await fetch(`${s.url}/api/auth/me?token=lnk_secreto123`, { headers: { authorization: `Bearer ${a.token}`, 'x-forwarded-for': '203.0.113.77, 10.0.0.1' } });
+    await fetch(`${s.url}/api/auth/me?token=lnk_secreto123`, { headers: { authorization: `Bearer ${a.token}`, 'x-forwarded-for': '10.0.0.1, 203.0.113.77' } });
     await until(() => s.logs.some(l => l.msg === 'http' && l.path === '/api/auth/me'));
     const line = s.logs.find(l => l.msg === 'http' && l.path === '/api/auth/me')!;
     expect(line).toMatchObject({ level: 'info', method: 'GET', status: 200, user: a.user.id, ip: '203.0.113.0' });

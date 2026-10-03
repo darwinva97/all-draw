@@ -593,3 +593,89 @@ button.ad-tr-count { color: var(--ad-text); }
 /* Lienzo sin vista: estado vacío con invitación */
 .ad-canvas--empty { flex-direction: column; gap: 6px; background-image: radial-gradient(color-mix(in srgb, var(--ad-muted) 28%, transparent) 1px, transparent 1px); background-size: 16px 16px; }
 @media (prefers-reduced-motion: reduce) { .ad-btn { transition: none; } .ad-btn:active:not(:disabled) { transform: none; } }
+
+/* ==== QA2 paneles: menús contextuales, paleta y vistas con teclado, pestañas, trazabilidad y barra superior */
+/* Menús contextuales: `ui/menu.tsx` los coloca dentro de la pantalla y fija su alto máximo (con desplazamiento propio). */
+.ad-menu { overscroll-behavior: contain; }
+.ad-menu:focus { outline: none; }
+.ad-menu .ad-popover__item:focus { background: var(--ad-bg); }
+.ad-menu .ad-popover__item:focus-visible { outline-offset: -2px; }
+.ad-menu-backdrop { position: fixed; inset: 0; z-index: 49; background: rgba(15, 23, 42, .35); animation: ad-fade .18s ease-out; }
+/* Móvil: hoja inferior a todo el ancho */
+.ad-menu--sheet { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto; min-width: 0; max-width: none; max-height: 70dvh; border-radius: 16px 16px 0 0; border-bottom: 0; padding: 6px 8px calc(8px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 32px rgba(0, 0, 0, .18); animation: ad-slide-up .22s cubic-bezier(.2, .8, .2, 1); }
+.ad-menu--sheet .ad-popover__item { min-height: 44px; padding: 10px 12px; }
+.ad-menu--sheet .ad-popover__title { position: sticky; top: -6px; z-index: 1; background: var(--ad-panel); padding: 10px 12px 8px; }
+@media (prefers-reduced-motion: reduce) { .ad-menu--sheet, .ad-menu-backdrop { animation: none; } }
+
+/* Paleta y vistas: una parada de Tab por lista, flechas dentro; clic, Intro o Espacio añaden/abren */
+.ad-pal__item:focus-visible, .ad-pal__scroll summary:focus-visible, .ad-views__scroll summary:focus-visible { outline: 2px solid var(--ad-accent); outline-offset: -2px; }
+.ad-pal__scroll:focus-visible, .ad-insp__scroll:focus-visible, .ad-ws-body:focus-visible { outline: 2px solid var(--ad-accent); outline-offset: -2px; }
+.ad-views__open { flex: 1; min-width: 0; display: block; text-align: left; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 4px; }
+.ad-views__open:focus-visible { outline: 2px solid var(--ad-accent); outline-offset: 2px; }
+.ad-insp__share { margin: 6px 0 10px; }
+
+/* Trazabilidad: la matriz no se aplasta; el panel desplaza y la matriz tiene su propio desplazamiento */
+.ad-tr-main > * { flex-shrink: 0; }
+.ad-tr-scroll { max-height: max(320px, 58vh); }
+
+/* Barra superior: el nombre del espacio se ve entero y el chip de la notación no se corta (cede la ruta, con «…») */
+.ad-toolbar > input { field-sizing: content; min-width: 80px; max-width: 280px; flex: none; text-overflow: ellipsis; }
+.ad-crumbs { min-width: 0; flex: 0 1 auto; }
+.ad-crumb { min-width: 0; }
+.ad-crumb .ad-link { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-crumb__notation { flex: none; white-space: nowrap; }
+
+/* ==== QA2 lienzo (foco visible, compartimentos, minimapa, vista vacía, selector de relación) ==== */
+/* Foco de teclado visible en nodos y aristas (Tab recorre el lienzo) */
+.ad-canvas .react-flow__node:focus { outline: none; }
+.ad-canvas .react-flow__node:focus-visible { outline: 2px solid var(--ad-accent); outline-offset: 3px; border-radius: 4px; }
+.ad-canvas .react-flow__edge:focus { outline: none; }
+.ad-canvas .react-flow__edge:focus-visible .react-flow__edge-path { stroke: var(--ad-accent) !important; stroke-width: 3px !important; }
+.ad-canvas .react-flow__edge:focus-visible .react-flow__edge-interaction { stroke: color-mix(in srgb, var(--ad-accent) 25%, transparent); stroke-opacity: 1; }
+.ad-canvas:focus-visible { outline: 2px solid color-mix(in srgb, var(--ad-accent) 60%, transparent); outline-offset: -2px; }
+.ad-canvas .react-flow__controls-button:focus-visible, .ad-canvas .react-flow__minimap:focus-visible { outline: 2px solid var(--ad-accent); outline-offset: 1px; }
+/* Conectar: soltar sobre el cuerpo vale; se resalta el nodo bajo el puntero */
+.ad-canvas .react-flow.connecting .react-flow__node:hover:not(.connectingfrom) .ad-node { outline: 2px dashed var(--ad-accent); outline-offset: 3px; }
+.ad-relpicker { min-width: 190px; max-height: min(70vh, 420px); overflow: auto; }
+/* Compartimentos de clase / interfaz / enumeración / entidad */
+.ad-node.ad-node--cls { display: block; padding: 0; text-align: left; }
+.ad-cls__head { position: absolute; left: 0; right: 0; top: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 8px; box-sizing: border-box; min-width: 0; }
+.ad-cls__stereo { font-size: 11px; line-height: 14px; opacity: .8; white-space: nowrap; }
+.ad-cls__name { max-width: 100%; line-height: 18px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.ad-cls__name .ad-node__label { font-weight: inherit; }
+.ad-cls__name.is-abstract { font-style: italic; }
+.ad-cls__sec { position: absolute; left: 0; right: 0; box-sizing: border-box; border-top: 1px solid; border-color: inherit; }
+.ad-cls__row { position: absolute; left: 0; right: 0; height: 18px; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; padding: 0 8px; box-sizing: border-box; font-size: 12px; line-height: 18px; white-space: nowrap; }
+.ad-cls__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ad-cls__detail { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; font-size: 11px; opacity: .7; }
+.ad-cls__pk { flex: none; font-size: 9px; font-weight: 700; line-height: 12px; padding: 0 3px; border-radius: 3px; border: 1px solid currentColor; opacity: .85; }
+.ad-cls__row.is-pk .ad-cls__text { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.ad-cls__row.is-dup .ad-cls__text { color: #b91c1c; text-decoration: underline wavy #dc2626; }
+.ad-handle.ad-handle--row { width: 8px; height: 8px; background: #f59e0b; border-radius: 2px; }
+/* Mensaje a sí mismo (secuencia): el círculo solo aparece al pasar por la cabecera, con la línea seleccionada o al conectar */
+.ad-seq-handle--self.react-flow__handle { opacity: 0; }
+.react-flow__node:hover .ad-seq-handle--self.react-flow__handle, .react-flow__node.selected .ad-seq-handle--self.react-flow__handle { opacity: .55; }
+.ad-seq-handle--self.react-flow__handle:hover, .ad-canvas .react-flow.connecting .ad-seq-handle--self.react-flow__handle { opacity: 1; }
+/* Minimapa: más pequeño, translúcido y opaco al pasar el puntero */
+.ad-canvas .react-flow__minimap.ad-minimap { opacity: .8; border: 1px solid var(--ad-border); border-radius: 6px; overflow: hidden; transition: opacity .15s; }
+.ad-canvas .react-flow__minimap.ad-minimap:hover { opacity: 1; }
+.ad-editor.theme-dark .ad-canvas .react-flow__minimap.ad-minimap { background: transparent; }
+/* Vista vacía: qué hacer */
+.ad-canvas-hint { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 5; max-width: min(420px, calc(100% - 32px)); padding: 16px 18px; border: 1px dashed var(--ad-border); border-radius: 10px; background: color-mix(in srgb, var(--ad-panel) 88%, transparent); color: var(--ad-muted); font-size: 13px; line-height: 1.45; text-align: center; pointer-events: none; }
+.ad-canvas-hint p { margin: 0 0 8px; }
+.ad-canvas-hint__title { color: var(--ad-text); font-weight: 600; font-size: 14px; }
+.ad-canvas-hint .ad-btn { pointer-events: auto; margin-top: 4px; }
+/* Los manejadores quedan por encima de la etiqueta del nodo (en nodos pequeños o bajos, el texto tapaba el de abajo) */
+.ad-node > .react-flow__handle { z-index: 3; }
+/* Por debajo de 1280 px no cabe todo: el nombre cede hasta 120 px y el chip se oculta antes que cortarse (como en tableta) */
+@media (max-width: 1279px) { .ad-toolbar > input { flex: 0 1 auto; min-width: 120px; } .ad-crumb__notation { display: none; } }
+
+/* ==== Contraste (QA 47) */
+.ad-sev-warning { color: #b45309; } .ad-problem.ad-sev-warning { border-left-color: #b45309; }
+.ad-editor.theme-dark .ad-sev-warning { color: #fbbf24; } .ad-editor.theme-dark .ad-problem.ad-sev-warning { border-left-color: #fbbf24; }
+/* Cabeceras de capa con color propio (pastel) en tema oscuro: texto oscuro; las de etapa sin color usan el texto del tema. */
+.ad-editor.theme-dark .ad-visual--core-header[style*="background"] .ad-visual__title { color: #111827; }
+/* Posición de la etiqueta guardada por los importadores (`style.labelPosition`), como en el SVG exportado */
+.ad-node.ad-node--label-top { align-items: flex-start; }
+.ad-node.ad-node--label-bottom .ad-node__body { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% + 40px); padding-top: 2px; color: var(--ad-text); }
+.ad-node.ad-node--label-bottom .ad-node__icon--alone { position: relative; }

@@ -102,7 +102,7 @@ describe('renderStandaloneHtml: comentarios', () => {
     const html = renderStandaloneHtml(store, reg());
     const v1 = section(html, 'vw_1');
     expect(v1).toContain('<aside class="ad-comments" aria-label="Comentarios">');
-    expect(v1).toContain('3 abiertos · 1 resueltos');
+    expect(v1).toContain('3 abiertos · 1 resuelto');
     // Numerados del más antiguo al más reciente
     const order = [...v1.matchAll(/<li class="ad-thread[^"]*" data-thread="([^"]+)"><div class="ad-thread__head"><span class="ad-thread__n">(\d+)</g)].map(m => `${m[2]}:${m[1]}`);
     expect(order).toEqual(['1:c1', '2:c2', '3:c3', '4:c4']);

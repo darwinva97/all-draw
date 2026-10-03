@@ -35,7 +35,7 @@ await page.locator('.ad-views__item', { hasText: 'Alta de cliente · Estados' })
 await shot('06-estados');
 await page.locator('.ad-views__item', { hasText: 'Mapa capas' }).first().click(); await wait(900);
 await page.locator('.react-flow__node', { hasText: 'clientes-api' }).first().click(); await wait(300);
-await page.getByRole('button', { name: /Pines/ }).click(); await wait(400);
+await page.getByRole('tab', { name: /Pines/ }).click(); await wait(400);
 await shot('07-rejilla-pines');
 await page.locator('.ad-problems__bar').click(); await wait(400);
 await shot('08-problemas');
@@ -44,7 +44,7 @@ await page.getByRole('button', { name: 'Espacio' }).click(); await wait(500);
 await page.locator('.ad-ws-tabs button', { hasText: 'Reglas' }).click(); await wait(400);
 await shot('09-espacio-reglas');
 await page.keyboard.press('Escape'); await wait(300);
-await page.getByRole('button', { name: 'Compartir' }).click();
+await page.getByRole('button', { name: 'Compartir', exact: true }).click();
 await page.getByRole('button', { name: 'Nuevo enlace de edición' }).click();
 await page.getByRole('button', { name: 'Nuevo enlace de lectura' }).click();
 await page.waitForSelector('text=lectura', { timeout: 10000 }); await wait(500);

@@ -45,8 +45,14 @@ export function buildIndex(lang: Lang): Promise<Section[]> {
   return p;
 }
 
-/** Términos plegados (minúsculas, sin acentos) de una consulta. */
-export const termsOf = (q: string): string[] => fold(q).split(/[^\p{L}\p{N}:_-]+/u).filter(w => w.length >= 2);
+/** Longitud mínima de un término: con una letra coincidiría casi todo el manual. */
+export const MIN_TERM = 2;
+
+/** Términos plegados (minúsculas, sin acentos pero con ñ) de una consulta. `NFC` por si llega «n + ◌̃» descompuesta. */
+export const termsOf = (q: string): string[] => fold(q.normalize('NFC')).split(/[^\p{L}\p{N}:_-]+/u).filter(w => w.length >= MIN_TERM);
+
+/** La consulta tiene texto pero ningún término buscable (p. ej. una sola letra): hay que pedir más, no decir «nada coincide». */
+export const tooShort = (q: string): boolean => q.trim().length > 0 && termsOf(q).length === 0;
 
 function count(hay: string, needle: string): number {
   let n = 0, i = hay.indexOf(needle);

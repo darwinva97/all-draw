@@ -6,7 +6,7 @@ A data flow diagram (DFD) shows **where the information of a system travels**: w
 which processes transform it, where it is stored and where it goes. It doesn't say in which order things
 happen or who does them; only which data moves.
 
-Use it to analyse a system before designing it, for privacy and security reviews ("where does personal
+Use it to analyze a system before designing it, for privacy and security reviews ("where does personal
 data go?") or to document integrations. It follows the classic Yourdon/DeMarco and Gane-Sarson
 notations, and it is built in **levels**: a context diagram with a single process and, from it, more
 detailed diagrams.
@@ -17,7 +17,7 @@ detailed diagrams.
 |---|---|---|
 | **Process** | Circle | Something that transforms data: "Validate order". The `number` field holds the level numbering: "0" for the context, "1", "1.2"… |
 | **Data store** | Two parallel lines | Data at rest: a table, a file, a queue. Its identifier (`number`) is "D1", "D2"… |
-| **External entity** | Rectangle | Whoever sends or receives data from outside the system: a person, an organisation, another system |
+| **External entity** | Rectangle | Whoever sends or receives data from outside the system: a person, an organization, another system |
 
 ## Relations {#relaciones}
 

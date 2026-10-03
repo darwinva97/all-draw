@@ -32,6 +32,13 @@ function OfflineIndicator() {
   );
 }
 
+/** Ejecuta `fn` cuando no haya un recorrido guiado en pantalla (lo comprueba cada segundo, como mucho 10 min). */
+function whenNoTour(fn: () => void, tries = 600): void {
+  const busy = () => !!document.querySelector('.tour') || (typeof localStorage !== 'undefined' && localStorage.getItem('alldraw:tour') !== 'done' && /^#\/(w|s)\//.test(location.hash));
+  if (!busy() || tries <= 0) { setTimeout(fn, 1500); return; }
+  setTimeout(() => whenNoTour(fn, tries - 1), 1000);
+}
+
 function registerServiceWorker(): void {
   if (!import.meta.env.PROD || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
   import('virtual:pwa-register').then(({ registerSW }) => {
@@ -43,7 +50,8 @@ function registerServiceWorker(): void {
           action: { label: t('Recargar'), onClick: () => { void update(true); } },
         });
       },
-      onOfflineReady() { toast.success(t('Lista para usar sin conexión'), { id: 'sw-offline', duration: 4000 }); },
+      // No encima del recorrido guiado ni de lo primero que se ve (fallo 75): espera a que no haya recorrido y avisa breve.
+      onOfflineReady() { whenNoTour(() => toast.success(t('Lista para usar sin conexión'), { id: 'sw-offline', duration: 3000 })); },
     });
   }).catch(() => { /* sin service worker (navegación privada, http): la app funciona igual */ });
 }

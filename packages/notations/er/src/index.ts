@@ -36,13 +36,15 @@ export const ER_ELEMENT_TYPES: ElementType[] = [
       { key: 'weak', label: 'Entidad débil', kind: 'checkbox', doc: 'Depende de otra entidad para identificarse (doble borde).' },
       { key: 'table', label: 'Tabla física', kind: 'text', doc: 'Nombre de la tabla en el modelo físico.' },
     ],
+    // Una fila por atributo (PK marcada) con su pin a la altura de la fila, en el lienzo y en el SVG.
+    meta: { compartments: { sections: ['attributes'], pk: 'pk' } },
   }),
   el('Attribute', 'Atributo', {
     shape: 'ellipse', color: '#FFFFFF', icon: '○',
     doc: 'Atributo suelto (estilo Chen). Se une a su entidad con `er:Has`.',
     fields: [
       { key: 'type', label: 'Tipo', kind: 'text' },
-      { key: 'key', label: 'Clave', kind: 'select', options: 'none,pk,fk,unique' },
+      { key: 'key', label: 'Clave', kind: 'select', options: 'none,pk,fk,unique', optionLabels: { none: 'Ninguna', pk: 'Clave primaria (PK)', fk: 'Clave ajena (FK)', unique: 'Única' } },
       { key: 'nullable', label: 'Nulo', kind: 'checkbox' },
     ],
   }),
@@ -60,20 +62,22 @@ export const ER_ELEMENT_TYPES: ElementType[] = [
 /** Valores de `sourceCard`/`targetCard` → cabeza IE que dibujan. */
 export const CARDINALITIES = { '1': 'one', '1..1': 'only-one', '0..1': 'zero-or-one', '*': 'many', '1..*': 'one-or-many', '0..*': 'zero-or-many' } as const;
 const CARD_OPTIONS = Object.keys(CARDINALITIES).join(',');
+/** Nombre legible de cada cardinalidad (en español; la interfaz lo traduce). */
+const CARD_LABELS: Record<keyof typeof CARDINALITIES, string> = { '1': '1 (uno)', '1..1': '1..1 (uno y solo uno)', '0..1': '0..1 (cero o uno)', '*': '* (muchos)', '1..*': '1..* (uno o muchos)', '0..*': '0..* (cero o muchos)' };
 const CARD_DOC = 'Sustituye la cabeza de este extremo: 1 = uno (barra), 1..1 = uno y solo uno (doble barra), 0..1 = cero o uno, * = muchos (pata de gallo), 1..* = uno o muchos, 0..* = cero o muchos.';
 
 const cardFields: FieldDef[] = [
-  { key: 'sourceCard', label: 'Cardinalidad origen', kind: 'select', options: CARD_OPTIONS, doc: CARD_DOC },
-  { key: 'targetCard', label: 'Cardinalidad destino', kind: 'select', options: CARD_OPTIONS, doc: CARD_DOC },
+  { key: 'sourceCard', label: 'Cardinalidad origen', kind: 'select', options: CARD_OPTIONS, optionLabels: CARD_LABELS, doc: CARD_DOC },
+  { key: 'targetCard', label: 'Cardinalidad destino', kind: 'select', options: CARD_OPTIONS, optionLabels: CARD_LABELS, doc: CARD_DOC },
   { key: 'identifying', label: 'Identificativa', kind: 'checkbox', doc: 'La clave del hijo incluye la del padre (línea continua en Crow\'s Foot).' },
-  { key: 'onDelete', label: 'Al borrar', kind: 'select', options: 'no action,cascade,set null,restrict' },
+  { key: 'onDelete', label: 'Al borrar', kind: 'select', options: 'no action,cascade,set null,restrict', optionLabels: { 'no action': 'Sin acción (no action)', cascade: 'En cascada (cascade)', 'set null': 'Poner a nulo (set null)', restrict: 'Impedir (restrict)' } },
 ];
 
 export const ER_RELATION_TYPES: RelationType[] = [
   { id: ONE_TO_ONE, name: 'Uno a uno', category: CAT.relations, line: 'solid', sourceHead: 'only-one', targetHead: 'only-one', fields: cardFields, doc: '1:1. Doble barra (uno y solo uno) en ambos extremos.', meta: { cardinality: '1:1' } },
   { id: ONE_TO_MANY, name: 'Uno a muchos', category: CAT.relations, line: 'solid', sourceHead: 'only-one', targetHead: 'one-or-many', fields: cardFields, doc: '1:N. Origen = lado uno (doble barra), destino = lado muchos (barra + pata de gallo).', meta: { cardinality: '1:N' } },
   { id: MANY_TO_MANY, name: 'Muchos a muchos', category: CAT.relations, line: 'solid', sourceHead: 'one-or-many', targetHead: 'one-or-many', fields: cardFields, doc: 'N:M (uno o muchos en ambos extremos). Se resuelve en físico con una tabla intermedia.', meta: { cardinality: 'N:M' } },
-  { id: INHERITS, name: 'Hereda', category: CAT.relations, line: 'solid', sourceHead: 'none', targetHead: 'triangle', fields: [{ key: 'kind', label: 'Estrategia', kind: 'select', options: 'single table,joined,table per class' }], doc: 'Especialización / generalización (subtipo → supertipo).' },
+  { id: INHERITS, name: 'Hereda', category: CAT.relations, line: 'solid', sourceHead: 'none', targetHead: 'triangle', fields: [{ key: 'kind', label: 'Estrategia', kind: 'select', options: 'single table,joined,table per class', optionLabels: { 'single table': 'Una sola tabla', joined: 'Tablas unidas (joined)', 'table per class': 'Una tabla por clase' } }], doc: 'Especialización / generalización (subtipo → supertipo).' },
   { id: HAS, name: 'Tiene', category: CAT.relations, line: 'solid', sourceHead: 'none', targetHead: 'none', fields: [], doc: 'Entidad → Atributo (estilo Chen) y Vista → Entidad (la vista se apoya en ella).' },
 ];
 

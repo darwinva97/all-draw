@@ -27,7 +27,8 @@ export function TracesTab({ onNavigate }: { onNavigate?: () => void }) {
   const na = notations.includes(a) ? a : (notations[0] ?? '');
   const nb = notations.includes(b) && b !== na ? b : (notations.find(n => n !== na) ?? '');
   const ready = !!na && !!nb;
-  const packName = (id: string) => registry.pack(id)?.name ?? id;
+  // Los tipos de librería no tienen pack: su "notación" es `lib`.
+  const packName = (id: string) => registry.pack(id)?.name ?? (id === 'lib' ? t('Librerías') : id);
 
   const view = useMemo(() => (ready ? matrixRows(store, registry, na, nb, filter) : null), [store, registry, na, nb, filter, version]);
   const cov = useMemo(() => (ready ? coverage(store, registry, na, nb) : null), [store, registry, na, nb, version]);

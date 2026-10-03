@@ -1,7 +1,6 @@
-import { useEffect } from 'react';
 import { useT } from '@all-draw/i18n';
 import { Icon } from '../icons';
-import { inLayer } from '../ui/layer';
+import { useModal } from '../ui/modal';
 
 /** Panel de atajos de teclado (tecla ?). Textos en español; se traducen con `t()` al pintarlos. */
 const GROUPS: { title: string; items: [string, string][] }[] = [
@@ -13,17 +12,13 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
 
 export function ShortcutsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT();
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !inLayer(e)) { e.stopPropagation(); onClose(); } };
-    window.addEventListener('keydown', h, true);
-    return () => window.removeEventListener('keydown', h, true);
-  }, [open, onClose]);
+  // Foco atrapado mientras está abierto, Escape cierra y el foco vuelve a donde estaba.
+  const box = useModal(open, onClose);
   if (!open) return null;
   return (
     <div className="ad-cmdk-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="ad-cmdk ad-shortcuts" role="dialog" aria-modal="true" aria-label={t('Atajos de teclado')}>
-        <header className="ad-shortcuts__head"><strong>{t('Atajos de teclado')}</strong><button className="ad-btn ad-btn--ghost" onClick={onClose} aria-label={t('Cerrar')} autoFocus><Icon name="close" size={14} /></button></header>
+      <div ref={box} className="ad-cmdk ad-shortcuts" role="dialog" aria-modal="true" aria-label={t('Atajos de teclado')}>
+        <header className="ad-shortcuts__head"><strong>{t('Atajos de teclado')}</strong><button className="ad-btn ad-btn--ghost" onClick={onClose} aria-label={t('Cerrar')} data-autofocus><Icon name="close" size={14} /></button></header>
         <div className="ad-shortcuts__grid">
           {GROUPS.map(g => (
             <section key={g.title}>

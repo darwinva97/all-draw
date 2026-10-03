@@ -19,7 +19,7 @@
 import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
-const base = process.env.BASE ?? 'http://127.0.0.1:4310';
+const base = process.env.BASE ?? 'http://127.0.0.1:4173';
 const SHOTS = '/tmp/shots';
 mkdirSync(SHOTS, { recursive: true });
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });

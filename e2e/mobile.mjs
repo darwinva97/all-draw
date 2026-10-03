@@ -3,7 +3,7 @@
 // que la pulsación larga abre el menú contextual y que en tableta los paneles se colapsan y persisten.
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
-const base = process.env.BASE ?? 'http://127.0.0.1:4196', out = process.env.OUT ?? '/tmp/shots';
+const base = process.env.BASE ?? 'http://127.0.0.1:4173', out = process.env.OUT ?? '/tmp/shots';
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
 const errors = [], fails = [];

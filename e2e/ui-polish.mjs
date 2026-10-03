@@ -3,7 +3,7 @@
 //      BASE=http://127.0.0.1:4311 node e2e/ui-polish.mjs      (capturas en $OUT/ui-*.png, por defecto /tmp/shots)
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
-const base = process.env.BASE ?? 'http://127.0.0.1:4311';
+const base = process.env.BASE ?? 'http://127.0.0.1:4173';
 const out = process.env.OUT ?? '/tmp/shots';
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });

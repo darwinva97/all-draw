@@ -10,7 +10,7 @@ para que se entiendan; léelas, son cortas.
 
 - Titular: el autor del proyecto, una persona física identificada por su cuenta de GitHub
   [darwinva97](https://github.com/darwinva97), que ofrece el servicio de forma gratuita.
-- Contacto: las incidencias del proyecto (https://github.com/darwinva97/all-draw/issues) o, para asuntos privados, un aviso privado en GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular.
+- Contacto: las [incidencias del proyecto](https://github.com/darwinva97/all-draw/issues) o, para asuntos privados, un [aviso privado en GitHub](https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular.
 - Si el servicio pasa a tener uso comercial, aquí se publicarán los datos fiscales del titular.
 
 ## Qué es el servicio {#el-servicio}
@@ -107,7 +107,7 @@ persona consumidora.
 ## Fin de tu cuenta {#fin-de-la-cuenta}
 
 - Puedes eliminar tu cuenta en cualquier momento en **Cuenta → Tus datos → Eliminar cuenta…** (o
-  pedirlo con un aviso privado en GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular). Antes, exporta lo que quieras conservar con
+  pedirlo con un [aviso privado en GitHub](https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular). Antes, exporta lo que quieras conservar con
   **Exportar mis datos**. Tus espacios pasan a su editor más antiguo o, si no tienen, se borran.
 - Podemos suspender o cerrar una cuenta que incumpla estas condiciones o que lleve mucho tiempo
   sin usarse, avisando antes cuando sea posible y dándote ocasión de exportar tus datos.
@@ -132,4 +132,4 @@ derecho de las personas consumidoras a acudir a los tribunales de su domicilio.
 
 ## Contacto {#contacto}
 
-Para cualquier duda sobre estas condiciones: las incidencias del proyecto (https://github.com/darwinva97/all-draw/issues).
+Para cualquier duda sobre estas condiciones: las [incidencias del proyecto](https://github.com/darwinva97/all-draw/issues).

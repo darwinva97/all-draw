@@ -14,7 +14,7 @@ written to be understood; if anything is unclear, write to us.
 
 - Controller: the project's author, an individual who runs the service free of charge and is publicly
   identified by the GitHub account [darwinva97](https://github.com/darwinva97).
-- Privacy contact: a private report on GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), visible only to the operator. For anything else, the project's public issues (https://github.com/darwinva97/all-draw/issues).
+- Privacy contact: a [private report on GitHub](https://github.com/darwinva97/all-draw/security/advisories/new), visible only to the operator. For anything else, the project's [public issues](https://github.com/darwinva97/all-draw/issues).
 - You can do almost everything yourself without writing to anyone: exporting and deleting your data are
   in **Account → Your data**.
 - If the service becomes commercial, the operator's tax details will be published here.
@@ -194,7 +194,7 @@ You can ask at any time for:
   downloads a single workspace in an open format.
 - **Objection and restriction** of processing based on legitimate interest.
 
-Request it with a private report on GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), visible only to the operator, giving your account's email address. We will reply within one
+Request it with a [private report on GitHub](https://github.com/darwinva97/all-draw/security/advisories/new), visible only to the operator, giving your account's email address. We will reply within one
 month. If you are not satisfied, you can lodge a complaint with the data protection
 authority of your country (in the European Union, that of your member state).
 
@@ -209,7 +209,7 @@ authority of your country (in the European Union, that of your member state).
   sessions, API keys and access to other people's workspaces are deleted. Each workspace you own
   passes to its longest-standing member who **can edit**; those without one are deleted, and a final copy of them
   is kept that is removed automatically after 30 days, like the other backups. If you cannot sign
-  in, request it with a private report on GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), visible only to the operator.
+  in, request it with a [private report on GitHub](https://github.com/darwinva97/all-draw/security/advisories/new), visible only to the operator.
 
 ## Security {#seguridad}
 

@@ -15,8 +15,7 @@ claro, escríbenos.
 
 - Responsable: el autor del proyecto, una persona física, que opera el servicio de forma gratuita
   y lo identifica públicamente su cuenta de GitHub [darwinva97](https://github.com/darwinva97).
-- Contacto para privacidad: un aviso privado en GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular. Para lo demás, las incidencias públicas del proyecto
-  (https://github.com/darwinva97/all-draw/issues).
+- Contacto para privacidad: un [aviso privado en GitHub](https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular. Para lo demás, las [incidencias públicas del proyecto](https://github.com/darwinva97/all-draw/issues).
 - Casi todo lo puedes hacer tú mismo sin escribir a nadie: exportar y borrar tus datos están en
   **Cuenta → Tus datos**.
 - Si el servicio pasa a tener uso comercial, aquí se publicarán los datos fiscales del titular.
@@ -199,7 +198,7 @@ Puedes pedir en cualquier momento:
   concreto en un formato abierto.
 - **Oposición y limitación** del tratamiento basado en interés legítimo.
 
-Pídelo con un aviso privado en GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular, indicando el correo de tu cuenta. Responderemos en el plazo
+Pídelo con un [aviso privado en GitHub](https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular, indicando el correo de tu cuenta. Responderemos en el plazo
 de un mes. Si no quedas conforme, puedes reclamar ante la autoridad de protección de
 datos de tu país (en la Unión Europea, la de tu Estado miembro).
 
@@ -214,7 +213,7 @@ datos de tu país (en la Unión Europea, la de tu Estado miembro).
   sesiones, tus claves API y tu acceso a espacios ajenos. Cada espacio tuyo pasa al miembro más antiguo
   que **puede editar**; los que no tienen ninguno se borran, y de ellos se guarda una copia final que se elimina
   sola a los 30 días, como el resto de copias de seguridad. Si no puedes entrar, pídelo con
-  un aviso privado en GitHub (https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular.
+  un [aviso privado en GitHub](https://github.com/darwinva97/all-draw/security/advisories/new), que solo ve el titular.
 
 ## Seguridad {#seguridad}
 

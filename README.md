@@ -28,6 +28,8 @@ Staging: https://alldraw.bezenti.com.
 
 ## Documentación
 
+Manual de uso en línea: **https://alldraw.bezenti.com/docs** (español e inglés, con búsqueda). Las fuentes están en `docs/manual/`.
+
 - **Centro de documentación dentro de la app**: <https://alldraw.bezenti.com/#/docs>, en español e inglés, con búsqueda,
   referencia de notaciones generada desde los packs y lista de endpoints leída de `/api/openapi.json`. Visor en
   [`apps/web/src/docs/`](apps/web/src/docs/README.md) (rutas `#/docs/<slug>#<ancla>`, `docHref()` en `links.ts`).

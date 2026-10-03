@@ -11,3 +11,8 @@ export { searchWorkspace, scoreText, type SearchHit, type SearchAction } from '.
 export { propagateTemplate, retypeElements, FALLBACK_TYPE } from './template';
 export type { AwarenessLike, PresenceMe, PresenceState, Peer } from './presence';
 export { usePeers, peersOf, colorFor } from './presence';
+export { Icon, ICON_NAMES, type IconName, type IconProps } from './icons';
+export { toast, dismissToast, Toaster, mountUiLayer, type ToastOptions, type ToastKind, type ToastAction } from './ui/toast';
+export { confirmDialog, promptDialog, noticeDialog, isDialogOpen, DialogHost, type ConfirmOptions, type PromptOptions, type NoticeOptions } from './ui/dialog';
+export { mountInLayer, inLayer, FOCUSABLE } from './ui/layer';
+export { HelpLink } from './panels/HelpLink';

@@ -540,3 +540,51 @@ button.ad-tr-count { color: var(--ad-text); }
 /* Rendimiento de los nodos (cambio de vista con vistas grandes; ver docs/06-rendimiento.md) */
 /* Figura de Archi rectangular o redondeada sin SVG (un div; geometría en `archimateBoxStyle`, ElementNode). */
 .ad-archi-box { position: absolute; box-sizing: border-box; border-style: solid; pointer-events: none; }
+
+/* ---- Interfaz pulida: iconos SVG, enlaces de ayuda, estados ---- */
+.ad-editor { --ad-ease: cubic-bezier(.23, 1, .32, 1); }
+.ad-btn, .ad-tabbar__btn, .ad-popover__item, .ad-link { -webkit-tap-highlight-color: transparent; }
+.ad-btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 28px; line-height: 1.2; transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease, transform 120ms ease-out; }
+.ad-btn:active:not(:disabled) { transform: scale(.97); }
+.ad-btn .ad-icon { vertical-align: 0; }
+.ad-btn__label { margin-left: 1px; }
+.ad-btn--ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--ad-text) 6%, transparent); color: var(--ad-text); border-color: transparent; }
+.ad-toolbar > .ad-btn:not(:has(.ad-btn__label)):has(> .ad-icon:only-child) { width: 30px; padding: 0; }
+.ad-btn:focus-visible, .ad-link:focus-visible, .ad-popover__item:focus-visible, .ad-tabs button:focus-visible { outline: 2px solid var(--ad-accent); outline-offset: 1px; }
+.ad-popover__item { gap: 6px; }
+.ad-popover__item .ad-icon, .ad-link .ad-icon { color: var(--ad-muted); }
+.ad-link { display: flex; align-items: center; gap: 6px; }
+.ad-crumb__sep { display: inline-flex; }
+.ad-views__head .ad-btn { width: 26px; min-height: 26px; padding: 0; }
+.ad-views__detail { color: var(--ad-muted); margin-right: 4px; vertical-align: -1px; }
+.ad-views__item > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-pal__swatch--visual { color: var(--ad-muted); }
+.ad-node__drill { display: inline-flex; }
+.ad-edge-label__pins { display: inline-flex; vertical-align: -1px; }
+.ad-pin-mark { display: inline-flex; vertical-align: -2px; margin-left: 3px; color: #d97706; }
+.ad-ws-warn { color: #d97706; margin-left: 3px; vertical-align: -1px; }
+.ad-cm-badge { display: inline-flex; align-items: center; gap: 3px; }
+.ad-cm-bubble__in .ad-icon { vertical-align: 0; }
+.ad-tabbar__btn .ad-icon { margin-bottom: 1px; }
+.ad-cmdk__icon { display: inline-flex; justify-content: center; }
+.ad-ws-close { width: 30px; height: 30px; padding: 0; }
+.ad-ws-help { margin-left: auto; margin-bottom: 6px; }
+.ad-ws-head .ad-ws-help + .ad-ws-close { margin-left: 4px; }
+
+/* Enlace contextual "¿Cómo funciona?" */
+.ad-help-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ad-muted); text-decoration: none; padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
+.ad-help-link:hover { color: var(--ad-accent); background: color-mix(in srgb, var(--ad-accent) 8%, transparent); }
+.ad-help-link--compact span { font-size: 12px; }
+
+/* Problemas: recuento con iconos y cabecera de la lista */
+.ad-problems__bar { align-items: center; gap: 16px; min-height: 28px; }
+.ad-problems__count { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+.ad-problems__bar:hover { color: var(--ad-text); }
+.ad-problems__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px 4px; font-size: 12px; color: var(--ad-muted); }
+.ad-empty--ok { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ad-muted); }
+.ad-empty--ok .ad-icon { color: #16a34a; }
+.ad-editor.theme-dark .ad-empty--ok .ad-icon { color: #4ade80; }
+
+/* Lienzo sin vista: estado vacío con invitación */
+.ad-canvas--empty { flex-direction: column; gap: 6px; background-image: radial-gradient(color-mix(in srgb, var(--ad-muted) 28%, transparent) 1px, transparent 1px); background-size: 16px 16px; }
+@media (prefers-reduced-motion: reduce) { .ad-btn { transition: none; } .ad-btn:active:not(:disabled) { transform: none; } }

@@ -7,6 +7,7 @@ import { CommentsSection } from './Comments';
 import { addLayer, addStage, removeLayer, removeStage, updateLayer, updateStage, normalizeGrid, LAYER_COLORS } from '@all-draw/notation-grid';
 import { useRecord, usePorts, useAnyChange, useCollection } from '../hooks';
 import { assignmentsTo, suggestedRoles, newAssignment } from './workspace-helpers';
+import { Icon } from '../icons';
 
 /** Inspector: lo seleccionado (nodo→elemento, arista→relación) o la vista. */
 export function Inspector() {
@@ -62,9 +63,9 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
         {tab === 'where' && <>
           <div className="ad-section">{t('Vistas de detalle')}</div>
           {details.length === 0 && <div className="ad-hint">{t('Ninguna. Botón derecho sobre el nodo → "Abrir en otra dimensión".')}</div>}
-          {details.map(v => <button key={v.id} className="ad-link" onClick={() => openView(v.id, true)}>◇ {v.name} <small>{registry.pack(v.notationId)?.name}</small></button>)}
+          {details.map(v => <button key={v.id} className="ad-link" onClick={() => openView(v.id, true)}><Icon name="diamond" size={12} />{v.name} <small>{registry.pack(v.notationId)?.name}</small></button>)}
           <div className="ad-section">{t('Aparece en')}</div>
-          {appearsIn.map(v => <button key={v.id} className="ad-link" onClick={() => openView(v.id)}>◻ {v.name} <small>{registry.pack(v.notationId)?.name}</small></button>)}
+          {appearsIn.map(v => <button key={v.id} className="ad-link" onClick={() => openView(v.id)}><Icon name="view" size={12} />{v.name} <small>{registry.pack(v.notationId)?.name}</small></button>)}
           {vn.detailViewId && <div className="ad-hint">{t('Doble clic entra en: {name}', { name: store.get('views', vn.detailViewId)?.name ?? '' })}</div>}
           {!readOnly && details.length > 0 && <label className="ad-field"><span>{t('Vista al hacer doble clic')}</span>
             <select className="ad-input" value={vn.detailViewId ?? ''} onChange={e => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { detailViewId: e.target.value || undefined } })}>
@@ -110,9 +111,9 @@ function NodeStyleTab({ vn }: { vn: ViewNode }) {
   const p = (patch: Record<string, unknown>) => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { style: patch } });
   return <>
     <div className="ad-hint">{t('Solo afecta a esta aparición. Para pintar por datos usa las reglas.')}</div>
-    <label className="ad-field"><span>{t('Relleno')}</span><input type="color" disabled={readOnly} value={vn.style.fill ?? '#ffffff'} onChange={e => p({ fill: e.target.value })} /><button className="ad-btn" title={t('Quitar')} onClick={() => p({ fill: undefined })}>×</button></label>
-    <label className="ad-field"><span>{t('Borde')}</span><input type="color" disabled={readOnly} value={vn.style.stroke ?? '#444444'} onChange={e => p({ stroke: e.target.value })} /><button className="ad-btn" title={t('Quitar')} onClick={() => p({ stroke: undefined })}>×</button></label>
-    <label className="ad-field"><span>{t('Texto')}</span><input type="color" disabled={readOnly} value={vn.style.text ?? '#111111'} onChange={e => p({ text: e.target.value })} /><button className="ad-btn" title={t('Quitar')} onClick={() => p({ text: undefined })}>×</button></label>
+    <label className="ad-field"><span>{t('Relleno')}</span><input type="color" disabled={readOnly} value={vn.style.fill ?? '#ffffff'} onChange={e => p({ fill: e.target.value })} /><button className="ad-btn" title={t('Quitar')} onClick={() => p({ fill: undefined })}><Icon name="close" size={14} /></button></label>
+    <label className="ad-field"><span>{t('Borde')}</span><input type="color" disabled={readOnly} value={vn.style.stroke ?? '#444444'} onChange={e => p({ stroke: e.target.value })} /><button className="ad-btn" title={t('Quitar')} onClick={() => p({ stroke: undefined })}><Icon name="close" size={14} /></button></label>
+    <label className="ad-field"><span>{t('Texto')}</span><input type="color" disabled={readOnly} value={vn.style.text ?? '#111111'} onChange={e => p({ text: e.target.value })} /><button className="ad-btn" title={t('Quitar')} onClick={() => p({ text: undefined })}><Icon name="close" size={14} /></button></label>
     <label className="ad-field"><span>{t('Tamaño')}</span><input className="ad-input" type="number" disabled={readOnly} value={vn.w} onChange={e => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { w: Number(e.target.value) } })} /> × <input className="ad-input" type="number" disabled={readOnly} value={vn.h} onChange={e => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { h: Number(e.target.value) } })} /></label>
     <label className="ad-field"><span>{t('Texto alternativo')}</span><input className="ad-input" disabled={readOnly} value={vn.text ?? ''} placeholder={t('(nombre del elemento)')} onChange={e => run({ type: 'patch', collection: 'nodes', id: vn.id, patch: { text: e.target.value || undefined } })} /></label>
     <label className="ad-field"><span>{t('Figura')}</span><select className="ad-input" disabled={readOnly} value={vn.style.figure ?? 0} onChange={e => p({ figure: Number(e.target.value) })}><option value={0}>{archiFigure ? t('Rectángulo con icono') : t('Por defecto')}</option><option value={1}>{archiFigure ? t('Figura ArchiMate') : t('Alternativa')}</option></select></label>
@@ -157,7 +158,7 @@ function EdgeInspector({ edgeId }: { edgeId: string }) {
         {(rel.from.portId || rel.to.portId || rel.mappings.length > 0) && <>
           <div className="ad-section">{t('Pines')}</div>
           <div className="ad-hint">{rel.from.portId?.split('#')[1] ?? t('(elemento)')} → {rel.to.portId?.split('#')[1] ?? t('(elemento)')}</div>
-          {rel.mappings.map((m, i) => <div key={i} className="ad-row"><code>{m.fromPath}</code> → <code>{m.toPath}</code>{!readOnly && <button className="ad-btn" title={t('Quitar')} onClick={() => patchRel({ mappings: rel.mappings.filter((_, j) => j !== i) })}>×</button>}</div>)}
+          {rel.mappings.map((m, i) => <div key={i} className="ad-row"><code>{m.fromPath}</code> → <code>{m.toPath}</code>{!readOnly && <button className="ad-btn" title={t('Quitar')} onClick={() => patchRel({ mappings: rel.mappings.filter((_, j) => j !== i) })}><Icon name="close" size={14} /></button>}</div>)}
         </>}
         <PropsEditor props={rel.props} disabled={readOnly} onChange={props => run({ type: 'set', collection: 'relations', id: rel.id, value: { ...rel, props } })} />
       </>}
@@ -165,7 +166,7 @@ function EdgeInspector({ edgeId }: { edgeId: string }) {
       <label className="ad-field"><span>{t('Etiqueta')}</span><input className="ad-input" disabled={readOnly} value={ve.label ?? ''} placeholder={rel?.name || type?.name} onChange={e => patchEdge({ label: e.target.value || undefined })} /></label>
       <label className="ad-field"><span>{t('Trazado')}</span><select className="ad-input" disabled={readOnly} value={ve.style.router ?? 'smoothstep'} onChange={e => patchEdge({ style: { router: e.target.value } })}><option value="smoothstep">{t('Ortogonal')}</option><option value="bezier">{t('Curva')}</option><option value="straight">{t('Recta')}</option></select></label>
       <label className="ad-field"><span>{t('Línea')}</span><select className="ad-input" disabled={readOnly} value={ve.style.line ?? ''} onChange={e => patchEdge({ style: { line: e.target.value || undefined } })}><option value="">{t('(del tipo)')}</option><option value="solid">{t('Continua')}</option><option value="dashed">{t('Discontinua')}</option><option value="dotted">{t('Punteada')}</option></select></label>
-      <label className="ad-field"><span>{t('Color')}</span><input type="color" disabled={readOnly} value={ve.style.color ?? type?.color ?? '#444444'} onChange={e => patchEdge({ style: { color: e.target.value } })} /><button className="ad-btn" title={t('Quitar')} onClick={() => patchEdge({ style: { color: undefined } })}>×</button></label>
+      <label className="ad-field"><span>{t('Color')}</span><input type="color" disabled={readOnly} value={ve.style.color ?? type?.color ?? '#444444'} onChange={e => patchEdge({ style: { color: e.target.value } })} /><button className="ad-btn" title={t('Quitar')} onClick={() => patchEdge({ style: { color: undefined } })}><Icon name="close" size={14} /></button></label>
       <CommentsSection anchors={[{ kind: 'edge', id: ve.id }, ...(rel ? [{ kind: 'relation' as const, id: rel.id }] : [])]} newAnchor={{ kind: 'edge', id: ve.id, viewId: ve.viewId }} />
     </div>
   </>;
@@ -207,11 +208,11 @@ function GridEditor({ viewId, grid }: { viewId: string; grid: ReturnType<typeof 
   function useEditor_store_get(id: string) { return store.get('views', id)!; }
   return <>
     <div className="ad-section">{t('Capas')}</div>
-    {grid.layers.map((l, i) => <div key={l.id} className="ad-row"><input type="color" disabled={readOnly} value={l.color ?? LAYER_COLORS[i % LAYER_COLORS.length]} onChange={e => set(updateLayer(grid, l.id, { color: e.target.value }))} /><input className="ad-input" disabled={readOnly} value={l.name} onChange={e => set(updateLayer(grid, l.id, { name: e.target.value }))} /><input className="ad-input" type="number" style={{ width: 70 }} disabled={readOnly} value={l.size ?? ''} placeholder={t('alto')} onChange={e => set(updateLayer(grid, l.id, { size: e.target.value ? Number(e.target.value) : undefined }))} />{!readOnly && <button className="ad-btn" title={t('Quitar')} onClick={() => set(removeLayer(grid, l.id))}>×</button>}</div>)}
-    {!readOnly && <button className="ad-btn" onClick={() => set(addLayer(grid, { name: t('Capa {n}', { n: grid.layers.length + 1 }), color: LAYER_COLORS[grid.layers.length % LAYER_COLORS.length] }))}>＋ {t('capa')}</button>}
+    {grid.layers.map((l, i) => <div key={l.id} className="ad-row"><input type="color" disabled={readOnly} value={l.color ?? LAYER_COLORS[i % LAYER_COLORS.length]} onChange={e => set(updateLayer(grid, l.id, { color: e.target.value }))} /><input className="ad-input" disabled={readOnly} value={l.name} onChange={e => set(updateLayer(grid, l.id, { name: e.target.value }))} /><input className="ad-input" type="number" style={{ width: 70 }} disabled={readOnly} value={l.size ?? ''} placeholder={t('alto')} onChange={e => set(updateLayer(grid, l.id, { size: e.target.value ? Number(e.target.value) : undefined }))} />{!readOnly && <button className="ad-btn" title={t('Quitar')} onClick={() => set(removeLayer(grid, l.id))}><Icon name="close" size={14} /></button>}</div>)}
+    {!readOnly && <button className="ad-btn" onClick={() => set(addLayer(grid, { name: t('Capa {n}', { n: grid.layers.length + 1 }), color: LAYER_COLORS[grid.layers.length % LAYER_COLORS.length] }))}><Icon name="plus" size={14} />{t('capa')}</button>}
     <div className="ad-section">{t('Etapas')}</div>
-    {grid.stages.map(st => <div key={st.id} className="ad-row"><input className="ad-input" disabled={readOnly} value={st.name} onChange={e => set(updateStage(grid, st.id, { name: e.target.value }))} /><input className="ad-input" type="number" style={{ width: 70 }} disabled={readOnly} value={st.size ?? ''} placeholder={t('ancho')} onChange={e => set(updateStage(grid, st.id, { size: e.target.value ? Number(e.target.value) : undefined }))} />{!readOnly && <button className="ad-btn" title={t('Quitar')} onClick={() => set(removeStage(grid, st.id))}>×</button>}</div>)}
-    {!readOnly && <button className="ad-btn" onClick={() => set(addStage(grid, { name: t('Etapa {n}', { n: grid.stages.length + 1 }) }))}>＋ {t('etapa')}</button>}
+    {grid.stages.map(st => <div key={st.id} className="ad-row"><input className="ad-input" disabled={readOnly} value={st.name} onChange={e => set(updateStage(grid, st.id, { name: e.target.value }))} /><input className="ad-input" type="number" style={{ width: 70 }} disabled={readOnly} value={st.size ?? ''} placeholder={t('ancho')} onChange={e => set(updateStage(grid, st.id, { size: e.target.value ? Number(e.target.value) : undefined }))} />{!readOnly && <button className="ad-btn" title={t('Quitar')} onClick={() => set(removeStage(grid, st.id))}><Icon name="close" size={14} /></button>}</div>)}
+    {!readOnly && <button className="ad-btn" onClick={() => set(addStage(grid, { name: t('Etapa {n}', { n: grid.stages.length + 1 }) }))}><Icon name="plus" size={14} />{t('etapa')}</button>}
     <div className="ad-hint">{t('Los nodos de una capa o etapa borrada quedan fuera de la rejilla hasta que los muevas a otra celda.')}</div>
   </>;
 }
@@ -247,12 +248,12 @@ function PeopleSection({ elementId }: { elementId: string }) {
   return <>
     <div className="ad-section">{t('Personas')} ({list.length})</div>
     {list.length === 0 && <div className="ad-hint">{t('Nadie asignado todavía.')}</div>}
-    {list.map(({ person, assignment }) => <div key={assignment.id} className="ad-row ad-ws-personrow"><span className="ad-ws-avatar">{person.name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('') || '?'}</span><span className="ad-ws-item__label">{person.name} <small>· {assignment.role}</small></span>{!readOnly && <button className="ad-btn ad-btn--ghost" title={t('Quitar')} onClick={() => remove(person.id, assignment.id)}>×</button>}</div>)}
+    {list.map(({ person, assignment }) => <div key={assignment.id} className="ad-row ad-ws-personrow"><span className="ad-ws-avatar">{person.name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('') || '?'}</span><span className="ad-ws-item__label">{person.name} <small>· {assignment.role}</small></span>{!readOnly && <button className="ad-btn ad-btn--ghost" title={t('Quitar')} onClick={() => remove(person.id, assignment.id)}><Icon name="close" size={14} /></button>}</div>)}
     {!readOnly && people.length > 0 && <div className="ad-row">
       <select className="ad-input" aria-label={t('Persona')} value={personId} onChange={e => setPid(e.target.value)}>{people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
       <input className="ad-input" list="ad-insp-roles" value={role} placeholder={t('papel')} aria-label={t('Papel')} onChange={e => setRole(e.target.value)} />
       <datalist id="ad-insp-roles">{suggestedRoles(people).map(r => <option key={r} value={r} />)}</datalist>
-      <button className="ad-btn" disabled={!personId} onClick={add} title={t('Asignar')}>＋</button>
+      <button className="ad-btn" disabled={!personId} onClick={add} title={t('Asignar')}><Icon name="plus" /></button>
     </div>}
     {!readOnly && people.length === 0 && <div className="ad-hint">{t('No hay personas: créalas en Espacio → Personas.')}</div>}
   </>;
@@ -275,14 +276,14 @@ export function FieldEditor({ def, value, onChange, disabled }: { def: FieldDef;
     default: input = <input {...common} value={String(value ?? '')} onChange={e => onChange(e.target.value)} />;
   }
   const isPin = def.port ?? ['json', 'list', 'keyvalue'].includes(def.kind);
-  return <label className={`ad-field ${def.kind === 'checkbox' ? 'ad-field--inline' : ''}`}><span>{def.label}{isPin && <small title={t('Genera pines')}> ⚲</small>}</span>{input}</label>;
+  return <label className={`ad-field ${def.kind === 'checkbox' ? 'ad-field--inline' : ''}`}><span>{def.label}{isPin && <small className="ad-pin-mark" title={t('Genera pines')}><Icon name="pin" size={12} /></small>}</span>{input}</label>;
 }
 
 function ListEditor({ value, onChange, disabled }: { value: string[]; onChange: (v: string[]) => void; disabled?: boolean }) {
   const t = useT();
   return <div className="ad-list">
-    {value.map((v, i) => <div key={i} className="ad-row"><input className="ad-input" disabled={disabled} value={v} onChange={e => onChange(value.map((x, j) => j === i ? e.target.value : x))} />{!disabled && <button className="ad-btn" title={t('Quitar')} onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>}</div>)}
-    {!disabled && <button className="ad-btn" onClick={() => onChange([...value, ''])}>＋ {t('añadir')}</button>}
+    {value.map((v, i) => <div key={i} className="ad-row"><input className="ad-input" disabled={disabled} value={v} onChange={e => onChange(value.map((x, j) => j === i ? e.target.value : x))} />{!disabled && <button className="ad-btn" title={t('Quitar')} onClick={() => onChange(value.filter((_, j) => j !== i))}><Icon name="close" size={14} /></button>}</div>)}
+    {!disabled && <button className="ad-btn" onClick={() => onChange([...value, ''])}><Icon name="plus" size={14} />{t('añadir')}</button>}
   </div>;
 }
 
@@ -290,8 +291,8 @@ export function KeyValueEditor({ value, onChange, disabled, labels }: { value: K
   const t = useT();
   const [lk, lv] = labels ? labels.split('|') : [t('Clave'), t('Valor')];
   return <div className="ad-list">
-    {value.map((kv, i) => <div key={i} className="ad-row"><input className="ad-input" placeholder={lk} disabled={disabled} value={kv.key} onChange={e => onChange(value.map((x, j) => j === i ? { ...x, key: e.target.value } : x))} /><input className="ad-input" placeholder={lv} disabled={disabled} value={kv.value} onChange={e => onChange(value.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} />{!disabled && <button className="ad-btn" title={t('Quitar')} onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>}</div>)}
-    {!disabled && <button className="ad-btn" onClick={() => onChange([...value, { key: '', value: '' }])}>＋ {t('añadir')}</button>}
+    {value.map((kv, i) => <div key={i} className="ad-row"><input className="ad-input" placeholder={lk} disabled={disabled} value={kv.key} onChange={e => onChange(value.map((x, j) => j === i ? { ...x, key: e.target.value } : x))} /><input className="ad-input" placeholder={lv} disabled={disabled} value={kv.value} onChange={e => onChange(value.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} />{!disabled && <button className="ad-btn" title={t('Quitar')} onClick={() => onChange(value.filter((_, j) => j !== i))}><Icon name="close" size={14} /></button>}</div>)}
+    {!disabled && <button className="ad-btn" onClick={() => onChange([...value, { key: '', value: '' }])}><Icon name="plus" size={14} />{t('añadir')}</button>}
   </div>;
 }
 

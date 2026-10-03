@@ -4,15 +4,19 @@
  * espacio en su Durable Object (`WorkspaceDO`) y la app web servida por Assets.
  *
  *   /api/admin/import  → importación desde otra instalación (sólo worker, ver admin-import.ts)
+ *   /.well-known/security.txt → contacto de seguridad (RFC 9116)
  *   /api/*, /healthz   → createApi (store RegistryDO o D1, docs → WorkspaceDO)
  *   /ws/<id>?token=    → autoriza aquí y reenvía el upgrade al DO con el rol en una cabecera
  *   resto              → ASSETS (fallback SPA)
  */
-import { SAFE_ID, authorizeConnection, createApi, credentialsFromRequest, isTrustedOrigin, makeHasher, requestHost, withSecurityHeaders, type Hasher } from '@all-draw/server-core';
+import {
+  SAFE_ID, SECURITY_TXT_PATH, authorizeConnection, createApi, credentialsFromRequest, isTrustedOrigin, jsonLogger, makeHasher, parseLogLevel, requestHost,
+  securityTxtResponse, withSecurityHeaders, type Hasher,
+} from '@all-draw/server-core';
 import { IMPORT_PATH, handleImport } from './admin-import';
 import { RESET_PATH, handleReset } from './admin-reset';
 import { ROLE_HEADER, WorkspaceDO } from './do';
-import type { Env } from './env';
+import { envInt, type Env } from './env';
 import { RegistryDO } from './registry';
 import { RemoteDocHost } from './remote-host';
 import { D1WorkspaceStore } from './store/d1';
@@ -22,6 +26,7 @@ export { RegistryDO, WorkspaceDO };
 
 interface Runtime { api: ReturnType<typeof createApi>; store: RegistryWorkspaceStore; hash: Hasher; docs: RemoteDocHost }
 let runtime: Runtime | null = null;
+const optional = <K extends string>(k: K, v: number | undefined) => (v === undefined ? {} : { [k]: v }) as Partial<Record<K, number>>;
 /** Se construye una vez por isolate (los bindings son estables). */
 function boot(env: Env): Runtime {
   if (runtime) return runtime;
@@ -31,7 +36,13 @@ function boot(env: Env): Runtime {
   const docs = new RemoteDocHost(env.WORKSPACES);
   const api = createApi({
     store, hash, docs,
-    config: { allowRegistration: env.ALLOW_REGISTRATION !== 'false', cookieSecure: true, publicUrl: env.PUBLIC_URL || null, inviteCode: env.INVITE_CODE || null },
+    config: {
+      allowRegistration: env.ALLOW_REGISTRATION !== 'false', cookieSecure: true, publicUrl: env.PUBLIC_URL || null, inviteCode: env.INVITE_CODE || null,
+      ...optional('maxWorkspacesPerUser', envInt(env.MAX_WORKSPACES_PER_USER)), ...optional('maxDocBytes', envInt(env.MAX_DOC_BYTES)), ...optional('registerMinMs', envInt(env.REGISTER_MIN_MS)),
+    },
+    // Una línea JSON por evento en `console`: Workers Observability la indexa (`[observability] enabled`).
+    logger: jsonLogger({ level: parseLogLevel(env.LOG_LEVEL) }),
+    build: { version: env.ALLDRAW_VERSION || '0.1.0', commit: env.ALLDRAW_COMMIT || null, runtime: 'cloudflare', db: env.DB ? 'd1' : 'durable-object' },
   });
   return (runtime = { api, store, hash, docs });
 }
@@ -64,6 +75,7 @@ export default {
     }
 
     const sec = { https: url.protocol === 'https:', host: requestHost(request.headers, url) };
+    if (url.pathname === SECURITY_TXT_PATH) return withSecurityHeaders(securityTxtResponse(env.PUBLIC_URL || url.origin), sec);
     if (url.pathname === RESET_PATH) return withSecurityHeaders(await handleReset(request, rt.store, env.RESET_CODE || null), sec);
     if (url.pathname === IMPORT_PATH) return withSecurityHeaders(await handleImport(request, { store: rt.store, hash: rt.hash, docs: rt.docs, importSecret: env.IMPORT_SECRET || null }), sec);
     if (url.pathname === '/healthz' || url.pathname === '/api' || url.pathname.startsWith('/api/')) return withSecurityHeaders(await rt.api.fetch(request, env, ctx), sec);

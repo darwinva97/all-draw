@@ -9,6 +9,8 @@ import { useEditor } from '../context';
 import { useCollection, useAnyChange } from '../hooks';
 import { shapeStyle } from '../nodes/shapes';
 import { RULE_SOURCES, RULE_OPS, OPS_SIN_VALOR, SOURCES_CON_CLAVE, STYLE_PARTS, STYLE_DEFAULTS, newRule, newCondition, duplicateRule, fieldKeys, clean } from './workspace-helpers';
+import { Icon } from '../icons';
+import { confirmDialog } from '../ui/dialog';
 
 export function RulesTab() {
   const t = useT();
@@ -21,12 +23,12 @@ export function RulesTab() {
 
   const create = () => { const r = newRule(); run({ type: 'set', collection: 'rules', id: r.id, value: r }); setSel(r.id); };
   const dup = (r: StyleRule) => { const c = duplicateRule(r); run({ type: 'set', collection: 'rules', id: c.id, value: c }); setSel(c.id); };
-  const remove = (r: StyleRule) => { if (!confirm(t('¿Borrar la regla "{name}"?', { name: r.name }))) return; run({ type: 'delete', collection: 'rules', id: r.id }); if (sel === r.id) setSel(null); };
+  const remove = async (r: StyleRule) => { if (!(await confirmDialog({ title: t('¿Borrar la regla "{name}"?', { name: r.name }), danger: true }))) return; run({ type: 'delete', collection: 'rules', id: r.id }); if (sel === r.id) setSel(null); };
 
   return (
     <>
       <aside className="ad-ws-side">
-        <div className="ad-ws-side__new"><button className="ad-btn ad-btn--primary" onClick={create}>＋ {t('Nueva regla')}</button></div>
+        <div className="ad-ws-side__new"><button className="ad-btn ad-btn--primary" onClick={create}><Icon name="plus" size={14} />{t('Nueva regla')}</button></div>
         <div className="ad-ws-side__list">
           {sorted.length === 0 && <div className="ad-empty">{t('Sin reglas. Una regla pinta los elementos que cumplen sus condiciones.')}</div>}
           {sorted.map(r => {
@@ -37,7 +39,7 @@ export function RulesTab() {
                 <input type="checkbox" checked={r.enabled} title={t('Activa')} aria-label={t('Activa')} onClick={e => e.stopPropagation()} onChange={e => run({ type: 'patch', collection: 'rules', id: r.id, patch: { enabled: e.target.checked } })} />
                 <span className="ad-ws-swatch" style={{ background: r.style.bg ?? r.style.accent ?? r.style.border ?? '#e5e7eb', borderColor: r.style.border ?? 'transparent' }} />
                 <span className="ad-ws-item__label">{r.name || t('(sin nombre)')}</span>
-                <small title={t('Prioridad · elementos afectados')}>{r.priority} · {n}{warn ? ' ⚠' : ''}</small>
+                <small title={t('Prioridad · elementos afectados')}>{r.priority} · {n}{warn ? <Icon name="warning" size={12} className="ad-ws-warn" /> : null}</small>
               </div>
             );
           })}
@@ -102,7 +104,7 @@ function RuleEditor({ r, onSelect, onDuplicate, onDelete }: { r: StyleRule; onSe
           onChange={nc => setConds(r.conditions.map((x, j) => j === i ? nc : x))}
           onRemove={() => setConds(r.conditions.filter((_, j) => j !== i))} />
       ))}
-      <button className="ad-btn" onClick={() => setConds([...r.conditions, newCondition()])}>＋ {t('Añadir condición')}</button>
+      <button className="ad-btn" onClick={() => setConds([...r.conditions, newCondition()])}><Icon name="plus" size={14} />{t('Añadir condición')}</button>
       <div className={`ad-ws-notice ${impact > 0 ? 'is-ok' : ''}`}>
         {r.conditions.length === 0 ? t('Sin condiciones la regla no pinta nada. Añade al menos una.') : `${t('Ahora mismo casa con {n} elemento(s)', { n: impact })}${r.enabled ? '' : ' ' + t('(pero está desactivada)')}.`}
       </div>
@@ -130,7 +132,7 @@ function RuleEditor({ r, onSelect, onDuplicate, onDelete }: { r: StyleRule; onSe
       </>}
 
       <div className="ad-row ad-ws-actions">
-        <button className="ad-btn" onClick={onDuplicate}>⧉ {t('Duplicar')}</button>
+        <button className="ad-btn" onClick={onDuplicate}><Icon name="copy" size={14} />{t('Duplicar')}</button>
         <button className="ad-btn ad-ws-danger" onClick={onDelete}>{t('Eliminar regla')}</button>
       </div>
     </>
@@ -155,7 +157,7 @@ function CondRow({ c, keys, idx, onChange, onRemove }: { c: Condition; keys: { k
       </select>
       {!sinValor && <input className="ad-input" value={c.value ?? ''} aria-label={t('Valor')} placeholder={c.op === 'in' ? t('valor 1, valor 2…') : c.op === 'regex' ? t('expresión') : t('valor')} onChange={e => p({ value: e.target.value })} />}
       <label className="ad-field--inline" title={t('Distinguir mayúsculas y tildes')}><input type="checkbox" checked={!!c.caseSensitive} onChange={e => p({ caseSensitive: e.target.checked || undefined })} /> <span>Aa</span></label>
-      <button className="ad-btn ad-btn--ghost" title={t('Quitar condición')} onClick={onRemove}>×</button>
+      <button className="ad-btn ad-btn--ghost" title={t('Quitar condición')} onClick={onRemove}><Icon name="close" size={14} /></button>
     </div>
   );
 }

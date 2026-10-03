@@ -73,6 +73,11 @@ export interface EditorCtx {
   comments: CommentsState;
   openComments(opts?: OpenCommentsOptions): void;
   closeComments(): void;
+  /** Panel de atajos de teclado (tecla ?, menú Ayuda). */
+  shortcutsOpen: boolean;
+  setShortcutsOpen(open: boolean): void;
+  /** Enlace a la documentación de la app (`#/docs/<slug>`); null si la app no la ofrece (los enlaces "¿Cómo funciona?" se ocultan). */
+  docsHref: ((slug: string, anchor?: string) => string) | null;
 }
 
 const Ctx = createContext<EditorCtx | null>(null);
@@ -102,6 +107,8 @@ export interface EditorProviderProps {
   presence?: { awareness: AwarenessLike; me: PresenceMe };
   /** Tema inicial; si no se da, se lee de `localStorage('alldraw:theme')` (por defecto `system`). */
   theme?: Theme;
+  /** Enlaces a la documentación (p. ej. `slug => '#/docs/' + slug`). Sin él no se muestran los enlaces de ayuda. */
+  docsHref?: (slug: string, anchor?: string) => string;
   children: ReactNode;
 }
 
@@ -116,6 +123,8 @@ export function EditorProvider(props: EditorProviderProps) {
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab | null>(null);
   const viewId = trail[trail.length - 1] ?? null;
   const [comments, setComments] = useState<CommentsState>({ open: false, threadId: null, draft: null, reveal: 0 });
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const docsHref = props.docsHref ?? null;
 
   useEffect(() => { if (props.theme) setThemeState(props.theme); }, [props.theme]);
   useEffect(() => {
@@ -158,8 +167,8 @@ export function EditorProvider(props: EditorProviderProps) {
     store: props.store, history: props.history, registry: props.registry, viewId, openView, back, trail,
     selection, select: setSelection, run, readOnly: !!props.readOnly, validators: props.validators ?? [],
     presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, setRenaming, canvas, workspaceTab, openWorkspacePanel, closeWorkspacePanel,
-    comments, openComments, closeComments,
-  }), [props.store, props.history, props.registry, viewId, openView, back, trail, selection, run, props.readOnly, props.validators, presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel, comments, openComments, closeComments]);
+    comments, openComments, closeComments, shortcutsOpen, setShortcutsOpen, docsHref,
+  }), [docsHref, shortcutsOpen, props.store, props.history, props.registry, viewId, openView, back, trail, selection, run, props.readOnly, props.validators, presence, theme, setTheme, effectiveTheme, snap, setSnap, renaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel, comments, openComments, closeComments]);
 
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>;
 }

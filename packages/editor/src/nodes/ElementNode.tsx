@@ -7,6 +7,7 @@ import { ArchimateFigure, archimateBox } from './ArchimateFigure';
 import { InlineEdit } from './InlineEdit';
 import { useNodeEnv } from './env';
 import { useT } from '@all-draw/i18n';
+import { Icon } from '../icons';
 
 /**
  * Datos de un nodo de elemento. `Canvas` los resuelve una vez por vista (elemento, tipo, estilo de las reglas,
@@ -117,7 +118,7 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
           ))}
         </div>
       )}
-      {vn.detailViewId && <span className="ad-node__drill" title={t('Tiene vista de detalle')}>⤵</span>}
+      {vn.detailViewId && <span className="ad-node__drill" title={t('Tiene vista de detalle')}><Icon name="drill" size={11} /></span>}
     </div>
   );
 }, elementNodePropsEqual);

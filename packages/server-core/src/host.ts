@@ -36,9 +36,10 @@ export class LocalDocHost implements DocHost {
   constructor(readonly docs: DocManager) {}
   init(id: string, name: string, initial: Workspace | null) { return this.docs.withStore(id, s => opInit(s, name, initial)); }
   snapshot(id: string) { return this.docs.withStore(id, opSnapshot); }
-  replace(id: string, ws: Workspace) { return this.docs.withStore(id, s => opReplace(s, ws)); }
+  // Las escrituras comprueban antes la cuota `MAX_DOC_BYTES` (`LiveDoc.assertWritable` → 413).
+  replace(id: string, ws: Workspace) { return this.docs.withStore(id, (s, live) => { live.assertWritable(); opReplace(s, ws); }); }
   setMeta(id: string, patch: Partial<WorkspaceMeta>) { return this.docs.withStore(id, s => opSetMeta(s, patch)); }
-  commands(id: string, commands: Command[], label?: string) { return this.docs.withStore(id, s => opCommands(s, commands, label)); }
+  commands(id: string, commands: Command[], label?: string) { return this.docs.withStore(id, (s, live) => { live.assertWritable(); return opCommands(s, commands, label); }); }
   validate(id: string) { return this.docs.withStore(id, opValidate); }
   renderSvg(id: string, viewId: string, opts: SvgOpts) { return this.docs.withStore(id, s => opRenderSvg(s, viewId, opts)); }
   async drop(id: string) {
@@ -54,6 +55,7 @@ export class LocalDocHost implements DocHost {
   async getSnapshot(id: string, sid: string) { return (await this.docs.get(id)).snapshotWorkspace(sid); }
   async restoreSnapshot(id: string, sid: string, authorId: string | null) {
     const d = await this.docs.get(id);
+    d.assertWritable();
     const ws = await d.restoreSnapshot(sid, authorId);
     if (ws) { d.touch(); void d.flush(); }
     return ws;

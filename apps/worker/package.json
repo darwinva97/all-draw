@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --var ALLDRAW_COMMIT:$(git rev-parse --short HEAD)",
     "migrate": "wrangler d1 migrations apply alldraw --remote",
     "migrate:local": "wrangler d1 migrations apply alldraw --local",
     "test": "vitest run",
@@ -16,15 +16,15 @@
     "@all-draw/core": "workspace:*",
     "@all-draw/server-core": "workspace:*",
     "@all-draw/sync": "workspace:*",
-    "hono": "^4.13.9",
+    "hono": "^4.13.12",
     "yjs": "^13.6.33"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
-    "@cloudflare/workers-types": "^5.20260925.1",
-    "lib0": "^0.2.117",
+    "@cloudflare/workers-types": "^5.20261002.1",
+    "lib0": "^0.2.119",
     "vitest": "^4.1.11",
-    "wrangler": "^4.139.0",
+    "wrangler": "^4.147.0",
     "y-protocols": "^1.0.7"
   }
 }

@@ -97,6 +97,14 @@ export interface WorkspaceStore extends SnapshotStore {
   listUsers(): Promise<User[]>;
   /** Cambia el hash de contraseña (p. ej. al migrar de scrypt a PBKDF2 tras un login correcto). */
   setPasswordHash(userId: string, passwordHash: string): Promise<void>;
+  /** Cambia nombre, email (normalizado; lanza `email ya registrado` si está cogido) o el rol de admin. `null` si no existe. */
+  updateUser(id: string, patch: { name?: string; email?: string; isAdmin?: boolean }): Promise<User | null>;
+  /**
+   * Borra la cuenta y lo que cuelga de ella: sesiones, API keys y membresías; las instantáneas que firmó
+   * quedan con `authorId = null`. **No** toca los espacios de los que es dueño: el llamador los transfiere
+   * o borra antes (la API lo hace en `DELETE /api/auth/account`).
+   */
+  deleteUser(id: string): Promise<void>;
 
   // Sesiones (el token en claro sólo lo ve el cliente; aquí va su hash). `getSession` no devuelve caducadas.
   createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session>;
@@ -119,6 +127,8 @@ export interface WorkspaceStore extends SnapshotStore {
   // Espacios
   listWorkspaces(userId: string): Promise<(WorkspaceRow & { role: Role })[]>;
   listAllWorkspaces(): Promise<WorkspaceRow[]>;
+  /** Espacios de los que el usuario es dueño (cuota `MAX_WORKSPACES_PER_USER`). */
+  countOwnedWorkspaces(userId: string): Promise<number>;
   getWorkspace(id: string): Promise<WorkspaceRow | null>;
   createWorkspace(w: { ownerId: string; name: string; id?: string }): Promise<WorkspaceRow>;
   updateMeta(id: string, patch: { name?: string; ownerId?: string }): Promise<WorkspaceRow | null>;

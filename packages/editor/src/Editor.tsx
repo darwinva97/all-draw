@@ -13,6 +13,10 @@ import { CommentsPanel } from './panels/Comments';
 import { useEditor, type Theme } from './context';
 import type { SearchAction } from './search';
 import { useT, useLang } from '@all-draw/i18n';
+import { Icon } from './icons';
+import { inLayer } from './ui/layer';
+import { mountUiLayer } from './ui/toast';
+import './ui/dialog';
 import './editor.css';
 
 export interface EditorProps {
@@ -73,7 +77,8 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
   const [lang] = useLang(); // las acciones memorizadas se rehacen al cambiar de idioma
   const { readOnly, effectiveTheme, setTheme, registry, run, openView, canvas, selection, setRenaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel, comments } = ed;
   const [searchOpen, setSearchOpen] = useState(false);
-  const [keysOpen, setKeysOpen] = useState(false);
+  const keysOpen = ed.shortcutsOpen;
+  const setKeysOpen = useCallback((v: boolean | ((o: boolean) => boolean)) => ed.setShortcutsOpen(typeof v === 'function' ? v(keysOpen) : v), [ed, keysOpen]);
   const mode = useLayoutMode();
   const [panels, setPanels] = useState<PanelsState>(readPanels);
   const [sheet, setSheet] = useState<Sheet | null>(null);
@@ -90,6 +95,15 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
     for (const m of metas) m.setAttribute('content', THEME_COLOR[effectiveTheme]);
     return () => { metas.forEach((m, i) => { if (saved[i] != null) m.setAttribute('content', saved[i]!); }); };
   }, [effectiveTheme]);
+  // `<html data-theme>` sigue al editor: la capa flotante (avisos, diálogos, recorrido) se pinta con el mismo tema.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const html = document.documentElement;
+    const prev = html.getAttribute('data-theme');
+    html.setAttribute('data-theme', effectiveTheme);
+    return () => { if (prev == null) html.removeAttribute('data-theme'); else html.setAttribute('data-theme', prev); };
+  }, [effectiveTheme]);
+  useEffect(() => { mountUiLayer(); }, []);
 
   const togglePanel = useCallback((side: 'left' | 'right') => setPanels(p => {
     const next = { ...p, [side]: !p[side] };
@@ -101,6 +115,7 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
   // Atajos globales: Ctrl+K / Ctrl+F abren la búsqueda; ? los atajos.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
+      if (inLayer(e)) return; // diálogos y avisos propios
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
       if (mod && (key === 'k' || key === 'f') && !e.shiftKey && !e.altKey) { e.preventDefault(); setSearchOpen(o => !o); setKeysOpen(false); return; }
@@ -112,7 +127,7 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [readOnly, selection.nodes, setRenaming]);
+  }, [readOnly, selection.nodes, setRenaming, setKeysOpen]);
 
   const actions = useMemo<SearchAction[]>(() => {
     const packs = registry.allPacks().filter(p => p.id !== 'core');
@@ -142,7 +157,7 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
     else if (id === 'fit') canvas.current?.fitView();
     else if (id === 'theme') setTheme(effectiveTheme === 'dark' ? 'light' : 'dark');
     else if (id === 'shortcuts') setKeysOpen(true);
-  }, [registry, run, openView, onRequestLayout, canvas, setTheme, effectiveTheme, openWorkspacePanel, t]);
+  }, [registry, run, openView, onRequestLayout, canvas, setTheme, effectiveTheme, openWorkspacePanel, t, setKeysOpen]);
 
   // En la hoja "Añadir" del móvil no hay arrastre: un toque sobre un elemento de la paleta lo suelta en el centro del lienzo
   // reutilizando el mismo `dragstart`/`drop` que en escritorio (DataTransfer sintético), sin tocar la paleta ni el lienzo.
@@ -177,10 +192,10 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
       </div>
       {mobile && (
         <nav className="ad-tabbar" aria-label={t('Paneles')}>
-          <button className={`ad-tabbar__btn ${sheet === 'views' ? 'is-on' : ''}`} aria-pressed={sheet === 'views'} onClick={() => setSheet(s => (s === 'views' ? null : 'views'))}><span aria-hidden="true">▤</span>{t('Vistas')}</button>
-          {!readOnly && <button className={`ad-tabbar__btn ${sheet === 'add' ? 'is-on' : ''}`} aria-pressed={sheet === 'add'} onClick={() => setSheet(s => (s === 'add' ? null : 'add'))}><span aria-hidden="true">＋</span>{t('Añadir')}</button>}
-          <button className={`ad-tabbar__btn ${sheet === 'inspector' ? 'is-on' : ''}`} aria-pressed={sheet === 'inspector'} onClick={() => setSheet(s => (s === 'inspector' ? null : 'inspector'))}><span aria-hidden="true">☰</span>{t('Inspector')}</button>
-          <button className={`ad-tabbar__btn ${sheet === 'more' ? 'is-on' : ''}`} aria-pressed={sheet === 'more'} onClick={() => setSheet(s => (s === 'more' ? null : 'more'))}><span aria-hidden="true">⋯</span>{t('Más')}</button>
+          <button className={`ad-tabbar__btn ${sheet === 'views' ? 'is-on' : ''}`} aria-pressed={sheet === 'views'} onClick={() => setSheet(s => (s === 'views' ? null : 'views'))}><Icon name="layers" size={20} />{t('Vistas')}</button>
+          {!readOnly && <button className={`ad-tabbar__btn ${sheet === 'add' ? 'is-on' : ''}`} aria-pressed={sheet === 'add'} onClick={() => setSheet(s => (s === 'add' ? null : 'add'))}><Icon name="shapes" size={20} />{t('Añadir')}</button>}
+          <button className={`ad-tabbar__btn ${sheet === 'inspector' ? 'is-on' : ''}`} aria-pressed={sheet === 'inspector'} onClick={() => setSheet(s => (s === 'inspector' ? null : 'inspector'))}><Icon name="sliders" size={20} />{t('Inspector')}</button>
+          <button className={`ad-tabbar__btn ${sheet === 'more' ? 'is-on' : ''}`} aria-pressed={sheet === 'more'} onClick={() => setSheet(s => (s === 'more' ? null : 'more'))}><Icon name="more" size={20} />{t('Más')}</button>
         </nav>
       )}
       {mobile && sheet && (
@@ -192,10 +207,10 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
             <div className="ad-sheet__more">
               <Crumbs />
               <div className="ad-sheet__row">
-                {!readOnly && <button className="ad-btn" onClick={() => { setSheet(null); openWorkspacePanel(); }}>▦<span className="ad-btn__label">{t('Espacio')}</span></button>}
+                {!readOnly && <button className="ad-btn" onClick={() => { setSheet(null); openWorkspacePanel(); }}><Icon name="box" /><span className="ad-btn__label">{t('Espacio')}</span></button>}
                 <ToolbarTools labels onSearch={() => { setSheet(null); setSearchOpen(true); }} onShortcuts={() => { setSheet(null); setKeysOpen(true); }} />
-                <button className="ad-btn" onClick={() => { setSheet(null); canvas.current?.fitView(); }}>⤢<span className="ad-btn__label">{t('Ajustar a la vista')}</span></button>
-                {onRequestLayout && !readOnly && <button className="ad-btn" onClick={() => { setSheet(null); onRequestLayout(); }}>⇶<span className="ad-btn__label">{t('Layout automático')}</span></button>}
+                <button className="ad-btn" onClick={() => { setSheet(null); canvas.current?.fitView(); }}><Icon name="fit" /><span className="ad-btn__label">{t('Ajustar a la vista')}</span></button>
+                {onRequestLayout && !readOnly && <button className="ad-btn" onClick={() => { setSheet(null); onRequestLayout(); }}><Icon name="layout" /><span className="ad-btn__label">{t('Layout automático')}</span></button>}
               </div>
               {toolbarRight && <div className="ad-sheet__row ad-sheet__app">{toolbarRight}</div>}
             </div>
@@ -215,7 +230,7 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
   const box = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y0: number; dy: number } | null>(null);
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !inLayer(e)) { e.stopPropagation(); onClose(); } };
     window.addEventListener('keydown', h, true);
     return () => window.removeEventListener('keydown', h, true);
   }, [onClose]);
@@ -236,7 +251,7 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
         <div className="ad-sheet__grip" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
           <span className="ad-sheet__handle" aria-hidden="true" />
           <span className="ad-sheet__title">{title}</span>
-          <button className="ad-btn ad-btn--ghost ad-sheet__close" onClick={onClose} aria-label={t('Cerrar')}>×</button>
+          <button className="ad-btn ad-btn--ghost ad-sheet__close" onClick={onClose} aria-label={t('Cerrar')}><Icon name="close" /></button>
         </div>
         <div className="ad-sheet__body">{children}</div>
       </div>

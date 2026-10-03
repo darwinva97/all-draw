@@ -53,6 +53,7 @@ export const make = (o) => { const registry = new NotationRegistry(); registry.r
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
 const page = await browser.newPage({ locale: 'es-ES', viewport: { width: 1440, height: 900 } });
+await page.addInitScript(() => localStorage.setItem('alldraw:tour', 'done')); // sin recorrido guiado
 const errors = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error' && !/status of 40[14]/.test(m.text())) errors.push('console: ' + m.text()); });

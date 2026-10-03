@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="336" viewBox="0 0 680 336" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" role="img">
+  <title>Pins: two components connected field to field</title>
+  <desc>The clientes-api microservice exposes the values of its JSON response (cliente.id, cliente.email, cliente.estado) as pins. Its cliente.email pin is connected to the recipient pin of notificaciones; the relation stores the mapping response.cliente.email → request.recipient.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+    <marker id="ah-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="#334155" stroke-width="1.6"/></marker>
+    <marker id="ah-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+    <marker id="ah-blue-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="#2563eb" stroke-width="1.6"/></marker>
+    <marker id="ah-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker>
+  </defs>
+  <rect x="0" y="0" width="680" height="336" fill="#ffffff"/>
+  <text x="340" y="34" font-size="13" fill="#475569" text-anchor="middle">JSON fields generate one pin per value</text>
+  <rect x="40" y="56" width="220" height="160" rx="8" fill="#c7d2fe" stroke="#6366f1" stroke-width="1.2"/>
+  <text x="150" y="82" font-size="14" font-weight="700" fill="#1f2937" text-anchor="middle">⚙ clientes-api</text>
+  <text x="150" y="100" font-size="12" fill="#475569" text-anchor="middle">Microservice</text>
+  <text x="246" y="126" font-size="12" fill="#4b5563" text-anchor="end" font-style="italic">response (JSON)</text>
+  <text x="246" y="154" font-size="12" fill="#1f2937" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">cliente.id</text>
+  <rect x="255" y="145" width="10" height="10" rx="1.5" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+  <text x="246" y="180" font-size="12" fill="#1f2937" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">cliente.email</text>
+  <rect x="255" y="171" width="10" height="10" rx="1.5" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+  <text x="246" y="206" font-size="12" fill="#1f2937" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">cliente.estado</text>
+  <rect x="255" y="197" width="10" height="10" rx="1.5" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+  <rect x="420" y="56" width="220" height="160" rx="8" fill="#c7d2fe" stroke="#6366f1" stroke-width="1.2"/>
+  <text x="530" y="82" font-size="14" font-weight="700" fill="#1f2937" text-anchor="middle">⚙ notificaciones</text>
+  <text x="530" y="100" font-size="12" fill="#475569" text-anchor="middle">Microservice</text>
+  <text x="434" y="126" font-size="12" fill="#4b5563" font-style="italic">request (JSON)</text>
+  <text x="434" y="167" font-size="12" fill="#1f2937" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">recipient</text>
+  <rect x="415" y="158" width="10" height="10" rx="1.5" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+  <text x="434" y="193" font-size="12" fill="#1f2937" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">template</text>
+  <rect x="415" y="184" width="10" height="10" rx="1.5" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+  <path d="M266 176 H 330 V 163 H 413" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+  <rect x="306" y="132" width="72" height="22" rx="11" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="342" y="147" font-size="12" fill="#1f2937" text-anchor="middle">email ⇄</text>
+  <line x1="372" y1="165" x2="372" y2="238" stroke="#2563eb" stroke-width="1.4" stroke-dasharray="3 3"/>
+  <rect x="140" y="240" width="400" height="50" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+  <text x="156" y="260" font-size="12" font-weight="700" fill="#1e3a8a">Mapping stored in the relation</text>
+  <text x="156" y="279" font-size="12" fill="#1e3a8a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">response.cliente.email → request.recipient</text>
+  <rect x="41" y="311" width="10" height="10" rx="1.5" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+  <text x="58" y="320" font-size="12" fill="#475569">pin: connection point for one specific value</text>
+</svg>

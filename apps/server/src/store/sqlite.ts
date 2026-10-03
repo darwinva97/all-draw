@@ -5,6 +5,7 @@
  * El esquema es SQL estándar: `postgres.ts` es una traducción directa (`BLOB` → `BYTEA`,
  * `INTEGER` booleanos → `BOOLEAN`, `?` → `$n`) y `apps/worker/migrations/0001_init.sql` (D1) es este mismo SQL.
  */
+import { statSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import * as Y from 'yjs';
 import { newId } from '@all-draw/core';
@@ -98,12 +99,31 @@ export const MIGRATIONS: string[] = [
 
 type Row = Record<string, unknown>;
 
+/**
+ * Ajustes de la conexión (no se guardan en el fichero salvo `journal_mode`):
+ *   - WAL: lectores (copias, scripts) no bloquean al escritor;
+ *   - `synchronous = NORMAL`: con WAL es seguro ante caídas del proceso; ante un corte de luz se pueden perder
+ *     las últimas transacciones, nunca corromper la BD (los docs se reescriben enteros en cada guardado);
+ *   - `foreign_keys`: borrados en cascada (sesiones, miembros, enlaces, docs, instantáneas);
+ *   - `busy_timeout`: espera hasta 5 s si otro proceso (backup, mantenimiento) tiene el cerrojo;
+ *   - `journal_size_limit`: el `-wal` no se queda en cientos de MB tras un pico;
+ *   - `temp_store = MEMORY`: ordenaciones y temporales sin tocar disco.
+ */
+export const SQLITE_PRAGMAS = [
+  'PRAGMA journal_mode = WAL',
+  'PRAGMA synchronous = NORMAL',
+  'PRAGMA foreign_keys = ON',
+  'PRAGMA busy_timeout = 5000',
+  'PRAGMA journal_size_limit = 67108864',
+  'PRAGMA temp_store = MEMORY',
+];
+
 export class SqliteWorkspaceStore implements WorkspaceStore {
   readonly db: DatabaseSync;
 
-  constructor(path: string) {
+  constructor(readonly path: string) {
     this.db = new DatabaseSync(path);
-    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
+    for (const p of SQLITE_PRAGMAS) this.db.exec(p);
     this.migrate();
   }
 
@@ -152,6 +172,24 @@ export class SqliteWorkspaceStore implements WorkspaceStore {
   async countUsers() { return (this.one<{ n: number }>('SELECT COUNT(*) AS n FROM users'))!.n; }
   async listUsers() { return this.all<Row>('SELECT * FROM users ORDER BY created_at').map(r => this.user(r)!); }
   async setPasswordHash(userId: string, passwordHash: string) { this.run('UPDATE users SET password_hash = ? WHERE id = ?', passwordHash, userId); }
+  async updateUser(id: string, patch: { name?: string; email?: string; isAdmin?: boolean }) {
+    const u = await this.getUser(id); if (!u) return null;
+    const next = { ...u, ...(patch.name !== undefined ? { name: patch.name } : {}), ...(patch.email !== undefined ? { email: patch.email.trim().toLowerCase() } : {}), ...(patch.isAdmin !== undefined ? { isAdmin: patch.isAdmin } : {}) };
+    try { this.run('UPDATE users SET name = ?, email = ?, is_admin = ? WHERE id = ?', next.name, next.email, next.isAdmin ? 1 : 0, id); }
+    catch (e) { if (String(e).includes('UNIQUE')) throw new Error('email ya registrado'); throw e; }
+    return next;
+  }
+  async deleteUser(id: string) {
+    this.db.exec('BEGIN');
+    try {
+      this.run('DELETE FROM sessions WHERE user_id = ?', id);
+      this.run('DELETE FROM api_keys WHERE user_id = ?', id);
+      this.run('DELETE FROM workspace_members WHERE user_id = ?', id);
+      this.run('UPDATE snapshots SET author_id = NULL WHERE author_id = ?', id);
+      this.run('DELETE FROM users WHERE id = ?', id);
+      this.db.exec('COMMIT');
+    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+  }
 
   async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
     const s: Session = { tokenHash, userId, createdAt: now(), expiresAt };
@@ -191,6 +229,7 @@ export class SqliteWorkspaceStore implements WorkspaceStore {
     return rows.map(r => ({ ...this.workspace(r)!, role: r.role as Role }));
   }
   async listAllWorkspaces() { return this.all<Row>('SELECT * FROM workspaces ORDER BY updated_at DESC').map(r => this.workspace(r)!); }
+  async countOwnedWorkspaces(userId: string) { return Number(this.one<{ n: number }>('SELECT COUNT(*) AS n FROM workspaces WHERE owner_id = ?', userId)!.n); }
   async getWorkspace(id: string) { return this.workspace(this.one('SELECT * FROM workspaces WHERE id = ?', id)); }
   async createWorkspace(w: { ownerId: string; name: string; id?: string }): Promise<WorkspaceRow> {
     const t = now();
@@ -278,5 +317,16 @@ export class SqliteWorkspaceStore implements WorkspaceStore {
     return Number(this.run('DELETE FROM snapshots WHERE id IN (SELECT id FROM snapshots WHERE workspace_id = ? AND label IS NULL ORDER BY created_at ASC, id ASC LIMIT ?)', workspaceId, total - keep).changes);
   }
 
-  async close() { this.db.close(); }
+  /** Bytes en disco (BD + `-wal`), para `/metrics`. */
+  dbSizeBytes(): number {
+    let n = 0;
+    for (const f of [this.path, `${this.path}-wal`]) { try { n += statSync(f).size; } catch { /* no existe */ } }
+    return n;
+  }
+
+  async close() {
+    if (!this.db.isOpen) return;
+    try { this.db.exec('PRAGMA optimize'); } catch { /* no es grave */ }
+    this.db.close();
+  }
 }

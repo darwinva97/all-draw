@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="344" viewBox="0 0 680 344" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" role="img">
+  <title>Viewpoint: the palette dims, it does not forbid</title>
+  <desc>Palette of a C4 view with the Context viewpoint: person, software system and boundary look normal; container, component and deployment node are dimmed. Even so, a container dragged onto the canvas is created, and the problems panel shows a warning.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+    <marker id="ah-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="#334155" stroke-width="1.6"/></marker>
+    <marker id="ah-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+    <marker id="ah-blue-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="#2563eb" stroke-width="1.6"/></marker>
+    <marker id="ah-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker>
+  </defs>
+  <rect x="0" y="0" width="680" height="344" fill="#ffffff"/>
+  <rect x="20" y="24" width="240" height="300" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="36" y="50" font-size="13" font-weight="700" fill="#334155">Palette · C4</text>
+  <text x="36" y="70" font-size="12" fill="#475569">View viewpoint: Context</text>
+  <rect x="32" y="86" width="216" height="28" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <rect x="40" y="92" width="16" height="16" rx="3" fill="#08427B" stroke="#08427B" stroke-width="1"/>
+  <text x="66" y="105" font-size="13" fill="#1f2937">Person</text>
+  <rect x="32" y="120" width="216" height="28" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <rect x="40" y="126" width="16" height="16" rx="3" fill="#1168BD" stroke="#1168BD" stroke-width="1"/>
+  <text x="66" y="139" font-size="13" fill="#1f2937">Software system</text>
+  <rect x="32" y="154" width="216" height="28" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <rect x="40" y="160" width="16" height="16" rx="3" fill="#F5F5F5" stroke="#64748b" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="66" y="173" font-size="13" fill="#1f2937">Boundary</text>
+  <text x="36" y="206" font-size="12" fill="#64748b" font-style="italic">dimmed: outside the viewpoint</text>
+  <rect x="32" y="216" width="216" height="28" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" opacity="0.4"/>
+  <rect x="40" y="222" width="16" height="16" rx="3" fill="#438DD5" stroke="#438DD5" stroke-width="1" opacity="0.4"/>
+  <text x="66" y="235" font-size="13" fill="#1f2937" opacity="0.4">Container</text>
+  <rect x="32" y="250" width="216" height="28" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" opacity="0.4"/>
+  <rect x="40" y="256" width="16" height="16" rx="3" fill="#85BBF0" stroke="#85BBF0" stroke-width="1" opacity="0.4"/>
+  <text x="66" y="269" font-size="13" fill="#1f2937" opacity="0.4">Component</text>
+  <rect x="32" y="284" width="216" height="28" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" opacity="0.4"/>
+  <rect x="40" y="290" width="16" height="16" rx="3" fill="#ffffff" stroke="#64748b" stroke-width="1" stroke-dasharray="3 2" opacity="0.4"/>
+  <text x="66" y="303" font-size="13" fill="#1f2937" opacity="0.4">Deployment node</text>
+  <rect x="300" y="24" width="360" height="300" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="316" y="50" font-size="13" font-weight="700" fill="#334155">Canvas</text>
+  <rect x="324" y="74" width="120" height="56" rx="12" fill="#08427B" stroke="#073763" stroke-width="1.2"/>
+  <text x="384" y="100" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">Manager</text>
+  <text x="384" y="117" font-size="12" fill="#dbeafe" text-anchor="middle">Person</text>
+  <rect x="510" y="74" width="130" height="56" rx="4" fill="#1168BD" stroke="#0b4884" stroke-width="1.2"/>
+  <text x="575" y="100" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">CRM</text>
+  <text x="575" y="117" font-size="12" fill="#dbeafe" text-anchor="middle">Software system</text>
+  <line x1="445" y1="102" x2="507" y2="102" stroke="#475569" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#ah)"/>
+  <text x="476" y="94" font-size="12" fill="#475569" text-anchor="middle">Uses</text>
+  <rect x="510" y="176" width="130" height="56" rx="4" fill="#438DD5" stroke="#2f6ea8" stroke-width="1.2"/>
+  <text x="575" y="202" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">Customer API</text>
+  <text x="575" y="219" font-size="12" fill="#e0ecfb" text-anchor="middle">Container</text>
+  <path d="M644 159 L656 180 L632 180 Z" fill="#f59e0b" stroke="#ffffff" stroke-width="1.5"/>
+  <text x="644" y="177" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">!</text>
+  <path d="M249 230 C 340 230, 410 204, 506 204" fill="none" stroke="#64748b" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah-grey)"/>
+  <text x="392" y="200" font-size="12" fill="#475569" text-anchor="middle">can still be used</text>
+  <rect x="316" y="252" width="328" height="56" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="330" y="274" font-size="12" font-weight="700" fill="#92400e">▲ Warning in the problems panel</text>
+  <text x="330" y="294" font-size="12" fill="#92400e">"Customer API" is not in the viewpoint</text>
+</svg>

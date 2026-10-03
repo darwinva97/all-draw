@@ -47,6 +47,10 @@ export function securityHeaders({ https, host }: SecurityHeaderOpts): Record<str
     'referrer-policy': 'strict-origin-when-cross-origin',
     'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
     'x-frame-options': 'SAMEORIGIN',
+    // Aísla la ventana de otras (sin `window.opener` cruzado) y prohíbe que otras webs incrusten nuestros
+    // recursos por `no-cors`. La única excepción es el SVG de una vista, que la API marca `cross-origin`.
+    'cross-origin-opener-policy': 'same-origin',
+    'cross-origin-resource-policy': 'same-origin',
   };
   if (https) h['strict-transport-security'] = 'max-age=15552000; includeSubDomains';
   return h;
@@ -57,4 +61,26 @@ export function withSecurityHeaders(res: Response, opts: SecurityHeaderOpts): Re
   const out = new Response(res.body, res);
   for (const [k, v] of Object.entries(securityHeaders(opts))) if (!out.headers.has(k)) out.headers.set(k, v);
   return out;
+}
+
+/** Ruta de `security.txt` (RFC 9116). */
+export const SECURITY_TXT_PATH = '/.well-known/security.txt';
+/** Dónde informar de vulnerabilidades (avisos privados de GitHub). */
+export const SECURITY_CONTACT = 'https://github.com/darwinva97/all-draw/security';
+
+/** `security.txt` con caducidad a un año vista (se genera en cada petición, así nunca caduca). */
+export function securityTxt(baseUrl?: string | null, now = new Date()): string {
+  const expires = new Date(now.getTime() + 365 * 86_400_000);
+  expires.setUTCHours(0, 0, 0, 0);
+  return [
+    `Contact: ${SECURITY_CONTACT}`,
+    `Expires: ${expires.toISOString()}`,
+    'Preferred-Languages: es, en',
+    ...(baseUrl ? [`Canonical: ${baseUrl.replace(/\/$/, '')}${SECURITY_TXT_PATH}`] : []),
+    '',
+  ].join('\n');
+}
+
+export function securityTxtResponse(baseUrl?: string | null): Response {
+  return new Response(securityTxt(baseUrl), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=86400' } });
 }

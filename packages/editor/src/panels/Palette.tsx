@@ -4,15 +4,17 @@ import { useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { useRecord, useAnyChange } from '../hooks';
 import { DND_TYPE, DND_TEMPLATE, DND_ELEMENT, DND_VISUAL } from '../Canvas';
+import { Icon, type IconName } from '../icons';
+import { promptDialog } from '../ui/dialog';
 
 interface VisualItem { visualType: string; text?: string; src?: string }
 /** Elementos que se pintan de golpe en la pestaña Modelo; el resto sale con "mostrar más". */
 export const PALETTE_PAGE = 200;
 /** Etiquetas en español: se traducen con `t()` al pintarlas (y el texto inicial del nodo también). */
-const VISUALS: { label: string; icon: string; visualType: string; hint: string }[] = [
-  { label: 'Nota', icon: '🗒', visualType: 'core:note', hint: 'Texto libre; doble clic para editar' },
-  { label: 'Grupo', icon: '▢', visualType: 'core:group', hint: 'Marco que agrupa nodos (se mueven con él)' },
-  { label: 'Etiqueta', icon: 'T', visualType: 'core:label', hint: 'Texto sin fondo ni borde' },
+const VISUALS: { label: string; icon: IconName; visualType: string; hint: string }[] = [
+  { label: 'Nota', icon: 'note', visualType: 'core:note', hint: 'Texto libre; doble clic para editar' },
+  { label: 'Grupo', icon: 'group', visualType: 'core:group', hint: 'Marco que agrupa nodos (se mueven con él)' },
+  { label: 'Etiqueta', icon: 'text', visualType: 'core:label', hint: 'Texto sin fondo ni borde' },
 ];
 
 /** Paleta: tipos de la notación de la vista (viewpoint primero), tipos de librerías, componentes reutilizables, elementos existentes y nodos visuales. */
@@ -35,8 +37,9 @@ export function Palette() {
 
   const drag = (kind: string, id: string) => (e: DragEvent) => { e.dataTransfer.setData(kind, id); e.dataTransfer.effectAllowed = 'copy'; };
   const dragVisual = (item: VisualItem) => drag(DND_VISUAL, JSON.stringify(item));
-  const addImageUrl = () => {
-    const url = prompt(t('URL de la imagen'));
+  const addImageUrl = async () => {
+    const url = await promptDialog({ title: t('Añadir una imagen por URL'), label: t('URL de la imagen'), placeholder: 'https://…', inputType: 'url', confirmLabel: t('Añadir'),
+      validate: v => (/^(https?:|data:image\/)/i.test(v.trim()) ? null : t('Escribe una dirección que empiece por https://')) });
     if (url?.trim()) setImages(xs => [...xs, { name: url.trim().split('/').pop() || t('imagen'), src: url.trim() }]);
   };
   const addImageFile = async (f: File) => {
@@ -112,21 +115,21 @@ export function Palette() {
           <details open><summary className="ad-pal__cat">{t('Visual')}</summary>
             {VISUALS.filter(v => match(t(v.label))).map(v => (
               <div key={v.label} className="ad-pal__item" draggable onDragStart={dragVisual({ visualType: v.visualType, text: t(v.label) })} title={t(v.hint)}>
-                <span className="ad-pal__swatch ad-pal__swatch--visual">{v.icon}</span><span>{t(v.label)}</span>
+                <span className="ad-pal__swatch ad-pal__swatch--visual"><Icon name={v.icon} size={14} /></span><span>{t(v.label)}</span>
               </div>
             ))}
           </details>
           <details open><summary className="ad-pal__cat">{t('Imágenes')}</summary>
             <div className="ad-row">
-              <button className="ad-btn" onClick={addImageUrl} title={t('Añadir una imagen por URL')}>＋ URL</button>
-              <button className="ad-btn" onClick={() => file.current?.click()} title={t('Añadir una imagen desde un fichero (se guarda incrustada)')}>＋ {t('Fichero')}</button>
+              <button className="ad-btn" onClick={addImageUrl} title={t('Añadir una imagen por URL')}><Icon name="link" size={14} />URL</button>
+              <button className="ad-btn" onClick={() => file.current?.click()} title={t('Añadir una imagen desde un fichero (se guarda incrustada)')}><Icon name="plus" size={14} />{t('Fichero')}</button>
               <input ref={file} type="file" aria-label={t('Imagen desde un fichero')} accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void addImageFile(f); e.target.value = ''; }} />
             </div>
             {images.length === 0 && <div className="ad-hint">{t('Añade una imagen y arrástrala al lienzo.')}</div>}
             {images.filter(i => match(i.name)).map((img, i) => (
               <div key={i} className="ad-pal__item" draggable onDragStart={dragVisual({ visualType: 'core:image', src: img.src })} title={img.name}>
                 <img className="ad-pal__thumb" src={img.src} alt="" /><span className="ad-pal__ellipsis">{img.name}</span>
-                <button className="ad-btn ad-btn--ghost" onClick={() => setImages(xs => xs.filter((_, j) => j !== i))} title={t('Quitar de la paleta')} aria-label={t('Quitar {name} de la paleta', { name: img.name })}>×</button>
+                <button className="ad-btn ad-btn--ghost" onClick={() => setImages(xs => xs.filter((_, j) => j !== i))} title={t('Quitar de la paleta')} aria-label={t('Quitar {name} de la paleta', { name: img.name })}><Icon name="close" size={14} /></button>
               </div>
             ))}
           </details>

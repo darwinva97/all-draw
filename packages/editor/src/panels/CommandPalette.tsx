@@ -7,6 +7,7 @@ import { useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { useAnyChange } from '../hooks';
 import { searchWorkspace, type SearchAction, type SearchHit } from '../search';
+import { Icon, type IconName } from '../icons';
 
 /** Resultados que se pintan de golpe; el resto sale con "mostrar más". */
 export const CMDK_PAGE = 200;
@@ -54,12 +55,12 @@ export function CommandPalette({ open, onClose, actions, onAction }: CommandPale
     else if (hit.kind === 'view') { openView(hit.id); onClose(); }
     else jumpToElement(hit);
   };
-  const items: { key: string; label: string; hint: string; icon: string; onPick: () => void }[] = pending
+  const items: { key: string; label: string; hint: string; icon: IconName | null; onPick: () => void }[] = pending
     ? [
-      ...pending.viewIds.map(vid => ({ key: vid, label: store.get('views', vid)?.name ?? vid, hint: registry.pack(store.get('views', vid)?.notationId ?? '')?.name ?? '', icon: '◻', onPick: () => jumpToElement(pending, vid) })),
-      { key: '__back', label: t('← Volver a los resultados'), hint: '', icon: '', onPick: () => setPending(null) },
+      ...pending.viewIds.map(vid => ({ key: vid, label: store.get('views', vid)?.name ?? vid, hint: registry.pack(store.get('views', vid)?.notationId ?? '')?.name ?? '', icon: 'view' as IconName, onPick: () => jumpToElement(pending, vid) })),
+      { key: '__back', label: t('Volver a los resultados'), hint: '', icon: 'arrowLeft' as IconName, onPick: () => setPending(null) },
     ]
-    : hits.map(h => ({ key: `${h.kind}:${h.id}`, label: h.label, hint: h.hint, icon: h.kind === 'action' ? '▸' : h.kind === 'view' ? '◻' : '●', onPick: () => choose(h) }));
+    : hits.map(h => ({ key: `${h.kind}:${h.id}`, label: h.label, hint: h.hint, icon: (h.kind === 'action' ? 'chevronRight' : h.kind === 'view' ? 'view' : 'diamond') as IconName, onPick: () => choose(h) }));
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(items.length - 1, i + 1)); }
@@ -76,7 +77,7 @@ export function CommandPalette({ open, onClose, actions, onAction }: CommandPale
           {items.length === 0 && <div className="ad-empty">{t('Sin resultados para «{q}».', { q })}</div>}
           {items.slice(0, shown).map((it, i) => (
             <button key={it.key} className={`ad-cmdk__item ${i === idx ? 'is-active' : ''}`} onMouseEnter={() => setIdx(i)} onClick={it.onPick}>
-              <span className="ad-cmdk__icon">{it.icon}</span>
+              <span className="ad-cmdk__icon">{it.icon && <Icon name={it.icon} size={14} />}</span>
               <span className="ad-cmdk__label">{it.label}</span>
               <small>{it.hint}</small>
             </button>

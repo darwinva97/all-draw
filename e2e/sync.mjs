@@ -3,7 +3,7 @@ import { chromium } from 'playwright-core';
 const base = process.env.BASE ?? 'http://127.0.0.1:4002';
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
 const errors = [];
-const mk = async () => { const ctx = await browser.newContext({ locale: 'es-ES', viewport: { width: 1280, height: 820 } }); const p = await ctx.newPage(); p.on('pageerror', e => errors.push(e.message)); return p; };
+const mk = async () => { const ctx = await browser.newContext({ locale: 'es-ES', viewport: { width: 1280, height: 820 } }); const p = await ctx.newPage(); await p.addInitScript(() => localStorage.setItem('alldraw:tour', 'done'));; p.on('pageerror', e => errors.push(e.message)); return p; };
 const a = await mk(), b = await mk();
 await a.goto(base + '/#/', { waitUntil: 'networkidle' });
 const email = `e2e-${Date.now()}@test.local`;
@@ -14,7 +14,7 @@ await a.locator('.field input:not([type=email]):not([type=password])').fill('E2E
 await a.locator('input[type=password]').fill('contraseña-larga');
 await a.getByRole('button', { name: 'Registrarme' }).click();
 await a.waitForSelector('text=En el servidor', { timeout: 15000 });
-await a.getByRole('button', { name: /Abrir la demo/ }).click();
+await a.getByRole('button', { name: /Abrir la demo|Probar sin cuenta/ }).click();
 await a.waitForURL(/#\/s\//, { waitUntil: 'commit' }); await a.waitForSelector('.react-flow__node', { timeout: 20000 }); await a.waitForTimeout(1500);
 console.log('A status:', await a.locator('.app-status').first().innerText());
 await a.getByRole('button', { name: 'Compartir' }).click();

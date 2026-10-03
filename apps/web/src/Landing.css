@@ -1,0 +1,71 @@
+/* Portada. Lo memorable es el visor de dimensiones (las vistas reales de la demo); el resto, sobrio. */
+.lp { overflow-x: clip; }
+.lp__main { flex: 1; }
+.lp-hero {
+  position: relative; display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 13fr); gap: 56px; align-items: center;
+  max-width: 1240px; margin: 0 auto; padding: 72px 32px 88px;
+}
+.lp-hero::before {
+  content: ''; position: absolute; inset: 0 -50vw; z-index: -1;
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px); background-size: 18px 18px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%); mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+}
+.lp-hero h1 { margin: 0; font-size: clamp(32px, 3.5vw, 48px); line-height: 1.06; letter-spacing: -.03em; font-weight: 700; max-width: 15ch; }
+.lp-hero__lead { margin: 20px 0 0; font-size: 17px; line-height: 1.55; color: var(--muted); max-width: 46ch; }
+.lp-hero__cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 28px; }
+.lp-hero__doc { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; color: var(--text); font-weight: 550; text-decoration: none; padding: 8px 4px; border-radius: var(--r-sm); }
+.lp-hero__doc:hover { color: var(--accent); }
+.lp-hero__doc .ad-icon { color: var(--muted); }
+.lp-hero__note { margin: 14px 0 0; font-size: 13px; color: var(--faint); }
+
+/* Visor de dimensiones */
+.lp-viewer { margin: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-lg); overflow: hidden; }
+.lp-viewer__bar { display: flex; align-items: center; gap: 12px; padding: 8px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 60%, var(--sunk)); overflow-x: auto; scrollbar-width: none; }
+.lp-viewer__bar::-webkit-scrollbar { display: none; }
+.lp-viewer__tabs { display: flex; gap: 2px; }
+.lp-viewer__tab { display: inline-flex; align-items: center; gap: 7px; border: 1px solid transparent; background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 550; padding: 5px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease; }
+.lp-viewer__tab:hover { color: var(--text); }
+.lp-viewer__tab.is-on { background: var(--surface); color: var(--text); border-color: var(--line); box-shadow: var(--shadow-sm); }
+.lp-viewer__stage { position: relative; height: 380px; background-image: radial-gradient(var(--dot) 1px, transparent 1px); background-size: 16px 16px; }
+.lp-viewer__stage img { position: absolute; inset: 20px; width: calc(100% - 40px); height: calc(100% - 40px); object-fit: contain; opacity: 0; transform: scale(.985); transition: opacity 360ms ease, transform 480ms var(--ease-out); user-select: none; }
+.lp-viewer__stage img.is-on { opacity: 1; transform: none; }
+.lp-viewer__skel { position: absolute; inset: 60px 80px; }
+.lp-viewer__cap { display: flex; align-items: flex-start; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.lp-viewer__cap .ad-icon { margin-top: 2px; color: var(--accent); }
+
+/* Secciones */
+.lp-sect { max-width: 1240px; margin: 0 auto; padding: 56px 32px; border-top: 1px solid var(--line); }
+.lp-sect h2, .lp-close h2 { margin: 0; font-size: 24px; letter-spacing: -.02em; font-weight: 680; }
+.lp-sect__lead { margin: 8px 0 0; color: var(--muted); max-width: 64ch; }
+.lp-ideas { list-style: none; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; }
+.lp-ideas li { display: flex; flex-direction: column; gap: 8px; }
+.lp-ideas__icon { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.lp-ideas h3 { margin: 6px 0 0; font-size: 15.5px; letter-spacing: -.01em; }
+.lp-ideas p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.lp-notations { list-style: none; margin: 22px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.lp-notations__chip { font-size: 13.5px; padding: 6px 13px 6px 11px; color: var(--text); transition: border-color 120ms ease, background-color 120ms ease; }
+.lp-notations__chip .chip__dot { width: 9px; height: 9px; }
+.lp-notations__chip:hover { border-color: var(--line-strong); background: color-mix(in srgb, var(--surface) 70%, var(--sunk)); }
+.lp-close { max-width: 1240px; margin: 0 auto; padding: 56px 32px 72px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.lp-close .lp-hero__cta { margin: 0; }
+
+@media (max-width: 1023px) {
+  .lp-hero { grid-template-columns: 1fr; gap: 36px; padding: 44px 24px 56px; }
+  .lp-hero__lead { max-width: 60ch; }
+  .lp-ideas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 699px) {
+  .lp-hero { padding: 28px 16px 40px; gap: 28px; }
+  .lp-hero h1 { font-size: 32px; }
+  .lp-hero__lead { font-size: 15.5px; margin-top: 14px; }
+  .lp-hero__cta { margin-top: 22px; }
+  .lp-hero__cta .btn { flex: 1 1 100%; }
+  .lp-hero__doc { margin-left: 0; }
+  .lp-viewer__stage { height: 240px; }
+  .lp-viewer__stage img { inset: 10px; width: calc(100% - 20px); height: calc(100% - 20px); }
+  .lp-viewer__skel { inset: 40px 30px; }
+  .lp-sect { padding: 40px 16px; }
+  .lp-ideas { grid-template-columns: 1fr; gap: 24px; }
+  .lp-close { padding: 40px 16px 48px; }
+  .lp-close .lp-hero__cta { width: 100%; }
+}

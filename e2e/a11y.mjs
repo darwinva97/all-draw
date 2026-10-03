@@ -17,6 +17,7 @@ import { chromium } from 'playwright-core';
 const base = process.env.BASE ?? 'http://127.0.0.1:4173';
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
 const page = await browser.newPage({ locale: 'es-ES', viewport: { width: 1440, height: 900 } });
+await page.addInitScript(() => localStorage.setItem('alldraw:tour', 'done')); // sin recorrido guiado
 const problems = [];
 const pending = [];
 const errors = [];
@@ -72,7 +73,7 @@ const outline = await page.evaluate(() => { const a = document.activeElement; re
 if (outline === 'none') problems.push('[inicio] el elemento enfocado con Tab no tiene outline visible');
 
 // 2. Diálogo de entrar (sólo si hay servidor)
-const login = page.getByRole('button', { name: /Entrar \/ registrarse/ });
+const login = page.getByRole('button', { name: /^Entrar( \/ registrarse)?$/ });
 if (await login.count()) {
   await login.focus(); await login.click();
   await page.waitForSelector('[role="dialog"]');
@@ -89,7 +90,7 @@ if (await login.count()) {
 } else console.log('entrar: sin servidor de cuentas, se omite el diálogo');
 
 // 3. Editor de la demo
-await page.getByRole('button', { name: /Abrir la demo/ }).click();
+await page.getByRole('button', { name: /Abrir la demo|Probar sin cuenta/ }).click();
 await page.waitForURL(/#\/(w|s)\//);
 await page.waitForSelector('.react-flow__node', { timeout: 15000 });
 await page.waitForTimeout(800);

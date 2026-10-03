@@ -3,6 +3,8 @@ import { validate, DEFAULT_VALIDATORS, type Diagnostic } from '@all-draw/core';
 import { useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { useAnyChange } from '../hooks';
+import { Icon } from '../icons';
+import { HelpLink } from './HelpLink';
 
 /** Espera de silencio antes de recalcular (los arrastres y el tecleo generan ráfagas de cambios). */
 export const PROBLEMS_DEBOUNCE_MS = 300;
@@ -42,10 +44,11 @@ export function Problems() {
   return (
     <div className={`ad-problems ${open ? 'is-open' : ''}`}>
       <button className="ad-problems__bar" aria-expanded={open} aria-label={t('Problemas: {errors} errores, {warns} avisos, {notes} notas', { errors, warns, notes })} onClick={() => setOpen(o => !o)}>
-        <span className={errors ? 'ad-sev-error' : ''}>● {t('{n} errores', { n: errors })}</span> <span className={warns ? 'ad-sev-warning' : ''}>▲ {t('{n} avisos', { n: warns })}</span> <span>ℹ {t('{n} notas', { n: notes })}</span>{computing && <span className="ad-problems__busy" aria-live="polite"> · {t('calculando…')}</span>}
+        <span className={`ad-problems__count ${errors ? 'ad-sev-error' : ''}`}><Icon name="error" size={14} />{t('{n} errores', { n: errors })}</span><span className={`ad-problems__count ${warns ? 'ad-sev-warning' : ''}`}><Icon name="warning" size={14} />{t('{n} avisos', { n: warns })}</span><span className="ad-problems__count"><Icon name="info" size={14} />{t('{n} notas', { n: notes })}</span>{computing && <span className="ad-problems__busy" aria-live="polite"> · {t('calculando…')}</span>}
       </button>
       {open && <div className="ad-problems__list" role="region" aria-label={t('Lista de problemas')}>
-        {diags.length === 0 && <div className="ad-empty">{t('Sin problemas.')}</div>}
+        <div className="ad-problems__head"><span>{t('El validador revisa el modelo y la vista actual mientras editas.')}</span><HelpLink slug="editor" /></div>
+        {diags.length === 0 && <div className="ad-empty ad-empty--ok"><Icon name="success" size={18} />{t('Sin problemas.')}</div>}
         {diags.map((d, i) => <div key={i} className={`ad-problem ad-sev-${d.severity}`}>
           <button className="ad-link" onClick={() => goTo(d)}><code>{d.code}</code> {d.message}</button>
           {!readOnly && d.supportedFixes.map((f, j) => <button key={j} className="ad-btn" onClick={() => run(f.command)}>{f.label}</button>)}

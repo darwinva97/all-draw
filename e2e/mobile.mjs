@@ -12,14 +12,14 @@ const noHScroll = async (page) => page.evaluate(() => document.documentElement.s
 const watch = (page) => { page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error' && !/401/.test(m.text())) errors.push(m.text()); }); };
 const openDemo = async (page) => {
   await page.goto(base + '/#/', { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: /Abrir la demo/ }).click();
+  await page.getByRole('button', { name: /Abrir la demo|Probar sin cuenta/ }).click();
   await page.waitForSelector('.react-flow__node'); await page.waitForTimeout(600);
 };
 
 // ---------------------------------------------------------------- móvil
 {
   const ctx = await browser.newContext({ locale: 'es-ES', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
-  const page = await ctx.newPage(); watch(page);
+  const page = await ctx.newPage(); watch(page); await page.addInitScript(() => localStorage.setItem('alldraw:tour', 'done')); // sin recorrido guiado
   await page.goto(base + '/#/', { waitUntil: 'networkidle' });
   await page.screenshot({ path: `${out}/mobile-home.png` });
   check('mobile home: sin scroll horizontal', await noHScroll(page));
@@ -101,7 +101,7 @@ const openDemo = async (page) => {
 // ---------------------------------------------------------------- tableta
 {
   const ctx = await browser.newContext({ locale: 'es-ES', viewport: { width: 900, height: 700 } });
-  const page = await ctx.newPage(); watch(page);
+  const page = await ctx.newPage(); watch(page); await page.addInitScript(() => localStorage.setItem('alldraw:tour', 'done')); // sin recorrido guiado
   await page.evaluate(() => localStorage.removeItem('alldraw:panels')).catch(() => {});
   await openDemo(page);
   await page.screenshot({ path: `${out}/tablet-editor.png` });

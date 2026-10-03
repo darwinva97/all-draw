@@ -28,6 +28,24 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
   async countUsers() { return this.users.size; }
   async listUsers() { return [...this.users.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt)); }
   async setPasswordHash(userId: string, passwordHash: string) { const u = this.users.get(userId); if (u) u.passwordHash = passwordHash; }
+  async updateUser(id: string, patch: { name?: string; email?: string; isAdmin?: boolean }) {
+    const u = this.users.get(id); if (!u) return null;
+    if (patch.email !== undefined) {
+      const email = patch.email.trim().toLowerCase();
+      if ([...this.users.values()].some(x => x.email === email && x.id !== id)) throw new Error('email ya registrado');
+      u.email = email;
+    }
+    if (patch.name !== undefined) u.name = patch.name;
+    if (patch.isAdmin !== undefined) u.isAdmin = patch.isAdmin;
+    return u;
+  }
+  async deleteUser(id: string) {
+    this.users.delete(id);
+    for (const [k, s] of this.sessions) if (s.userId === id) this.sessions.delete(k);
+    for (const [k, key] of this.apiKeys) if (key.userId === id) this.apiKeys.delete(k);
+    for (const [k, m] of this.members) if (m.userId === id) this.members.delete(k);
+    for (const sn of this.snapshots.values()) if (sn.authorId === id) sn.authorId = null;
+  }
 
   async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
     const s: Session = { tokenHash, userId, createdAt: now(), expiresAt };
@@ -68,6 +86,7 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
   async listAllWorkspaces() { return [...this.workspaces.values()]; }
+  async countOwnedWorkspaces(userId: string) { return [...this.workspaces.values()].filter(w => w.ownerId === userId).length; }
   async getWorkspace(id: string) { return this.workspaces.get(id) ?? null; }
   async createWorkspace(w: { ownerId: string; name: string; id?: string }): Promise<WorkspaceRow> {
     const t = now();

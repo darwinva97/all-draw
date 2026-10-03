@@ -54,6 +54,14 @@ PORT=4002 HOST=127.0.0.1 DATA_DIR=~/.alldraw-data node src/server.mjs
 | `ALLOW_REGISTRATION` | `true` | `false` cierra `POST /api/auth/register` (salvo si aún no hay usuarios) |
 | `COOKIE_SECURE` | `false` | Fuerza `Secure` en la cookie. Detrás de Caddy no hace falta: se activa solo cuando llega `x-forwarded-proto: https`. |
 | `PUBLIC_URL` | *(de la petición)* | Base para las URLs de los enlaces compartidos |
+| `LOG_LEVEL` | `info` | Log JSON en stdout: `debug` · `info` (una línea por petición) · `warn` · `error` · `silent` |
+| `METRICS_TOKEN` | *(vacío)* | `/metrics` responde desde 127.0.0.1 sin proxy; con esto, también con `Authorization: Bearer <token>` |
+| `ALLDRAW_COMMIT` | `git rev-parse --short HEAD` | Commit que publican `/api/status` y `alldraw_build_info` |
+| `MAX_WORKSPACES_PER_USER` | `100` | Espacios propios por cuenta (los admins sin límite; `0` = sin límite) |
+| `MAX_DOC_BYTES` | `20971520` (20 MB) | Tamaño máximo de un espacio (update Yjs completo); `0` = sin límite |
+| `REGISTER_MIN_MS` | `2000` | Tiempo mínimo entre `GET /api/auth/config` (da el `formToken`) y el registro; `0` lo desactiva |
+| `MAX_WS_PER_IP` / `MAX_WS_PER_WORKSPACE` | `30` / `100` | WebSockets simultáneos; al pasarse, cierre `4429` |
+| `BACKUP_DIR` | `~/.alldraw-backups` | Copias; el servidor deja aquí (`deleted/`) la copia final de los espacios borrados con su cuenta |
 
 Unidad systemd de usuario (`~/.config/systemd/user/alldraw.service`): sigue valiendo tal cual
 (`ExecStart=node src/server.mjs` en `apps/server`). Al primer arranque crea la BD e importa los
@@ -93,11 +101,20 @@ Documento completo en `GET /api/openapi.json` (OpenAPI 3.1). Resumen:
 
 ```
 GET    /healthz
+GET    /api/status                                    versión, commit, uptime, BD (público; 503 si la BD falla)
+GET    /metrics                                       Prometheus (sólo 127.0.0.1 sin proxy o Bearer METRICS_TOKEN; no está bajo /api)
+GET    /.well-known/security.txt
+POST   /api/client-errors {message, stack?, …}        errores de la web → log (8 KB, 30/10 min por IP)
 GET    /api/notations                                 packs y tipos (público)
 POST   /api/auth/register {email,name,password}       201 {user, token} + cookie
 POST   /api/auth/login    {email,password}            200 {user, token} + cookie · 401 · 429
 POST   /api/auth/logout                               204
-GET    /api/auth/me                                   {user, via: 'session'|'apikey'}
+GET    /api/auth/config                               {registration, passwordMinLength, formToken, formMinMs}
+GET    /api/auth/me                                   {user, via: 'session'|'apikey', quotas}
+PATCH  /api/auth/me {name?, email?, password?}        el email exige sesión y contraseña
+GET    /api/auth/export                               JSON con la cuenta y sus espacios (RGPD)
+DELETE /api/auth/account {password}                   borra la cuenta (regla en docs/07-seguridad.md)
+PATCH  /api/admin/users/:id {isAdmin}                 admin
 GET    /api/keys · POST /api/keys {name} → {key} · DELETE /api/keys/:id
 GET    /api/workspaces                                {workspaces:[{id,name,ownerId,…,role}]}
 POST   /api/workspaces {name?, initial?: Workspace}   201
@@ -235,6 +252,35 @@ instalado (cada 5 minutos):
 ```
 */5 * * * * cd /home/maka/projects/all-draw/apps/server && node scripts/healthcheck.mjs >> ~/.alldraw-backups/health.log 2>&1
 ```
+
+### Mantenimiento semanal (`scripts/maintenance.mjs`)
+
+`quick_check`, compactación de `doc_updates` en `docs.state`, purga de sesiones caducadas, `ANALYZE`, `PRAGMA optimize`,
+`VACUUM` y checkpoint del WAL, con el servidor en marcha (lógica en `src/maintenance.ts`; `--no-vacuum` se lo salta).
+
+### Simulacro de restauración (`scripts/restore-drill.mjs`)
+
+Toma la última copia de `BACKUP_DIR` (o `--from <carpeta>`), la descomprime en un `DATA_DIR` temporal, crea **en la
+copia** un admin técnico con API key, arranca `src/server.mjs` en un puerto alto libre de 127.0.0.1, comprueba
+`/api/status`, que estén todos los espacios del `manifest.json` y `GET /api/workspaces/:id/validate` y `…/snapshot` de
+cada uno (mismos elementos y vistas), lo para con SIGTERM (debe salir con 0) y borra el temporal (`--keep` lo deja).
+Escribe `BACKUP_DIR/restore-drill.last.json`; sale con 1 si algo falla y con 2 si no hay copias.
+
+Cron (instalado, domingos, después de la copia diaria):
+
+```
+37 3 * * 0 cd /home/maka/projects/all-draw/apps/server && /usr/bin/node scripts/maintenance.mjs >> /home/maka/.alldraw-backups/maintenance.log 2>&1
+57 3 * * 0 cd /home/maka/projects/all-draw/apps/server && /usr/bin/node scripts/restore-drill.mjs >> /home/maka/.alldraw-backups/restore-drill.log 2>&1
+```
+
+`backup.mjs` borra también, pasados `KEEP_DAYS`, las copias finales de `BACKUP_DIR/deleted/` (espacios borrados con la
+cuenta de su dueño; se restauran con `restore.mjs` como cualquier otra).
+
+### Logs y métricas
+
+Una línea JSON por petición en el journal (`journalctl --user -u alldraw -o cat | jq …`): método, ruta sin tokens, estado,
+ms, usuario (`id`/`link`/`anon`) e IP truncada. `curl -s 127.0.0.1:4002/metrics` desde el VPS (a través de Caddy da 403).
+Apagado: SIGTERM cierra los WebSockets con 1012, guarda los docs y cierra la BD (máx. 10 s).
 
 ### Migrar a Cloudflare
 

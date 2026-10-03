@@ -13,6 +13,8 @@ import {
   FIELD_KINDS, SHAPES, newElementType, newFieldFromLabel, newLibrary, newTemplate, moveItem, withType, withoutType,
   typeUsage, libraryUsage, templateInstances, clean,
 } from './workspace-helpers';
+import { Icon } from '../icons';
+import { confirmDialog } from '../ui/dialog';
 
 export function LibrariesTab() {
   const t = useT();
@@ -27,12 +29,12 @@ export function LibrariesTab() {
     run({ type: 'set', collection: 'libraries', id: l.id, value: l });
     setSel(l.id); setName('');
   };
-  const remove = (l: Library) => {
+  const remove = async (l: Library) => {
     const uses = libraryUsage(store, l.id);
     const msg = uses > 0
-      ? t('La librería "{name}" tiene {n} elemento(s) que la usan (componentes o instancias de sus tipos). Se borrarán sus componentes; las instancias quedarán con un tipo desconocido. ¿Borrar?', { name: l.name, n: uses })
-      : t('¿Borrar la librería "{name}"?', { name: l.name });
-    if (!confirm(msg)) return;
+      ? t('Tiene {n} elemento(s) que la usan (componentes o instancias de sus tipos). Se borrarán sus componentes; las instancias quedarán con un tipo desconocido.', { n: uses })
+      : undefined;
+    if (!(await confirmDialog({ title: t('¿Borrar la librería "{name}"?', { name: l.name }), message: msg, danger: true }))) return;
     const cmds: Command[] = store.list('elements').filter(e => e.template && e.libraryId === l.id).map(e => ({ type: 'deleteElement', id: e.id }));
     cmds.push({ type: 'delete', collection: 'libraries', id: l.id });
     run({ type: 'batch', label: t('borrar librería'), commands: cmds });
@@ -44,7 +46,7 @@ export function LibrariesTab() {
       <aside className="ad-ws-side">
         <div className="ad-ws-side__new">
           <input className="ad-input" placeholder={t('Nueva librería…')} aria-label={t('Nueva librería')} value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') create(); }} />
-          <button className="ad-btn" onClick={create} title={t('Crear librería')}>＋</button>
+          <button className="ad-btn" onClick={create} title={t('Crear librería')}><Icon name="plus" /></button>
         </div>
         <div className="ad-ws-side__list">
           {libs.length === 0 && <div className="ad-empty">{t('Sin librerías. Crea una arriba.')}</div>}
@@ -52,7 +54,7 @@ export function LibrariesTab() {
             <div key={l.id} className={`ad-ws-item ${lib?.id === l.id ? 'is-active' : ''}`} onClick={() => setSel(l.id)}>
               <span className="ad-ws-item__label">{l.name}</span>
               <small>{l.elementTypes.length === 1 ? t('1 tipo') : t('{n} tipos', { n: l.elementTypes.length })}</small>
-              <button className="ad-btn ad-btn--ghost" title={t('Borrar librería')} onClick={e => { e.stopPropagation(); remove(l); }}>×</button>
+              <button className="ad-btn ad-btn--ghost" title={t('Borrar librería')} onClick={e => { e.stopPropagation(); remove(l); }}><Icon name="close" size={14} /></button>
             </div>
           ))}
         </div>
@@ -83,10 +85,10 @@ function LibraryEditor({ lib }: { lib: Library }) {
     setLib(withType(lib, nt)); setTypeId(nt.id); setTypeName('');
   };
   const [removing, setRemoving] = useState<{ type: ElementType; to: string } | null>(null);
-  const removeType = (ty: ElementType) => {
+  const removeType = async (ty: ElementType) => {
     const uses = typeUsage(store, ty.id);
     if (uses === 0) {
-      if (!confirm(t('¿Borrar el tipo "{name}"?', { name: ty.name }))) return;
+      if (!(await confirmDialog({ title: t('¿Borrar el tipo "{name}"?', { name: ty.name }), danger: true }))) return;
       setLib(withoutType(lib, ty.id)); if (typeId === ty.id) setTypeId(null);
       return;
     }
@@ -115,9 +117,9 @@ function LibraryEditor({ lib }: { lib: Library }) {
     run({ type: 'set', collection: 'elements', id: el.id, value: el });
     setCompId(el.id); setCompName('');
   };
-  const removeComp = (e: Element) => {
+  const removeComp = async (e: Element) => {
     const n = templateInstances(store, e.id);
-    if (!confirm(n > 0 ? t('El componente "{name}" tiene {n} instancia(s) en el modelo, que seguirán existiendo sueltas. ¿Borrar el componente?', { name: e.name, n }) : t('¿Borrar el componente "{name}"?', { name: e.name }))) return;
+    if (!(await confirmDialog({ title: t('¿Borrar el componente "{name}"?', { name: e.name }), message: n > 0 ? t('Tiene {n} instancia(s) en el modelo, que seguirán existiendo sueltas.', { n }) : undefined, danger: true }))) return;
     run({ type: 'deleteElement', id: e.id }); if (compId === e.id) setCompId(null);
   };
   const instances = (n: number) => (n === 1 ? t('1 instancia') : t('{n} instancias', { n }));
@@ -135,14 +137,14 @@ function LibraryEditor({ lib }: { lib: Library }) {
           <div className="ad-section">{t('Tipos de elemento')} ({lib.elementTypes.length})</div>
           <div className="ad-ws-side__new">
             <input className="ad-input" placeholder={t('Nuevo tipo…')} aria-label={t('Nuevo tipo')} value={typeName} onChange={e => setTypeName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addType(); }} />
-            <button className="ad-btn" onClick={addType} title={t('Crear tipo')}>＋</button>
+            <button className="ad-btn" onClick={addType} title={t('Crear tipo')}><Icon name="plus" /></button>
           </div>
           {lib.elementTypes.map(ty => (
             <div key={ty.id} className={`ad-ws-item ${type?.id === ty.id ? 'is-active' : ''}`} onClick={() => setTypeId(ty.id)}>
               <span className="ad-pal__swatch" style={{ background: ty.color ?? '#eee' }}>{ty.icon ?? ''}</span>
               <span className="ad-ws-item__label">{ty.name}</span>
               <small>{t('{n} campos', { n: ty.fields.length })} · {t('{n} usos', { n: typeUsage(store, ty.id) })}</small>
-              <button className="ad-btn ad-btn--ghost" title={t('Borrar tipo')} onClick={e => { e.stopPropagation(); removeType(ty); }}>×</button>
+              <button className="ad-btn ad-btn--ghost" title={t('Borrar tipo')} onClick={e => { e.stopPropagation(); removeType(ty); }}><Icon name="close" size={14} /></button>
             </div>
           ))}
           {lib.elementTypes.length === 0 && <div className="ad-hint">{t('Sin tipos. Un tipo define la forma, el color y los campos de sus elementos.')}</div>}
@@ -168,7 +170,7 @@ function LibraryEditor({ lib }: { lib: Library }) {
               {lib.elementTypes.map(ty => <option key={ty.id} value={ty.id}>{ty.name}</option>)}
             </select>
             <input className="ad-input" placeholder={t('Nombre del componente…')} aria-label={t('Nombre del componente')} value={compName} onChange={e => setCompName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addComp(); }} />
-            <button className="ad-btn" onClick={addComp} title={t('Crear componente')}>＋</button>
+            <button className="ad-btn" onClick={addComp} title={t('Crear componente')}><Icon name="plus" /></button>
           </div>}
           {templates.map(e => {
             const ty = registry.elementType(e.typeId) ?? lib.elementTypes.find(x => x.id === e.typeId);
@@ -178,7 +180,7 @@ function LibraryEditor({ lib }: { lib: Library }) {
                 <span className="ad-pal__swatch" style={{ background: ty?.color ?? '#eee' }}>{ty?.icon ?? ''}</span>
                 <span className="ad-ws-item__label">{e.name || t('(sin nombre)')}</span>
                 <small>{ty?.name ?? e.typeId} · {instances(n)}</small>
-                <button className="ad-btn ad-btn--ghost" title={t('Borrar componente')} onClick={ev => { ev.stopPropagation(); removeComp(e); }}>×</button>
+                <button className="ad-btn ad-btn--ghost" title={t('Borrar componente')} onClick={ev => { ev.stopPropagation(); removeComp(e); }}><Icon name="close" size={14} /></button>
               </div>
             );
           })}
@@ -216,7 +218,7 @@ function TypeEditor({ lib, type, onChange }: { lib: Library; type: ElementType; 
       <div className="ad-section">{t('Campos')} ({type.fields.length})</div>
       <div className="ad-ws-side__new">
         <input className="ad-input" placeholder={t('Etiqueta del campo nuevo…')} aria-label={t('Etiqueta del campo nuevo')} value={label} onChange={e => setLabel(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addField(); }} />
-        <button className="ad-btn" onClick={addField}>＋ {t('campo')}</button>
+        <button className="ad-btn" onClick={addField}><Icon name="plus" size={14} />{t('campo')}</button>
       </div>
       {type.fields.map((f, i) => (
         <FieldDefRow key={i} f={f} first={i === 0} last={i === type.fields.length - 1}
@@ -242,9 +244,9 @@ function FieldDefRow({ f, first, last, onChange, onMove, onRemove }: { f: FieldD
         <input className="ad-input ad-ws-mono" value={f.key} placeholder={t('clave')} aria-label={t('Clave interna del campo')} onChange={e => p({ key: e.target.value })} title={t('Clave interna del campo')} />
         <select className="ad-input" aria-label={t('Clase de campo')} value={f.kind} onChange={e => p({ kind: e.target.value as FieldKind })}>{FIELD_KINDS.map(k => <option key={k.id} value={k.id}>{t(k.label)}</option>)}</select>
         <span className="ad-ws-fieldrow__btns">
-          <button className="ad-btn ad-btn--ghost" disabled={first} onClick={() => onMove(-1)} title={t('Subir')}>↑</button>
-          <button className="ad-btn ad-btn--ghost" disabled={last} onClick={() => onMove(1)} title={t('Bajar')}>↓</button>
-          <button className="ad-btn ad-btn--ghost" onClick={onRemove} title={t('Quitar campo')}>×</button>
+          <button className="ad-btn ad-btn--ghost" disabled={first} onClick={() => onMove(-1)} title={t('Subir')}><Icon name="arrowUp" size={14} /></button>
+          <button className="ad-btn ad-btn--ghost" disabled={last} onClick={() => onMove(1)} title={t('Bajar')}><Icon name="arrowDown" size={14} /></button>
+          <button className="ad-btn ad-btn--ghost" onClick={onRemove} title={t('Quitar campo')}><Icon name="close" size={14} /></button>
         </span>
       </div>
       <div className="ad-ws-fieldrow__opts">

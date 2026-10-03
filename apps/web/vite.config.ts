@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // La app avisa de la versión nueva y el usuario decide cuándo recargar (src/pwa.tsx registra el SW con `virtual:pwa-register`).
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'all-draw', short_name: 'all-draw', description: 'Diagramador universal: un modelo, muchas notaciones.',

@@ -8,6 +8,8 @@ import { useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { useCollection, useAnyChange } from '../hooks';
 import { ASSIGN_KINDS, assignmentTargets, targetLabel, newPerson, newAssignment, suggestedRoles, clean, type AssignKind } from './workspace-helpers';
+import { Icon } from '../icons';
+import { confirmDialog } from '../ui/dialog';
 
 export function PeopleTab() {
   const t = useT();
@@ -19,9 +21,9 @@ export function PeopleTab() {
   const person = people.find(p => p.id === sel) ?? sorted[0];
 
   const create = () => { const p = newPerson(name || t('Persona nueva')); run({ type: 'set', collection: 'people', id: p.id, value: p }); setSel(p.id); setName(''); };
-  const remove = (p: Person) => {
+  const remove = async (p: Person) => {
     const n = p.assignments.length;
-    if (!confirm(n > 0 ? t('"{name}" tiene {n} asignación(es). ¿Borrar la persona?', { name: p.name, n }) : t('¿Borrar a "{name}"?', { name: p.name }))) return;
+    if (!(await confirmDialog({ title: t('¿Borrar a "{name}"?', { name: p.name }), message: n > 0 ? t('Tiene {n} asignación(es), que también se borrarán.', { n }) : undefined, danger: true }))) return;
     run({ type: 'delete', collection: 'people', id: p.id }); if (sel === p.id) setSel(null);
   };
 
@@ -30,7 +32,7 @@ export function PeopleTab() {
       <aside className="ad-ws-side">
         <div className="ad-ws-side__new">
           <input className="ad-input" placeholder={t('Nueva persona…')} aria-label={t('Nueva persona')} value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') create(); }} />
-          <button className="ad-btn" onClick={create} title={t('Crear persona')}>＋</button>
+          <button className="ad-btn" onClick={create} title={t('Crear persona')}><Icon name="plus" /></button>
         </div>
         <div className="ad-ws-side__list">
           {sorted.length === 0 && <div className="ad-empty">{t('Sin personas. Añade a quien participa en el modelo.')}</div>}
@@ -39,7 +41,7 @@ export function PeopleTab() {
               <span className="ad-ws-avatar">{initials(p.name)}</span>
               <span className="ad-ws-item__label">{p.name || t('(sin nombre)')}<small>{p.team ?? p.email ?? ''}</small></span>
               <small>{p.assignments.length}</small>
-              <button className="ad-btn ad-btn--ghost" title={t('Borrar persona')} onClick={e => { e.stopPropagation(); remove(p); }}>×</button>
+              <button className="ad-btn ad-btn--ghost" title={t('Borrar persona')} onClick={e => { e.stopPropagation(); remove(p); }}><Icon name="close" size={14} /></button>
             </div>
           ))}
         </div>
@@ -89,7 +91,7 @@ function PersonEditor({ p }: { p: Person }) {
           <span className="ad-ws-item__label" title={a.targetId}>{targetLabel(store, registry, a)}</span>
           <input className="ad-input ad-ws-narrow2" list="ad-ws-roles" value={a.role} placeholder={t('papel')} aria-label={t('Papel')} onChange={e => setAssignments(p.assignments.map((x, j) => j === i ? { ...x, role: e.target.value } : x))} />
           <input className="ad-input" value={a.notes ?? ''} placeholder={t('notas')} aria-label={t('Notas')} onChange={e => setAssignments(p.assignments.map((x, j) => j === i ? clean({ ...x, notes: e.target.value || undefined }) : x))} />
-          <button className="ad-btn ad-btn--ghost" title={t('Quitar asignación')} onClick={() => setAssignments(p.assignments.filter((_, j) => j !== i))}>×</button>
+          <button className="ad-btn ad-btn--ghost" title={t('Quitar asignación')} onClick={() => setAssignments(p.assignments.filter((_, j) => j !== i))}><Icon name="close" size={14} /></button>
         </div>
       ))}
       <div className="ad-ws-assign ad-ws-assign--new">
@@ -101,7 +103,7 @@ function PersonEditor({ p }: { p: Person }) {
           {targets.map(x => <option key={x.id} value={x.id}>{x.label}{x.hint ? ` · ${x.hint}` : ''}</option>)}
         </select>
         <input className="ad-input ad-ws-narrow2" list="ad-ws-roles" value={role} placeholder={t('papel')} aria-label={t('Papel')} onChange={e => setRole(e.target.value)} />
-        <button className="ad-btn ad-btn--primary" disabled={!targetId} onClick={add}>＋ {t('Asignar')}</button>
+        <button className="ad-btn ad-btn--primary" disabled={!targetId} onClick={add}><Icon name="plus" size={14} />{t('Asignar')}</button>
       </div>
       <datalist id="ad-ws-roles">{roles.map(r => <option key={r} value={r} />)}</datalist>
     </>

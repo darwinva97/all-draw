@@ -7,7 +7,7 @@
  *     sacado del doc Yjs). Lo lee `restore.mjs`.
  *   - `manifest.json` con el resumen.
  * Todo en `$BACKUP_DIR/<fecha>/` (por defecto `~/.alldraw-backups`); borra las carpetas de más de
- * `KEEP_DAYS` días (30). La BD se abre en solo lectura: no hace falta parar el servicio.
+ * `KEEP_DAYS` días (30), y también las copias finales de `deleted/` (espacios borrados con su cuenta). La BD se abre en solo lectura: no hace falta parar el servicio.
  *
  *   node scripts/backup.mjs            (DB_PATH / DATA_DIR como el servidor; BACKUP_DIR, KEEP_DAYS)
  */
@@ -80,6 +80,14 @@ if (keepDays > 0) {
     if (!m) continue;
     const when = Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`);
     if (when < limit) { fs.rmSync(path.join(backupRoot, name), { recursive: true, force: true }); removed++; }
+  }
+  // Copias finales de espacios borrados con su cuenta (`deleted/<fecha>-<id>.json.gz`, ver src/archive.ts).
+  const deletedDir = path.join(backupRoot, 'deleted');
+  if (fs.existsSync(deletedDir)) {
+    for (const name of fs.readdirSync(deletedDir)) {
+      const file = path.join(deletedDir, name);
+      if (fs.statSync(file).mtimeMs < limit) { fs.rmSync(file, { force: true }); removed++; }
+    }
   }
 }
 

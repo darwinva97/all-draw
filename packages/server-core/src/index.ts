@@ -13,4 +13,8 @@ export * from './headers';
 export * from './ops';
 export * from './ysync';
 export * from './notations';
-export { createApi, type ApiConfig, type ApiDeps } from './api';
+export * from './log';
+export {
+  createApi, DEFAULT_MAX_DOC_BYTES, DEFAULT_MAX_WORKSPACES_PER_USER, DEFAULT_REGISTER_MIN_MS, MAX_BODY_CLIENT_ERROR,
+  type ApiConfig, type ApiDeps, type BuildInfo, type WorkspaceArchive,
+} from './api';

@@ -64,6 +64,22 @@ export class SqlWorkspaceStore implements WorkspaceStore {
   async countUsers() { return Number((await this.one<{ n: number }>('SELECT COUNT(*) AS n FROM users'))!.n); }
   async listUsers() { return (await this.all('SELECT * FROM users ORDER BY created_at')).map(r => this.user(r)!); }
   async setPasswordHash(userId: string, passwordHash: string) { await this.run('UPDATE users SET password_hash = ? WHERE id = ?', passwordHash, userId); }
+  async updateUser(id: string, patch: { name?: string; email?: string; isAdmin?: boolean }) {
+    const u = await this.getUser(id); if (!u) return null;
+    const next = { ...u, ...(patch.name !== undefined ? { name: patch.name } : {}), ...(patch.email !== undefined ? { email: patch.email.trim().toLowerCase() } : {}), ...(patch.isAdmin !== undefined ? { isAdmin: patch.isAdmin } : {}) };
+    try { await this.run('UPDATE users SET name = ?, email = ?, is_admin = ? WHERE id = ?', next.name, next.email, next.isAdmin ? 1 : 0, id); }
+    catch (e) { if (String(e).includes('UNIQUE')) throw new Error('email ya registrado'); throw e; }
+    return next;
+  }
+  async deleteUser(id: string) {
+    await this.driver.batch([
+      { sql: 'DELETE FROM sessions WHERE user_id = ?', params: [id] },
+      { sql: 'DELETE FROM api_keys WHERE user_id = ?', params: [id] },
+      { sql: 'DELETE FROM workspace_members WHERE user_id = ?', params: [id] },
+      { sql: 'UPDATE snapshots SET author_id = NULL WHERE author_id = ?', params: [id] },
+      { sql: 'DELETE FROM users WHERE id = ?', params: [id] },
+    ]);
+  }
 
   async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
     const s: Session = { tokenHash, userId, createdAt: now(), expiresAt };
@@ -103,6 +119,7 @@ export class SqlWorkspaceStore implements WorkspaceStore {
     return rows.map(r => ({ ...this.workspace(r)!, role: r.role as Role }));
   }
   async listAllWorkspaces() { return (await this.all('SELECT * FROM workspaces ORDER BY updated_at DESC')).map(r => this.workspace(r)!); }
+  async countOwnedWorkspaces(userId: string) { return Number((await this.one<{ n: number }>('SELECT COUNT(*) AS n FROM workspaces WHERE owner_id = ?', userId))!.n); }
   async getWorkspace(id: string) { return this.workspace(await this.one('SELECT * FROM workspaces WHERE id = ?', id)); }
   async createWorkspace(w: { ownerId: string; name: string; id?: string }): Promise<WorkspaceRow> {
     const t = now();

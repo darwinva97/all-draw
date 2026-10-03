@@ -30,10 +30,10 @@ export function sqlStorageDriver(storage: DurableObjectStorage): SqlDriver {
 
 /** Métodos que el `RegistryDO` acepta por `invoke` (todo `WorkspaceStore` salvo `close`, más la importación). */
 export const REGISTRY_METHODS = [
-  'createUser', 'getUser', 'getUserByEmail', 'countUsers', 'listUsers', 'setPasswordHash',
+  'createUser', 'getUser', 'getUserByEmail', 'countUsers', 'listUsers', 'setPasswordHash', 'updateUser', 'deleteUser',
   'createSession', 'getSession', 'touchSession', 'deleteSession', 'deleteUserSessions', 'purgeExpiredSessions',
   'createApiKey', 'listApiKeys', 'resolveApiKey', 'deleteApiKey', 'touchApiKey',
-  'listWorkspaces', 'listAllWorkspaces', 'getWorkspace', 'createWorkspace', 'updateMeta', 'deleteWorkspace',
+  'listWorkspaces', 'listAllWorkspaces', 'countOwnedWorkspaces', 'getWorkspace', 'createWorkspace', 'updateMeta', 'deleteWorkspace',
   'loadDoc', 'saveDoc', 'appendUpdate',
   'getRole', 'setRole', 'listMembers',
   'createShareLink', 'listShareLinks', 'resolveShareLink', 'deleteShareLink',

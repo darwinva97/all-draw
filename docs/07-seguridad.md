@@ -57,6 +57,8 @@ worker (`withSecurityHeaders`):
 | `Referrer-Policy` | `strict-origin-when-cross-origin` |
 | `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=()` |
 | `X-Frame-Options` | `SAMEORIGIN` |
+| `Cross-Origin-Opener-Policy` | `same-origin` (desde el 3-10-2026) |
+| `Cross-Origin-Resource-Policy` | `same-origin`; **excepción**: `GET /api/workspaces/:id/views/:viewId/svg` va con `cross-origin` para poder incrustar el SVG (`<img src=…?token=lnk_…>`) en otras webs |
 | `Strict-Transport-Security` | `max-age=15552000; includeSubDomains` **sólo** si la petición llegó por https (`x-forwarded-proto: https` o `COOKIE_SECURE=true`); en el worker siempre. |
 
 Por qué así: `vite-plugin-pwa` registra el service worker desde `/registerSW.js` (fichero, no inline), así que
@@ -188,3 +190,145 @@ Todo está en `/api/openapi.json`.
 3. Copias de seguridad: la tabla `snapshots` es nueva; si el script de copia enumera tablas, incluirla (o basta con el
    Workspace JSON actual, las instantáneas son recuperables desde la interfaz mientras la BD exista).
 4. Si un usuario olvida la contraseña: un admin entra en **Cuenta** y pulsa «Restablecer» junto a su correo.
+
+## Revisión de producción (3 de octubre de 2026)
+
+Cuentas y datos del usuario (RGPD), observabilidad, robustez del servidor, dependencias y anti-abuso. Tests:
+`packages/server-core/test/production.test.ts` (API en memoria), `apps/server/test/{production,ops}.test.ts` (servidor
+Node real, SQLite, scripts), `apps/worker/test/production.test.ts` (workerd) y el contrato de `WorkspaceStore`
+(`updateUser`, `deleteUser`, `countOwnedWorkspaces` en memoria, SQLite, Postgres, RegistryDO y D1).
+
+### Datos del usuario (RGPD)
+
+| Ruta | Quién | Qué |
+|---|---|---|
+| `GET /api/auth/me` | sesión o API key | ahora también `quotas: { workspaces: { used, limit }, docBytes: { limit } }` (`limit: null` = sin límite) |
+| `PATCH /api/auth/me {name?, email?, password?}` | nombre: sesión o API key; **email: sólo sesión y con la contraseña actual** | 409 si el email está cogido; 10 intentos/15 min |
+| `GET /api/auth/export` | sesión o API key | JSON descargable `all-draw-account/1`: cuenta, API keys (sin hash), cuotas y, por espacio propio, el Workspace JSON + miembros + enlaces (sólo el **prefijo** del token: el enlace no viaja en un fichero que puede acabar en cualquier sitio). Los espacios compartidos contigo se listan (id, nombre, rol) **sin** contenido: son datos de otros |
+| `DELETE /api/auth/account {password}` | sólo sesión, con la contraseña | borra la cuenta (ver la regla); 10 intentos/15 min |
+| `PATCH /api/admin/users/:id {isAdmin}` | admin desde sesión | nombrar o quitar administradores; nunca deja el servidor sin ninguno (409) |
+
+**Regla al borrar una cuenta** (`DELETE /api/auth/account`, en `server-core/src/api.ts`):
+
+1. Si eres el **único administrador** y hay más cuentas → 409 `last_admin`: nombra antes a otro (Cuenta → Usuarios del
+   servidor → «Hacer administrador»). Si eres la única cuenta, se borra sin más.
+2. Cada espacio del que eres **dueño**:
+   - si tiene **editores**, pasa al **editor más antiguo** (el que lleva más tiempo como miembro) y éste deja de figurar
+     como miembro (ahora es el dueño). Los demás miembros y los enlaces se conservan: son del espacio, y el nuevo dueño
+     puede revocarlos;
+   - si **no** tiene editores (sólo lectores o nadie), **se borra**. En el VPS antes se escribe una copia final en
+     `$BACKUP_DIR/deleted/<fecha>-<id>.json.gz` (formato `all-draw-backup/1`, restaurable con `scripts/restore.mjs`;
+     ficheros `0600`), que `backup.mjs` borra a los `KEEP_DAYS` días (30) como el resto de copias. **Si una copia final
+     falla, no se borra nada** (500). En Cloudflare no hay copias del VPS: el espacio se borra con su Durable Object.
+3. Se borran tus sesiones, tus API keys y tus membresías en espacios ajenos; las instantáneas que firmaste quedan con
+   autor `null` (en el worker las instantáneas viven en el DO y conservan el id, que ya no resuelve a ningún nombre).
+4. Las conexiones WebSocket ya abiertas no se cortan al instante (no se rastrea el usuario por conexión); cualquier
+   petición o reconexión siguiente falla con 401/4401.
+
+Interfaz: «Cuenta» (`Keys.tsx`) tiene «Perfil» (nombre, email y cuotas) y «Tus datos» (Exportar mis datos; Eliminar
+cuenta… → formulario con la contraseña y botón «Eliminar mi cuenta definitivamente»).
+
+### Registro: anti-abuso (el registro sigue abierto en el VPS y cerrado en el worker)
+
+- **Trampa** (`website`): campo que una persona deja vacío; si llega con algo → 400 y aviso en el log. *Pendiente*: el
+  campo oculto en `Auth.tsx` (otro agente); `api.register(…, website)` ya lo envía.
+- **Tiempo mínimo**: `GET /api/auth/config` da `formToken` = `<ms>.<HMAC('register-form:<ms>')>` (con `SESSION_SECRET`;
+  sin él es SHA-256 y falsificable) y `formMinMs`. El registro exige ese token con al menos `REGISTER_MIN_MS` (2000) de
+  antigüedad y como mucho un día → 400 `form_token`. La SPA lo pide al abrir el formulario y, si alguien envía antes,
+  espera lo que falte (nadie lo nota); un script tiene que pedir el token y esperar. `REGISTER_MIN_MS=0` lo desactiva.
+- **Cuotas**: `MAX_WORKSPACES_PER_USER` (100) espacios propios por cuenta → 403 `quota_workspaces` con mensaje claro (los
+  admins no tienen límite); `MAX_DOC_BYTES` (20 MB) por espacio → 413 `doc_too_large` (ver *Robustez*).
+- Siguen el rate limit de 10 registros/hora por IP y `INVITE_CODE`.
+
+### Observabilidad (Node)
+
+- **Log de accesos** JSON en stdout (journal de systemd), una línea por petición:
+  `{"t","level":"info","msg":"http","method","path","status","ms","user","ip"}`. `path` sin query y con los tokens de
+  la ruta como `:token`; `user` = id, `link` o `anon`; `ip` truncada (IPv4 /24 → `203.0.113.0`, IPv6 /48). `LOG_LEVEL`
+  (`debug|info|warn|error|silent`, por defecto `info`; `/healthz` y `/metrics` sólo en `debug`). Errores 500 con la pila.
+- `GET /api/status` (público, también en el worker): versión, commit (`ALLDRAW_COMMIT` o `git rev-parse --short HEAD` al
+  arrancar), runtime, `uptimeS` y si la BD responde (503 si no). No expone recuentos ni datos.
+- `GET /metrics` (Prometheus, sólo Node): **sólo** desde 127.0.0.1 **sin** `X-Forwarded-For`/`X-Real-IP` (Caddy también
+  conecta desde 127.0.0.1, pero añade esas cabeceras) o con `Authorization: Bearer $METRICS_TOKEN`; si no, 403. Peticiones
+  por ruta normalizada/estado, p50/p95 por ruta, docs vivos, conexiones WS, rechazos de WS por motivo, errores de
+  cliente, tamaño de la BD, memoria, uptime y `alldraw_build_info`.
+- **Errores del cliente**: `POST /api/client-errors` (público, 8 KB máx., 30 por IP cada 10 min; esquema cerrado —
+  mensaje, pila, pila de componentes, origen, URL, user-agent, repeticiones—: cualquier otro campo se descarta, así que
+  no puede colarse contenido del diagrama). Se registra como `client-error` con los tokens borrados de mensaje, pila y
+  URL. En la web, `apps/web/src/errors.ts`: `ErrorBoundary` para toda la app («Algo salió mal» con Recargar, Informar
+  del error, Ir al inicio y detalles plegados) y `window.onerror`/`unhandledrejection` con deduplicación por firma,
+  muestreo del 50 % y 20 informes por pestaña como mucho; la URL se manda sin query (adiós `?token=`).
+
+### Robustez (Node)
+
+- **Apagado ordenado** (SIGTERM/SIGINT): deja de aceptar conexiones, rechaza upgrades nuevos con 1012, cierra los
+  WebSockets con **1012** (los clientes y-websocket reconectan solos al proceso nuevo), guarda los docs con cambios,
+  corta las keep-alive ociosas (todas a los 3 s), cierra la BD (`PRAGMA optimize`). Si algo se cuelga, sale a los 10 s.
+  `uncaughtException` → log + apagado ordenado con código 1 (systemd lo levanta: `Restart=always`).
+- **Límites de WebSocket**: `MAX_WS_PER_IP` (30) y `MAX_WS_PER_WORKSPACE` (100) conexiones simultáneas → cierre `4429`.
+  En el worker sólo por espacio (en el DO; por IP no tiene sentido entre isolates). `maxPayload` de 16 MB por mensaje.
+- **Timeouts HTTP**: `headersTimeout` 15 s, `requestTimeout` 60 s (cuerpo incluido), `keepAliveTimeout` 10 s,
+  `maxHeadersCount` 100 (contra slowloris). Los WebSockets aceptados no los heredan.
+- **Tamaño por espacio** (`MAX_DOC_BYTES`, 20 MB; `LiveDoc.maxBytes`): por la API, `PUT …/snapshot`, `POST /api/workspaces
+  {initial}`, comandos y restaurar → 413 `doc_too_large` si el doc ya está en el límite o el Workspace JSON lo supera; por
+  WebSocket, un update que haría crecer el doc por encima se **descarta** y se avisa con `permissionDenied`
+  `{"error":"doc_too_large","limit":N}` (lo que el doc ya tiene no cuenta —se mide con `Y.diffUpdate`— y los updates que
+  sólo borran se aceptan siempre, para poder volver por debajo).
+- **SQLite**: `journal_mode=WAL`, `synchronous=NORMAL` (seguro con WAL ante caídas del proceso), `foreign_keys=ON`,
+  `busy_timeout=5000`, `journal_size_limit=64 MB`, `temp_store=MEMORY` (`SQLITE_PRAGMAS` en `store/sqlite.ts`).
+- **Mantenimiento semanal** (`scripts/maintenance.mjs`, cron domingos 03:37): `quick_check`, compactación de
+  `doc_updates` en `docs.state` (transacción `IMMEDIATE` por espacio; sólo borra los updates leídos), purga de sesiones
+  caducadas, `ANALYZE`, `PRAGMA optimize`, `VACUUM` y `wal_checkpoint(TRUNCATE)`. Con el servidor en marcha.
+- **Simulacro de restauración** (`scripts/restore-drill.mjs`, cron domingos 03:57): restaura la última copia en un
+  `DATA_DIR` temporal, crea en esa copia un admin técnico y una API key, arranca el servidor en un puerto alto libre,
+  comprueba `/api/status`, que estén todos los espacios del manifiesto y `GET /api/workspaces/:id/validate` +
+  `…/snapshot` de cada uno (mismo nº de elementos y vistas), lo para con SIGTERM (exige salida 0) y borra el temporal.
+  Resultado en `~/.alldraw-backups/restore-drill.last.json` y `restore-drill.log`. Probado contra la copia real del
+  3-10-2026: 3/3 espacios, 1,4 s.
+
+### `security.txt`
+
+`/.well-known/security.txt` (RFC 9116) en Node y en el worker: `Contact: https://github.com/darwinva97/all-draw/security`,
+`Expires` a un año vista (se genera en cada petición), `Preferred-Languages: es, en` y `Canonical` (con `PUBLIC_URL`).
+
+### Comprobado en Chromium
+
+Build en `/tmp/alldraw-dist` servido por un servidor temporal (puerto 4890, `DATA_DIR` temporal) con COOP y CORP:
+portada, registro por la interfaz (el cliente esperó los 2 s del token), demo en el servidor con WebSocket «en línea»,
+Cuenta (Perfil con cuotas, Tus datos), exportación descargada (37 elementos), errores globales llegando a
+`/api/client-errors` (y a `alldraw_client_errors_total`), borrado de la cuenta (401 después) y apagado con SIGTERM.
+Sin errores de consola salvo los 401 esperados. Sigue el aviso informativo de CSP por la sonda `Function("")` de zod
+(`script-src eval`, capturado; también en producción): `z.config({ jitless: true })` en `main.tsx` no alcanza a la otra
+copia de zod del bundle.
+
+### Dependencias
+
+`pnpm audit --prod`: **sin vulnerabilidades**. Actualizado dentro de rango en server, server-core y worker: `hono`
+4.13.12, `@hono/node-server` 2.1.3, `ws` 8.22.0, `pg` 8.23.1, `lib0` 0.2.119, `@modelcontextprotocol/sdk` 1.31.0,
+`wrangler` 4.147.0, `@cloudflare/workers-types`. Quedan avisos **sólo de desarrollo** (`undici` < 7.29.1 y `sharp`
+< 0.35.4, 3 altos) que llegan por `@cloudflare/vitest-pool-workers` 0.22.0, que fija versiones exactas de `miniflare`
+y `wrangler`: no tienen arreglo hasta una versión nueva de ese paquete (o un `overrides` en `pnpm-workspace.yaml`). CI
+ejecuta `pnpm audit --prod --audit-level high` como job informativo (`continue-on-error`).
+
+### Variables de entorno nuevas
+
+| Variable | Defecto | Dónde | Uso |
+|---|---|---|---|
+| `LOG_LEVEL` | `info` | Node, worker | nivel del log JSON |
+| `METRICS_TOKEN` | — | Node | `/metrics` también con `Authorization: Bearer` |
+| `ALLDRAW_COMMIT` | `git rev-parse` | Node, worker | commit en `/api/status` (en el worker: `wrangler deploy --var ALLDRAW_COMMIT:…`, ya en `pnpm deploy`) |
+| `ALLDRAW_VERSION` | `0.1.0` | worker | versión en `/api/status` (Node la lee del `package.json`) |
+| `MAX_WORKSPACES_PER_USER` | `100` | Node, worker | espacios propios por cuenta (`0` = sin límite) |
+| `MAX_DOC_BYTES` | `20971520` | Node, worker | tamaño máximo por espacio (`0` = sin límite) |
+| `REGISTER_MIN_MS` | `2000` | Node, worker | tiempo mínimo del formulario de registro (`0` lo desactiva) |
+| `MAX_WS_PER_IP` / `MAX_WS_PER_WORKSPACE` | `30` / `100` | Node (el segundo también worker) | conexiones WebSocket simultáneas |
+| `BACKUP_DIR` | `~/.alldraw-backups` | Node | ya lo usaba `backup.mjs`; ahora también el servidor (copias finales en `deleted/`) |
+
+### Qué debe hacer quien despliega
+
+1. **VPS**: reiniciar `alldraw` (no hay migraciones de esquema; los PRAGMA se aplican al abrir) y reconstruir la web
+   (`pnpm --filter web build`) para tener Cuenta → Perfil/Tus datos, la pantalla de error y el `formToken` del registro.
+   **Ojo: sin reconstruir la web, el registro desde la SPA antigua falla** (no manda `formToken`); o se reconstruye a la
+   vez o se arranca temporalmente con `REGISTER_MIN_MS=0`. El cron semanal ya está instalado (ver `apps/server/README.md`).
+2. **Cloudflare**: `pnpm --filter @all-draw/worker deploy` (inyecta `ALLDRAW_COMMIT`); `run_worker_first` incluye ahora
+   `/.well-known/security.txt`. El registro sigue cerrado (`ALLOW_REGISTRATION=false`).

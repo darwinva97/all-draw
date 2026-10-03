@@ -164,6 +164,25 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
   async countUsers() { return Number((await this.one<{ n: string }>('SELECT COUNT(*) AS n FROM users'))!.n); }
   async listUsers() { return (await this.all('SELECT * FROM users ORDER BY created_at')).map(r => this.user(r)!); }
   async setPasswordHash(userId: string, passwordHash: string) { await this.run('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]); }
+  async updateUser(id: string, patch: { name?: string; email?: string; isAdmin?: boolean }) {
+    const u = await this.getUser(id); if (!u) return null;
+    const next = { ...u, ...(patch.name !== undefined ? { name: patch.name } : {}), ...(patch.email !== undefined ? { email: patch.email.trim().toLowerCase() } : {}), ...(patch.isAdmin !== undefined ? { isAdmin: patch.isAdmin } : {}) };
+    try { await this.run('UPDATE users SET name = $1, email = $2, is_admin = $3 WHERE id = $4', [next.name, next.email, next.isAdmin, id]); }
+    catch (e) { if ((e as { code?: string }).code === '23505') throw new Error('email ya registrado'); throw e; }
+    return next;
+  }
+  async deleteUser(id: string) {
+    const c = await this.pool.connect();
+    try {
+      await c.query('BEGIN');
+      await c.query('DELETE FROM sessions WHERE user_id = $1', [id]);
+      await c.query('DELETE FROM api_keys WHERE user_id = $1', [id]);
+      await c.query('DELETE FROM workspace_members WHERE user_id = $1', [id]);
+      await c.query('UPDATE snapshots SET author_id = NULL WHERE author_id = $1', [id]);
+      await c.query('DELETE FROM users WHERE id = $1', [id]);
+      await c.query('COMMIT');
+    } catch (e) { await c.query('ROLLBACK').catch(() => {}); throw e; } finally { c.release(); }
+  }
 
   async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
     const s: Session = { tokenHash, userId, createdAt: now(), expiresAt };
@@ -203,6 +222,7 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
     return rows.map(r => ({ ...this.workspace(r)!, role: r.role as Role }));
   }
   async listAllWorkspaces() { return (await this.all('SELECT * FROM workspaces ORDER BY updated_at DESC')).map(r => this.workspace(r)!); }
+  async countOwnedWorkspaces(userId: string) { return Number((await this.one<{ n: string }>('SELECT COUNT(*) AS n FROM workspaces WHERE owner_id = $1', [userId]))!.n); }
   async getWorkspace(id: string) { return this.workspace(await this.one('SELECT * FROM workspaces WHERE id = $1', [id])); }
   async createWorkspace(w: { ownerId: string; name: string; id?: string }): Promise<WorkspaceRow> {
     const t = now();
@@ -290,6 +310,9 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
     if (total <= keep) return 0;
     return this.run('DELETE FROM snapshots WHERE id IN (SELECT id FROM snapshots WHERE workspace_id = $1 AND label IS NULL ORDER BY created_at ASC, id ASC LIMIT $2)', [workspaceId, total - keep]);
   }
+
+  /** Tamaño de la base de datos (`pg_database_size`), para `/metrics`. */
+  async dbSizeBytes(): Promise<number> { return Number((await this.one<{ n: string }>('SELECT pg_database_size(current_database()) AS n'))!.n); }
 
   async close() { await this.pool.end(); }
 }

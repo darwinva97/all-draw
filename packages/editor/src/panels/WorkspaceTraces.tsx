@@ -11,6 +11,7 @@ import {
   notationsInModel, matrixRows, coverage, gapsBetween, bestSuggestionCommand, bestSuggestionsBatch,
   elementTraces, topSuggestions, linkCommand, firstNodeOf, scoreLabel,
 } from './traces-helpers';
+import { Icon } from '../icons';
 
 const MIN_BATCH_SCORE = 0.8;
 
@@ -52,7 +53,7 @@ export function TracesTab({ onNavigate }: { onNavigate?: () => void }) {
         <label className="ad-tr-sel">{t('Filas')}
           <select className="ad-input" value={na} onChange={e => setA(e.target.value)}>{notations.map(n => <option key={n} value={n}>{packName(n)}</option>)}</select>
         </label>
-        <button className="ad-btn ad-btn--ghost" title={t('Intercambiar')} aria-label={t('Intercambiar filas y columnas')} onClick={() => { setA(nb); setB(na); }}>⇄</button>
+        <button className="ad-btn ad-btn--ghost" title={t('Intercambiar')} aria-label={t('Intercambiar filas y columnas')} onClick={() => { setA(nb); setB(na); }}><Icon name="swap" /></button>
         <label className="ad-tr-sel">{t('Columnas')}
           <select className="ad-input" value={nb} onChange={e => setB(e.target.value)}>{notations.filter(n => n !== na).map(n => <option key={n} value={n}>{packName(n)}</option>)}</select>
         </label>
@@ -148,8 +149,8 @@ export function ElementTraces({ elementId }: { elementId: string }) {
           <span className="ad-tr-row__main" title={tr.relation.doc || typeName}>
             <small className="ad-tr-muted">{tr.direction === 'out' ? typeName + ' →' : '← ' + typeName}</small> {tr.partner.name || t('(sin nombre)')} <small>{notationName(tr.partner.typeId)}</small>
           </span>
-          {hit && <button className="ad-btn ad-btn--ghost" title={t('Ir a una vista donde aparece')} aria-label={t('Ir a {name}', { name: tr.partner.name })} onClick={() => jump(tr.partner.id)}>↗</button>}
-          {!readOnly && <button className="ad-btn ad-btn--ghost" title={t('Quitar la traza')} aria-label={t('Quitar traza con {name}', { name: tr.partner.name })} onClick={() => run({ type: 'delete', collection: 'relations', id: tr.relation.id })}>×</button>}
+          {hit && <button className="ad-btn ad-btn--ghost" title={t('Ir a una vista donde aparece')} aria-label={t('Ir a {name}', { name: tr.partner.name })} onClick={() => jump(tr.partner.id)}><Icon name="external" size={14} /></button>}
+          {!readOnly && <button className="ad-btn ad-btn--ghost" title={t('Quitar la traza')} aria-label={t('Quitar traza con {name}', { name: tr.partner.name })} onClick={() => run({ type: 'delete', collection: 'relations', id: tr.relation.id })}><Icon name="close" size={14} /></button>}
         </div>
       );
     })}

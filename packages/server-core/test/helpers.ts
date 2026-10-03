@@ -4,11 +4,28 @@ import { makeHasher } from '../src/auth';
 import { DocManager } from '../src/docs';
 import { LocalDocHost } from '../src/host';
 import { MemoryWorkspaceStore } from '../src/store/memory';
+import { jsonLogger, type LogLevel } from '../src/log';
+import type { ApiConfig, ApiDeps } from '../src/api';
 
-export function makeApi(opts: { allowRegistration?: boolean; secret?: string | null; publicUrl?: string | null; inviteCode?: string | null } = {}) {
+export interface MakeApiOpts extends Partial<Pick<ApiConfig, 'maxWorkspacesPerUser' | 'maxDocBytes' | 'registerMinMs'>> {
+  allowRegistration?: boolean; secret?: string | null; publicUrl?: string | null; inviteCode?: string | null;
+  /** Líneas de log capturadas (por defecto no se imprime nada). */
+  logs?: Record<string, unknown>[]; logLevel?: LogLevel;
+  archiveWorkspace?: ApiDeps['archiveWorkspace']; build?: ApiDeps['build'];
+}
+
+export function makeApi(opts: MakeApiOpts = {}) {
   const store = new MemoryWorkspaceStore();
-  const docs = new DocManager(store);
-  const app = createApi({ store, docs: new LocalDocHost(docs), hash: makeHasher(opts.secret ?? null), config: { allowRegistration: opts.allowRegistration ?? true, cookieSecure: false, publicUrl: opts.publicUrl ?? null, inviteCode: opts.inviteCode ?? null } });
+  const docs = new DocManager(store, { maxDocBytes: opts.maxDocBytes ?? 0 });
+  const logger = jsonLogger({ level: opts.logLevel ?? 'debug', write: line => { opts.logs?.push(JSON.parse(line) as Record<string, unknown>); } });
+  const app = createApi({
+    store, docs: new LocalDocHost(docs), hash: makeHasher(opts.secret ?? null), logger,
+    ...(opts.archiveWorkspace ? { archiveWorkspace: opts.archiveWorkspace } : {}), ...(opts.build ? { build: opts.build } : {}),
+    config: {
+      allowRegistration: opts.allowRegistration ?? true, cookieSecure: false, publicUrl: opts.publicUrl ?? null, inviteCode: opts.inviteCode ?? null,
+      registerMinMs: opts.registerMinMs ?? 0, maxWorkspacesPerUser: opts.maxWorkspacesPerUser ?? 100, maxDocBytes: opts.maxDocBytes ?? 20 * 1024 * 1024,
+    },
+  });
   const j = async (res: Response) => ({ status: res.status, body: res.status === 204 ? null : await res.json().catch(() => null) as any, headers: res.headers });
   const req = (p: string, init: RequestInit) => Promise.resolve(app.request(p, init));
   const client = (token?: string) => {

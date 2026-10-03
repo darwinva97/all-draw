@@ -14,7 +14,8 @@ import { FLOWCHART_PACK } from '@all-draw/notation-flowchart';
 import { DFD_PACK } from '@all-draw/notation-dfd';
 
 export const PACKS: NotationPack[] = [FREEFORM_PACK, GRID_PACK, ARCHIMATE_PACK, BPMN_PACK, STATECHART_PACK, C4_PACK, SEQUENCE_PACK, ER_PACK, UML_CLASS_PACK, MINDMAP_PACK, FLOWCHART_PACK, DFD_PACK];
-const COLORS: Record<string, string> = { freeform: '#64748b', grid: '#0ea5e9', archimate: '#ca8a04', bpmn: '#16a34a', statechart: '#7c3aed', c4: '#1168bd', sequence: '#db2777', er: '#0d9488', uml: '#9333ea', mindmap: '#f59e0b', flow: '#475569', dfd: '#0891b2' };
+/** Color de cada notación en la interfaz (chips, puntos, paleta). */
+export const PACK_COLORS: Record<string, string> = { freeform: '#64748b', grid: '#0ea5e9', archimate: '#ca8a04', bpmn: '#16a34a', statechart: '#7c3aed', c4: '#1168bd', sequence: '#db2777', er: '#0d9488', uml: '#9333ea', mindmap: '#f59e0b', flow: '#475569', dfd: '#0891b2' };
 
 /** Traduce los nombres visibles de un pack (nombre, categorías, tipos, relaciones, viewpoints) al idioma dado. */
 export function localizePack(p: NotationPack, lang: Lang): NotationPack {
@@ -32,7 +33,7 @@ export function localizePack(p: NotationPack, lang: Lang): NotationPack {
 
 export function createRegistry(lang: Lang = getLang()): NotationRegistry {
   const reg = new NotationRegistry().register(localizePack(CORE_PACK, lang));
-  for (const p of PACKS) reg.register(localizePack({ ...p, color: COLORS[p.id] ?? p.color }, lang));
+  for (const p of PACKS) reg.register(localizePack({ ...p, color: PACK_COLORS[p.id] ?? p.color }, lang));
   return reg;
 }
 

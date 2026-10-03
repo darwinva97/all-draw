@@ -123,5 +123,43 @@ export function storeContractTests(name: string, factory: () => WorkspaceStore |
       expect(await s.listSnapshots(w.id)).toEqual([]);
       await s.close();
     });
+
+    it('cuentas: updateUser, deleteUser y countOwnedWorkspaces', async () => {
+      const s = await factory();
+      const a = await s.createUser({ email: 'a@x.io', name: 'A', passwordHash: 'h' });
+      const b = await s.createUser({ email: 'b@x.io', name: 'B', passwordHash: 'h' });
+      expect(await s.updateUser('usr_nope', { name: 'x' })).toBeNull();
+      expect(await s.updateUser(a.id, { name: 'Ana', email: ' NUEVA@X.io ' })).toMatchObject({ id: a.id, name: 'Ana', email: 'nueva@x.io', isAdmin: false });
+      expect(await s.getUserByEmail('a@x.io')).toBeNull();
+      expect((await s.getUserByEmail('nueva@x.io'))?.name).toBe('Ana');
+      await expect(s.updateUser(a.id, { email: 'b@x.io' })).rejects.toThrow(/email ya registrado/);
+      expect((await s.updateUser(a.id, { isAdmin: true }))?.isAdmin).toBe(true);
+      expect((await s.getUser(a.id))?.isAdmin).toBe(true);
+
+      const wa = await s.createWorkspace({ ownerId: a.id, name: 'de A' });
+      await s.createWorkspace({ ownerId: a.id, name: 'otro de A' });
+      const wb = await s.createWorkspace({ ownerId: b.id, name: 'de B' });
+      expect(await s.countOwnedWorkspaces(a.id)).toBe(2);
+      expect(await s.countOwnedWorkspaces(b.id)).toBe(1);
+      expect(await s.countOwnedWorkspaces('usr_nope')).toBe(0);
+
+      // b es editor en un espacio de a, tiene sesión, clave e instantánea firmada
+      await s.setRole(wa.id, b.id, 'editor');
+      await s.createSession(b.id, 'sb', new Date(Date.now() + 60_000).toISOString());
+      await s.createApiKey({ userId: b.id, name: 'k', prefix: 'adk_b', keyHash: 'kb' });
+      const snap = await s.createSnapshot({ workspaceId: wa.id, authorId: b.id, label: 'de b', data: new Uint8Array([1]) });
+      await s.setRole(wb.id, b.id, null);
+      await s.deleteWorkspace(wb.id); // el llamador borra o transfiere los espacios propios antes
+      await s.deleteUser(b.id);
+      expect(await s.getUser(b.id)).toBeNull();
+      expect(await s.getSession('sb')).toBeNull();
+      expect(await s.resolveApiKey('kb')).toBeNull();
+      expect(await s.getRole(wa.id, b.id)).toBeNull();
+      expect(await s.listMembers(wa.id)).toEqual([]);
+      expect((await s.listSnapshots(wa.id)).find(x => x.id === snap.id)?.authorId).toBeNull();
+      expect(await s.countUsers()).toBe(1);
+      expect((await s.getWorkspace(wa.id))?.ownerId).toBe(a.id);
+      await s.close();
+    });
   });
 }

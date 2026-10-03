@@ -4,5 +4,9 @@ import { z } from 'zod';
 z.config({ jitless: true }); // evita la sonda `Function('')` de zod, incompatible con la CSP sin unsafe-eval
 import './index.css';
 import { App } from './App';
+import { ErrorBoundary, installGlobalErrorHandlers } from './errors';
 
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
+// Errores no capturados → `POST /api/client-errors` (deduplicados y muestreados; nunca el contenido del diagrama).
+installGlobalErrorHandlers();
+
+createRoot(document.getElementById('root')!).render(<StrictMode><ErrorBoundary><App /></ErrorBoundary></StrictMode>);

@@ -11,6 +11,7 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import { loadInto, type Workspace } from '@all-draw/core';
 import { YjsStore } from '@all-draw/sync';
 import type { SnapshotMeta, SnapshotStore, WorkspaceStore } from './store/types';
+import { docTooLarge } from './ops';
 
 export const SAVE_DEBOUNCE_MS = 500;
 const IDLE_UNLOAD_MS = 60_000;
@@ -45,14 +46,21 @@ export class LiveDoc {
   private saving: Promise<void> = Promise.resolve();
   private lastSnapshotAt = Date.now();
   private snapshotting: Promise<unknown> = Promise.resolve();
+  /** Tamaño máximo del doc (update Yjs completo) en bytes; 0 = sin límite (`MAX_DOC_BYTES`). */
+  maxBytes = 0;
+  /** Bytes del último estado completo leído o guardado. */
+  private savedBytes = 0;
+  /** Bytes de los updates llegados desde entonces (cota superior del crecimiento). */
+  private pendingBytes = 0;
 
   constructor(readonly id: string, private persist: DocPersistence, private onIdle: () => void = () => {}, private debounceMs = SAVE_DEBOUNCE_MS, private autoSnapshotMs = AUTO_SNAPSHOT_MS) {
     this.doc = new Y.Doc({ gc: true });
     this.store = new YjsStore(this.doc);
     this.awareness = new awarenessProtocol.Awareness(this.doc);
     this.awareness.setLocalState(null);
-    this.doc.on('update', (_u: Uint8Array, origin: unknown) => {
+    this.doc.on('update', (u: Uint8Array, origin: unknown) => {
       this.dirty = true;
+      this.pendingBytes += u.byteLength;
       if (this.saveTimer) clearTimeout(this.saveTimer);
       this.saveTimer = setTimeout(() => { void this.flush(); }, this.debounceMs);
       if (origin !== 'load' && Date.now() - this.lastSnapshotAt >= this.autoSnapshotMs) void this.createSnapshot(null, null).catch(e => console.error('instantánea automática', this.id, e));
@@ -64,6 +72,8 @@ export class LiveDoc {
     if (update) Y.applyUpdate(this.doc, update, 'load');
     if (this.saveTimer) { clearTimeout(this.saveTimer); this.saveTimer = null; }
     this.dirty = false;
+    this.savedBytes = update?.byteLength ?? 0;
+    this.pendingBytes = 0;
     this.lastSnapshotAt = Date.now();
   }
 
@@ -104,12 +114,37 @@ export class LiveDoc {
 
   get isDirty() { return this.dirty; }
 
+  // ---------------------------------------------------------------- Cuota de tamaño
+  /** Tamaño estimado del doc (estado guardado + updates desde entonces; nunca lo subestima). */
+  get bytes(): number { return this.savedBytes + this.pendingBytes; }
+
+  /** Lanza `CommandError` 413 si el doc ya está en el límite (escrituras por la API). */
+  assertWritable(extraBytes = 0): void {
+    if (this.maxBytes > 0 && this.bytes + extraBytes > this.maxBytes) throw docTooLarge(this.maxBytes);
+  }
+
+  /**
+   * ¿Se acepta este update (WebSocket) sin pasarse de `maxBytes`? Se mide sólo lo que el doc aún no tiene
+   * (`Y.diffUpdate` contra su vector de estado: al reconectar, el cliente reenvía todo lo que ya existe), y un
+   * update que sólo borra se acepta siempre, para que se pueda volver por debajo del límite.
+   */
+  accepts(update: Uint8Array): boolean {
+    if (this.maxBytes <= 0 || this.bytes + update.byteLength <= this.maxBytes) return true;
+    try {
+      const novel = Y.diffUpdate(update, Y.encodeStateVector(this.doc));
+      if (Y.decodeUpdate(novel).structs.length === 0) return true;
+      return this.bytes + novel.byteLength <= this.maxBytes;
+    } catch { return false; }
+  }
+
   /** Guarda ahora (si hay cambios). Serializa las escrituras. */
   flush(): Promise<void> {
     if (this.saveTimer) { clearTimeout(this.saveTimer); this.saveTimer = null; }
     if (!this.dirty) return this.saving;
     this.dirty = false;
     const snapshot = Y.encodeStateAsUpdate(this.doc);
+    this.savedBytes = snapshot.byteLength;
+    this.pendingBytes = 0;
     this.saving = this.saving.then(() => this.persist.saveDoc(this.id, snapshot)).catch(e => console.error('no se pudo guardar', this.id, e));
     return this.saving;
   }
@@ -130,9 +165,23 @@ export class LiveDoc {
   }
 }
 
+export interface DocManagerOptions {
+  /** Tamaño máximo de cada doc en bytes (`MAX_DOC_BYTES`); 0 o ausente = sin límite. */
+  maxDocBytes?: number;
+}
+
 export class DocManager {
   private docs = new Map<string, Promise<LiveDoc>>();
-  constructor(private persist: DocPersistence) {}
+  constructor(private persist: DocPersistence, private opts: DocManagerOptions = {}) {}
+
+  /** Docs abiertos ahora mismo (métrica). */
+  get size(): number { return this.docs.size; }
+  /** Conexiones WebSocket registradas en los docs ya cargados (métrica). */
+  async connections(): Promise<number> {
+    let n = 0;
+    for (const p of this.docs.values()) { try { n += (await p).conns.size; } catch { /* doc que no cargó */ } }
+    return n;
+  }
 
   /** Doc cargado (lo abre si hace falta). El llamador debe saber que el espacio existe. */
   get(id: string): Promise<LiveDoc> {
@@ -140,6 +189,7 @@ export class DocManager {
     if (!p) {
       p = (async () => {
         const d = new LiveDoc(id, this.persist, () => { void this.unload(id); });
+        d.maxBytes = this.opts.maxDocBytes ?? 0;
         await d.load();
         d.touch();
         return d;
@@ -160,10 +210,23 @@ export class DocManager {
     await d.destroy();
   }
 
-  /** Cierra todo guardando (apagado ordenado). */
-  async closeAll(): Promise<void> {
+  /** Guarda ya todos los docs con cambios (sin cerrarlos). */
+  async flushAll(): Promise<void> {
+    for (const p of [...this.docs.values()]) { try { await (await p).flush(); } catch { /* doc que no cargó */ } }
+  }
+
+  /**
+   * Cierra todo guardando (apagado ordenado). Las conexiones se cierran con `code` (1012 «reiniciando»
+   * al apagar: el cliente y-websocket reconecta solo).
+   */
+  async closeAll(code?: number, reason?: string): Promise<void> {
     const all = [...this.docs.values()]; this.docs.clear();
-    for (const p of all) { const d = await p; d.closeConnections(); await d.destroy(); }
+    for (const p of all) {
+      let d: LiveDoc;
+      try { d = await p; } catch { continue; }
+      d.closeConnections(code, reason);
+      await d.destroy();
+    }
   }
 
   /** Ejecuta `fn` con el store del doc y persiste sin esperar al debounce. */

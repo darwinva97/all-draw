@@ -12,9 +12,16 @@ import { renderSvg as renderSvgIo } from '@all-draw/io';
 import type { YjsStore } from '@all-draw/sync';
 import { createRegistry } from './notations';
 
-/** Error de usuario al aplicar comandos (→ 400 si es de forma, 422 si no se pudo aplicar). */
+/** Error de usuario al aplicar comandos (→ 400 si es de forma, 422 si no se pudo aplicar, 413 si el espacio supera `MAX_DOC_BYTES`). */
 export class CommandError extends Error {
-  constructor(readonly status: 400 | 422, message: string, readonly issues?: unknown[]) { super(message); }
+  constructor(readonly status: 400 | 413 | 422, message: string, readonly issues?: unknown[], readonly extra?: Record<string, unknown>) { super(message); }
+}
+
+/** Código de error (en el cuerpo `{ code }`) cuando un espacio llega a `MAX_DOC_BYTES`. */
+export const DOC_TOO_LARGE = 'doc_too_large';
+export const formatBytes = (n: number): string => n >= 1024 * 1024 ? `${Math.round((n / (1024 * 1024)) * 10) / 10} MB` : `${Math.round(n / 1024)} KB`;
+export function docTooLarge(limit: number): CommandError {
+  return new CommandError(413, `El espacio ha llegado a su tamaño máximo (${formatBytes(limit)}). Borra contenido o reparte el modelo en varios espacios para seguir editando.`, undefined, { code: DOC_TOO_LARGE, limit });
 }
 
 type RecordSchema = { safeParse(v: unknown): { success: true; data: unknown } | { success: false; error: { issues: unknown[] } } };

@@ -17,6 +17,13 @@ import { initials, colorFor } from '../presence';
 import {
   anchorLabel, anchorNodesIn, anchorTarget, applyMention, commentAuthor, isOwn, matchPeople, mentionQuery, mentionsIn, relativeTime, splitMentions,
 } from './comments-helpers';
+import { Icon, type IconName } from '../icons';
+import { HelpLink } from './HelpLink';
+import { confirmDialog } from '../ui/dialog';
+
+/** Glifo del ancla (`anchorLabel`) → icono SVG. */
+const ANCHOR_ICON: Record<string, IconName> = { '◆': 'diamond', '↗': 'trace', '▭': 'view', '▦': 'layers', '◎': 'pin' };
+const AnchorIcon = ({ glyph }: { glyph: string }) => <Icon name={ANCHOR_ICON[glyph] ?? 'diamond'} size={12} />;
 
 type Filter = 'open' | 'resolved' | 'all';
 
@@ -118,10 +125,11 @@ export function CommentsPanel() {
     <aside className="ad-cm-panel" aria-label={t('Comentarios')} onKeyDown={onKeyDown}>
       <header className="ad-cm-panel__head">
         <span className="ad-cm-panel__title">{t('Comentarios')}</span>
+        <HelpLink slug="comentarios" label={t('Ayuda')} className="ad-help-link--compact" />
         {!readOnly && viewId && !comments.draft && (
-          <button className="ad-btn ad-btn--ghost" onClick={() => openComments({ draft: { kind: 'view', id: viewId, viewId } })} title={t('Comentar la vista entera')}>＋ {t('Comentar la vista')}</button>
+          <button className="ad-btn ad-btn--ghost" onClick={() => openComments({ draft: { kind: 'view', id: viewId, viewId } })} title={t('Comentar la vista entera')}><Icon name="plus" size={14} />{t('Comentar la vista')}</button>
         )}
-        <button className="ad-btn ad-btn--ghost" onClick={closeComments} aria-label={t('Cerrar')} title={t('Cerrar')}>×</button>
+        <button className="ad-btn ad-btn--ghost" onClick={closeComments} aria-label={t('Cerrar')} title={t('Cerrar')}><Icon name="close" size={14} /></button>
       </header>
       <div className="ad-cm-panel__filters">
         <div className="ad-cm-seg" role="radiogroup" aria-label={t('Filtrar comentarios')}>
@@ -136,7 +144,7 @@ export function CommentsPanel() {
       <div className="ad-cm-panel__scroll" ref={listRef}>
         {comments.draft && !readOnly && draftLabel && (
           <div className="ad-cm-thread is-draft">
-            <div className="ad-cm-anchor is-static"><span aria-hidden="true">{draftLabel.icon}</span> {draftLabel.label}</div>
+            <div className="ad-cm-anchor is-static"><AnchorIcon glyph={draftLabel.icon} /> {draftLabel.label}</div>
             <Composer autoFocus people={people} placeholder={t('Escribe un comentario… (@ para mencionar)')} submitLabel={t('Comentar')}
               onSubmit={create} onCancel={() => openComments({ draft: null })} />
           </div>
@@ -175,9 +183,9 @@ function ThreadCard({ th, active, me, people, now }: { th: CommentThread; active
       onClick={() => { if (!active) openComments({ threadId: th.id }); }}>
       <div className="ad-cm-thread__top">
         <button className={`ad-cm-anchor ${label.missing ? 'is-missing' : ''}`} onClick={e => { e.stopPropagation(); goTo(th); }} title={t('Ir a lo comentado')}>
-          <span aria-hidden="true">{label.icon}</span> <span className="ad-cm-anchor__label">{label.label}</span>
+          <AnchorIcon glyph={label.icon} /> <span className="ad-cm-anchor__label">{label.label}</span>
         </button>
-        {th.resolved && <span className="ad-cm-badge" title={th.root.resolvedBy ? t('Resuelto por {name}', { name: th.root.resolvedBy }) : undefined}>✓ {t('Resuelto')}</span>}
+        {th.resolved && <span className="ad-cm-badge" title={th.root.resolvedBy ? t('Resuelto por {name}', { name: th.root.resolvedBy }) : undefined}><Icon name="check" size={12} />{t('Resuelto')}</span>}
       </div>
       {th.comments.map((c, i) => <CommentItem key={c.id} c={c} th={th} isRoot={i === 0} me={me} people={people} now={now} />)}
       {!readOnly && (
@@ -186,7 +194,7 @@ function ThreadCard({ th, active, me, people, now }: { th: CommentThread; active
             ? <Composer autoFocus people={people} placeholder={t('Responder…')} submitLabel={t('Responder')} onSubmit={reply} onCancel={() => setReplying(false)} />
             : <>
               <button className="ad-btn ad-btn--ghost" onClick={e => { e.stopPropagation(); setReplying(true); openComments({ threadId: th.id }); }}>{t('Responder')}</button>
-              <button className="ad-btn ad-btn--ghost" onClick={e => { e.stopPropagation(); toggleResolved(); }}>{th.resolved ? t('Reabrir') : `✓ ${t('Resolver')}`}</button>
+              <button className="ad-btn ad-btn--ghost" onClick={e => { e.stopPropagation(); toggleResolved(); }}>{th.resolved ? t('Reabrir') : <><Icon name="check" size={14} />{t('Resolver')}</>}</button>
             </>}
         </div>
       )}
@@ -204,9 +212,9 @@ function CommentItem({ c, th, isRoot, me, people, now }: { c: Comment; th: Comme
     run({ type: 'patch', collection: 'comments', id: c.id, patch: { text, mentions, editedAt: new Date().toISOString() } });
     setEditing(false);
   };
-  const remove = () => {
+  const remove = async () => {
     if (isRoot && th.comments.length > 1) {
-      if (!confirm(t('¿Borrar el hilo entero ({n} comentarios)?', { n: th.comments.length }))) return;
+      if (!(await confirmDialog({ title: t('¿Borrar el hilo entero ({n} comentarios)?', { n: th.comments.length }), message: t('Se borran el comentario inicial y todas sus respuestas.'), danger: true }))) return;
       run({ type: 'batch', label: 'borrar hilo', commands: th.comments.map(x => ({ type: 'delete', collection: 'comments', id: x.id }) as Command) });
     } else run({ type: 'delete', collection: 'comments', id: c.id });
   };
@@ -222,7 +230,7 @@ function CommentItem({ c, th, isRoot, me, people, now }: { c: Comment; th: Comme
           {c.editedAt && <span className="ad-cm-edited" title={new Date(c.editedAt).toLocaleString(lang)}>{t('(editado)')}</span>}
           {own && !editing && (
             <span className="ad-cm-item__tools">
-              <button className="ad-btn ad-btn--ghost" onClick={e => { e.stopPropagation(); setEditing(true); }} title={t('Editar')} aria-label={t('Editar')}>✎</button>
+              <button className="ad-btn ad-btn--ghost" onClick={e => { e.stopPropagation(); setEditing(true); }} title={t('Editar')} aria-label={t('Editar')}><Icon name="edit" size={14} /></button>
               <button className="ad-btn ad-btn--ghost" onClick={e => { e.stopPropagation(); remove(); }} title={t('Borrar')} aria-label={t('Borrar')}><TrashIcon /></button>
             </span>
           )}
@@ -311,13 +319,13 @@ export function CommentsSection({ anchors, newAnchor }: { anchors: CommentAnchor
     <div className="ad-cm-section">
       <div className="ad-section ad-cm-section__head">
         <span>{t('Comentarios')} ({open}{threads.length > open ? ` / ${threads.length}` : ''})</span>
-        {!readOnly && <button className="ad-btn ad-btn--ghost" onClick={() => openComments({ draft: newAnchor })}>＋ {t('Comentar')}</button>}
+        {!readOnly && <button className="ad-btn ad-btn--ghost" onClick={() => openComments({ draft: newAnchor })}><Icon name="plus" size={14} />{t('Comentar')}</button>}
       </div>
       {threads.length === 0 && <div className="ad-hint">{t('Sin comentarios.')}</div>}
       {threads.slice(0, 5).map(th => (
         <button key={th.id} className={`ad-link ad-cm-mini ${th.resolved ? 'is-resolved' : ''}`} onClick={() => openComments({ threadId: th.id })}>
           <b>{th.root.author.name}</b> <span className="ad-cm-mini__text">{th.root.text}</span>
-          <small>{th.resolved ? '✓' : ''}{th.comments.length > 1 ? ` ${t('{n} respuestas', { n: th.comments.length - 1 })}` : ''}</small>
+          <small>{th.resolved ? <Icon name="check" size={12} /> : null}{th.comments.length > 1 ? ` ${t('{n} respuestas', { n: th.comments.length - 1 })}` : ''}</small>
         </button>
       ))}
       {threads.length > 5 && <button className="ad-link" onClick={() => openComments()}>{t('Ver todos ({n})', { n: threads.length })}</button>}
@@ -427,7 +435,7 @@ export function CommentLayer() {
       })}
       {draft && (
         <div className="ad-cm-bubble ad-cm-bubble--point ad-cm-bubble--draft" aria-hidden="true" style={{ transform: `translate(${draft.x}px, ${draft.y}px) scale(${scale})` }}>
-          <span className="ad-cm-bubble__in">＋</span>
+          <span className="ad-cm-bubble__in"><Icon name="plus" size={12} /></span>
         </div>
       )}
     </ViewportPortal>

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="352" viewBox="0 0 680 352" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" role="img">
+  <title>Trazas entre BPMN y ArchiMate</title>
+  <desc>Tres tareas BPMN a la izquierda y dos elementos ArchiMate a la derecha. Verificar identidad tiene una traza "usa" hacia el servicio Verificación KYC y Crear cuenta una traza "crea en" hacia el CRM. Recoger datos no tiene traza: es un hueco. Cobertura: 2 de 3.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+    <marker id="ah-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="#334155" stroke-width="1.6"/></marker>
+    <marker id="ah-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+    <marker id="ah-blue-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="#2563eb" stroke-width="1.6"/></marker>
+    <marker id="ah-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker>
+  </defs>
+  <rect x="0" y="0" width="680" height="352" fill="#ffffff"/>
+  <rect x="20" y="40" width="250" height="250" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.2"/>
+  <circle cx="38" cy="63" r="5" fill="#16a34a"/>
+  <text x="50" y="68" font-size="13" font-weight="700" fill="#334155">Proceso (BPMN)</text>
+  <rect x="410" y="40" width="250" height="250" rx="10" fill="#fefce8" stroke="#fde047" stroke-width="1.2"/>
+  <circle cx="428" cy="63" r="5" fill="#ca8a04"/>
+  <text x="440" y="68" font-size="13" font-weight="700" fill="#334155">Arquitectura (ArchiMate)</text>
+  <rect x="50" y="84" width="180" height="50" rx="10" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="5 3"/>
+  <text x="140" y="105" font-size="13" fill="#1f2937" text-anchor="middle">Recoger datos</text>
+  <text x="140" y="123" font-size="12" font-weight="600" fill="#b45309" text-anchor="middle">sin traza (hueco)</text>
+  <rect x="50" y="154" width="180" height="46" rx="10" fill="#ffffff" stroke="#334155" stroke-width="1.2"/>
+  <text x="140" y="182" font-size="13" fill="#1f2937" text-anchor="middle">Verificar identidad</text>
+  <rect x="50" y="222" width="180" height="46" rx="10" fill="#ffffff" stroke="#334155" stroke-width="1.2"/>
+  <text x="140" y="250" font-size="13" fill="#1f2937" text-anchor="middle">Crear cuenta</text>
+  <rect x="440" y="154" width="190" height="46" rx="20" fill="#b5ffff" stroke="#3c9f9f" stroke-width="1.2"/>
+  <text x="535" y="173" font-size="13" font-weight="600" fill="#1f2937" text-anchor="middle">Verificación KYC</text>
+  <text x="535" y="191" font-size="12" fill="#475569" text-anchor="middle">Servicio de aplicación</text>
+  <rect x="440" y="222" width="190" height="46" rx="2" fill="#b5ffff" stroke="#3c9f9f" stroke-width="1.2"/>
+  <text x="535" y="241" font-size="13" font-weight="600" fill="#1f2937" text-anchor="middle">CRM</text>
+  <text x="535" y="259" font-size="12" fill="#475569" text-anchor="middle">Componente de aplicación</text>
+  <line x1="231" y1="177" x2="437" y2="177" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="7 4" marker-end="url(#ah-blue-open)"/>
+  <text x="334" y="169" font-size="12" fill="#2563eb" text-anchor="middle">Traza · usa</text>
+  <line x1="231" y1="245" x2="437" y2="245" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="7 4" marker-end="url(#ah-blue-open)"/>
+  <text x="334" y="237" font-size="12" fill="#2563eb" text-anchor="middle">Traza · crea en</text>
+  <text x="340" y="316" font-size="13" fill="#334155" text-anchor="middle">Cobertura BPMN → ArchiMate: 2 de 3 elementos con traza</text>
+  <rect x="240" y="326" width="200" height="10" rx="5" fill="#e5e7eb" stroke="#e5e7eb" stroke-width="0.5"/>
+  <rect x="240" y="326" width="133" height="10" rx="5" fill="#2563eb" stroke="#2563eb" stroke-width="0.5"/>
+</svg>

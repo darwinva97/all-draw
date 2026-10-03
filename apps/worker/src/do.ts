@@ -18,13 +18,16 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Command, Workspace, WorkspaceMeta } from '@all-draw/core';
 import {
-  CommandError, LiveDoc, attachConnection, closeConn, opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, parseCommands, parseWorkspaceJson,
+  CommandError, DEFAULT_MAX_DOC_BYTES, LiveDoc, attachConnection, closeConn, opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, parseCommands, parseWorkspaceJson,
   type DocPersistence, type Role, type Snapshot, type SnapshotMeta, type SyncHandlers, type SyncSocket,
 } from '@all-draw/server-core';
 import { newId } from '@all-draw/core';
-import type { Env } from './env';
+import { envInt, type Env } from './env';
 
 export const ROLE_HEADER = 'x-alldraw-role';
+/** WebSockets por espacio por defecto (`MAX_WS_PER_WORKSPACE`) y código de cierre al pasarse (igual que Node). */
+export const DEFAULT_MAX_WS_PER_WORKSPACE = 100;
+export const WS_TOO_MANY = 4429;
 const CHUNK = 96 * 1024; // < 128 KiB por valor, vale para KV y SQLite
 const META_KEY = 'doc:meta';
 const SNAP_PREFIX = 'snap:';
@@ -106,6 +109,7 @@ export class WorkspaceDO extends DurableObject<Env> {
   private doc(): Promise<LiveDoc> {
     this.live ??= (async () => {
       const d = new LiveDoc(this.ctx.id.toString(), storagePersistence(this.ctx.storage));
+      d.maxBytes = envInt(this.env.MAX_DOC_BYTES) ?? DEFAULT_MAX_DOC_BYTES;
       await d.load();
       return d;
     })();
@@ -141,6 +145,12 @@ export class WorkspaceDO extends DurableObject<Env> {
       const role = (request.headers.get(ROLE_HEADER) ?? 'viewer') as Role;
       const pair = new WebSocketPair();
       const [client, server] = [pair[0], pair[1]];
+      const max = envInt(this.env.MAX_WS_PER_WORKSPACE) ?? DEFAULT_MAX_WS_PER_WORKSPACE;
+      if (max > 0 && this.ctx.getWebSockets().length >= max) {
+        server.accept();
+        server.close(WS_TOO_MANY, 'demasiadas conexiones a este espacio');
+        return new Response(null, { status: 101, webSocket: client });
+      }
       this.ctx.acceptWebSocket(server, [role]);
       this.attach(server, live, role);
       return new Response(null, { status: 101, webSocket: client });
@@ -155,6 +165,7 @@ export class WorkspaceDO extends DurableObject<Env> {
         if (!sid && request.method === 'POST') { const b = await request.json() as { authorId: string | null; label: string | null }; return json(await live.createSnapshot(b.authorId ?? null, b.label ?? null)); }
         if (sid && !snap[2] && request.method === 'GET') { const ws = await live.snapshotWorkspace(sid); return ws ? json(ws) : json({ error: 'No existe esa instantánea' }, 404); }
         if (sid && snap[2] && request.method === 'POST') {
+          live.assertWritable();
           const b = await request.json() as { authorId: string | null };
           const ws = await live.restoreSnapshot(sid, b.authorId ?? null);
           if (!ws) return json({ error: 'No existe esa instantánea' }, 404);
@@ -174,6 +185,7 @@ export class WorkspaceDO extends DurableObject<Env> {
         }
         case 'GET /snapshot': return json(opSnapshot(live.store));
         case 'PUT /snapshot': {
+          live.assertWritable();
           const r = parseWorkspaceJson(await request.json());
           if ('issues' in r) return json({ error: 'Workspace inválido', issues: r.issues }, 400);
           opReplace(live.store, r);
@@ -183,6 +195,7 @@ export class WorkspaceDO extends DurableObject<Env> {
         case 'POST /commands': {
           const body = await request.json() as { commands: unknown; label?: string };
           const commands = parseCommands(body.commands);
+          live.assertWritable();
           const inverse: Command = opCommands(live.store, commands, body.label);
           await live.flush();
           return json({ inverse });
@@ -208,7 +221,7 @@ export class WorkspaceDO extends DurableObject<Env> {
       await live.flush();
       return json({ ok: true });
     } catch (e) {
-      if (e instanceof CommandError) return json({ error: e.message, ...(e.issues ? { issues: e.issues } : {}) }, e.status);
+      if (e instanceof CommandError) return json({ error: e.message, ...(e.issues ? { issues: e.issues } : {}), ...e.extra }, e.status);
       console.error('DO', e);
       return json({ error: 'error interno' }, 500);
     }

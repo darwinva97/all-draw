@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="380" viewBox="0 0 680 380" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" role="img">
+  <title>Model and views: one element, several appearances</title>
+  <desc>On the left, the model with the process Alta de cliente (customer onboarding) and the CRM component linked by a Serving relationship. On the right, two views (ArchiMate and layers × stages) that draw the same process; the dashed blue lines show that each box is an appearance of the single model element.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+    <marker id="ah-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="#334155" stroke-width="1.6"/></marker>
+    <marker id="ah-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+    <marker id="ah-blue-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="#2563eb" stroke-width="1.6"/></marker>
+    <marker id="ah-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker>
+  </defs>
+  <rect x="0" y="0" width="680" height="380" fill="#ffffff"/>
+  <rect x="20" y="50" width="220" height="290" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.2"/>
+  <text x="36" y="76" font-size="13" font-weight="700" fill="#475569" letter-spacing="1">MODEL</text>
+  <rect x="50" y="100" width="160" height="56" rx="10" fill="#ffffb5" stroke="#a8a83c" stroke-width="1.2"/>
+  <text x="130" y="124" font-size="14" font-weight="700" fill="#1f2937" text-anchor="middle">Alta de cliente</text>
+  <text x="130" y="143" font-size="12" fill="#57534e" text-anchor="middle">Business process</text>
+  <rect x="45" y="230" width="170" height="56" rx="2" fill="#b5ffff" stroke="#3c9f9f" stroke-width="1.2"/>
+  <text x="130" y="254" font-size="14" font-weight="700" fill="#1f2937" text-anchor="middle">CRM</text>
+  <text x="130" y="273" font-size="12" fill="#475569" text-anchor="middle">Application component</text>
+  <line x1="130" y1="229" x2="130" y2="159" stroke="#334155" stroke-width="1.4" marker-end="url(#ah-open)"/>
+  <text x="140" y="199" font-size="12" fill="#334155">Serves</text>
+  <text x="130" y="366" font-size="12" fill="#475569" text-anchor="middle">Each thing exists only once</text>
+  <rect x="330" y="50" width="330" height="130" rx="10" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+  <circle cx="346" cy="71" r="5" fill="#ca8a04"/>
+  <text x="358" y="76" font-size="13" font-weight="700" fill="#475569">View · ArchiMate</text>
+  <rect x="350" y="94" width="120" height="44" rx="10" fill="#ffffb5" stroke="#2563eb" stroke-width="2"/>
+  <text x="410" y="121" font-size="13" fill="#1f2937" text-anchor="middle">Alta de cliente</text>
+  <rect x="530" y="94" width="110" height="44" rx="2" fill="#b5ffff" stroke="#3c9f9f" stroke-width="1.2"/>
+  <text x="585" y="121" font-size="13" fill="#1f2937" text-anchor="middle">CRM</text>
+  <line x1="529" y1="116" x2="472" y2="116" stroke="#334155" stroke-width="1.4" marker-end="url(#ah-open)"/>
+  <text x="501" y="108" font-size="12" fill="#334155" text-anchor="middle">Serves</text>
+  <text x="346" y="166" font-size="12" fill="#64748b">Each appearance has its own position and size</text>
+  <rect x="330" y="200" width="330" height="140" rx="10" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+  <circle cx="346" cy="221" r="5" fill="#0ea5e9"/>
+  <text x="358" y="226" font-size="13" font-weight="700" fill="#475569">View · Layers × stages</text>
+  <rect x="346" y="236" width="298" height="46" rx="0" fill="#fef3c7" stroke="#e2e8f0" stroke-width="1"/>
+  <rect x="346" y="282" width="298" height="46" rx="0" fill="#dbeafe" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="434" y1="236" x2="434" y2="328" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="352" y="274" font-size="12" fill="#475569">Business</text>
+  <text x="352" y="320" font-size="12" fill="#475569">Application</text>
+  <rect x="448" y="240" width="130" height="30" rx="10" fill="#ffffb5" stroke="#2563eb" stroke-width="2"/>
+  <text x="513" y="260" font-size="13" fill="#1f2937" text-anchor="middle">Alta de cliente</text>
+  <rect x="448" y="290" width="130" height="30" rx="2" fill="#b5ffff" stroke="#3c9f9f" stroke-width="1.2"/>
+  <text x="513" y="310" font-size="13" fill="#1f2937" text-anchor="middle">CRM</text>
+  <path d="M211 128 C 280 128, 280 116, 347 116" fill="none" stroke="#ffffff" stroke-width="7"/>
+  <path d="M211 128 C 260 128, 250 255, 445 255" fill="none" stroke="#ffffff" stroke-width="7"/>
+  <path d="M211 128 C 280 128, 280 116, 347 116" fill="none" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ah-blue)"/>
+  <path d="M211 128 C 260 128, 250 255, 445 255" fill="none" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ah-blue)"/>
+  <text x="282" y="108" font-size="12" fill="#2563eb" text-anchor="middle">appearance</text>
+  <text x="300" y="250" font-size="12" fill="#2563eb" text-anchor="end">appearance</text>
+</svg>

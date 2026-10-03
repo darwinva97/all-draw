@@ -8,23 +8,34 @@
  * Roles por espacio: owner > editor > viewer. Los admins actúan como dueños de cualquier espacio.
  */
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
+import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { setCookie, deleteCookie } from 'hono/cookie';
 import { bodyLimit } from 'hono/body-limit';
 import { CommandSchema, Workspace as WorkspaceSchema, type Command, type NotationPack, type Workspace } from '@all-draw/core';
 import type { DocHost } from './host';
 import { ALL_PACKS, describePacks } from './notations';
-import { CommandError, normalizeCommand } from './ops';
+import { CommandError, DOC_TOO_LARGE, formatBytes, normalizeCommand } from './ops';
+import { jsonLogger, redactPath, redactTokens, truncateIp, type Logger } from './log';
 import {
   APIKEY_PREFIX, CSRF_HEADER, CSRF_VALUE, LEGACY_EMAIL, LINK_PREFIX, RateLimiter, SAFE_ID, SESSION_COOKIE, SESSION_MS, SESSION_PREFIX,
   credentialsFromRequest, hashPassword, isTrustedOrigin, needsRehash, randomToken, resolveToken, roleFor, safeEqualString, sessionNeedsRenewal, verifyPassword,
   type Hasher, type Principal,
 } from './auth';
-import { atLeast, type Role, type SnapshotMeta, type User, type WorkspaceStore } from './store/types';
+import { atLeast, type Member, type Role, type ShareLink, type SnapshotMeta, type User, type WorkspaceRow, type WorkspaceStore } from './store/types';
 
 /** Tamaños máximos de cuerpo: 5 MB para Workspace JSON completos, 1 MB para el resto (comandos incluidos). */
 export const MAX_BODY_SNAPSHOT = 5 * 1024 * 1024;
 export const MAX_BODY_DEFAULT = 1024 * 1024;
+/** Informes de errores del cliente (`POST /api/client-errors`): pequeños y sin datos del diagrama. */
+export const MAX_BODY_CLIENT_ERROR = 8 * 1024;
+/** Cuotas por defecto (ver `ApiConfig`). */
+export const DEFAULT_MAX_WORKSPACES_PER_USER = 100;
+export const DEFAULT_MAX_DOC_BYTES = 20 * 1024 * 1024;
+/** Tiempo mínimo entre que se pide el formulario de registro (`GET /api/auth/config`) y se envía. */
+export const DEFAULT_REGISTER_MIN_MS = 2000;
+/** Un `formToken` de registro vale un día. */
+export const FORM_TOKEN_MAX_AGE_MS = 86_400_000;
 
 /** Lo que la API necesita saber del despliegue (subconjunto de la `Config` de cada runtime). */
 export interface ApiConfig {
@@ -35,6 +46,34 @@ export interface ApiConfig {
   publicUrl: string | null;
   /** Si está, el registro exige este código (`inviteCode` en el cuerpo); `GET /api/auth/config` lo anuncia como `invite`. */
   inviteCode?: string | null;
+  /** Espacios de los que una cuenta puede ser dueña (`MAX_WORKSPACES_PER_USER`, 100); 0 = sin límite. Los admins no tienen límite. */
+  maxWorkspacesPerUser?: number;
+  /** Tamaño máximo de un espacio en bytes (`MAX_DOC_BYTES`, 20 MB; 0 = sin límite). Lo aplica el `DocHost`; aquí se anuncia y se comprueban los Workspace JSON enteros. */
+  maxDocBytes?: number;
+  /** Tiempo mínimo del formulario de registro en ms (`REGISTER_MIN_MS`, 2000); 0 desactiva el `formToken`. */
+  registerMinMs?: number;
+}
+
+/** Versión desplegada (la publica `GET /api/status`). */
+export interface BuildInfo {
+  version: string;
+  /** Commit corto (`git rev-parse --short HEAD` o `ALLDRAW_COMMIT`); `null` si no se sabe. */
+  commit: string | null;
+  /** `node` o `cloudflare`. */
+  runtime: string;
+  /** Motor del registro: `sqlite`, `postgres`, `memory`, `durable-object`, `d1`. */
+  db: string;
+  startedAt: string;
+}
+
+/** Lo que se archiva de un espacio que se borra con la cuenta de su dueño (formato `all-draw-backup/1` de `backup.mjs`). */
+export interface WorkspaceArchive {
+  format: 'all-draw-backup/1';
+  exportedAt: string;
+  reason: 'account-deleted';
+  deletedBy: { id: string; email: string };
+  workspace: { id: string; name: string; ownerId: string; ownerEmail: string; createdAt: string; updatedAt: string; members: { userId: string; email: string | null; role: string; createdAt: string }[]; links: { token: string; role: string; createdBy: string; createdAt: string; expiresAt: string | null }[] };
+  snapshot: Workspace | null;
 }
 export interface ApiDeps {
   store: WorkspaceStore;
@@ -43,6 +82,17 @@ export interface ApiDeps {
   config: ApiConfig;
   /** Packs anunciados en `GET /api/notations` (por defecto todos los del monorepo). */
   notations?: NotationPack[];
+  /** Registro estructurado (por defecto JSON por `console`). */
+  logger?: Logger;
+  /** Versión, commit y motor (para `GET /api/status`). */
+  build?: Partial<BuildInfo>;
+  /** Se llama con la identidad resuelta de cada petición `/api` (el servidor Node la pone en su log de accesos). */
+  onIdentity?: (c: Context, principal: Principal | null) => void;
+  /**
+   * Guarda una copia final de un espacio antes de borrarlo con la cuenta de su dueño (`DELETE /api/auth/account`).
+   * En Node escribe en las copias de seguridad del VPS; si lanza, la cuenta no se borra.
+   */
+  archiveWorkspace?: (a: WorkspaceArchive) => Promise<void>;
 }
 type Env = { Variables: { principal: Principal | null } };
 
@@ -72,12 +122,35 @@ const errors = {
 };
 const bearer: Record<string, string[]>[] = [{ bearerAuth: [] }, { cookieAuth: [] }];
 
-const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 429 | 501, error: string, extra: Record<string, unknown> = {}) =>
+const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 429 | 500 | 501 | 503, error: string, extra: Record<string, unknown> = {}) =>
   new HTTPException(status, { res: Response.json({ error, ...extra }, { status }) });
 
 const publicUser = (u: User) => ({ id: u.id, email: u.email, name: u.name, isAdmin: u.isAdmin, createdAt: u.createdAt });
 
-export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: ApiDeps) {
+const QuotasOut = z.object({
+  workspaces: z.object({ used: z.number(), limit: z.number().nullable().describe('null = sin límite') }),
+  docBytes: z.object({ limit: z.number().nullable() }),
+}).meta({ id: 'Quotas' });
+const ClientError = z.object({
+  message: z.string().max(1000),
+  stack: z.string().max(4000).optional(),
+  componentStack: z.string().max(2000).optional(),
+  source: z.enum(['boundary', 'onerror', 'unhandledrejection', 'manual']).optional(),
+  url: z.string().max(500).optional().describe('URL de la página (los tokens se borran antes de registrarla)'),
+  release: z.string().max(100).optional(),
+  userAgent: z.string().max(300).optional(),
+  count: z.number().int().min(1).max(10_000).optional().describe('Veces que se repitió (deduplicado en el cliente)'),
+});
+
+export function createApi({ store, docs, hash, config, notations = ALL_PACKS, logger = jsonLogger(), build = {}, onIdentity, archiveWorkspace }: ApiDeps) {
+  const maxWorkspaces = config.maxWorkspacesPerUser ?? DEFAULT_MAX_WORKSPACES_PER_USER;
+  const maxDocBytes = config.maxDocBytes ?? DEFAULT_MAX_DOC_BYTES;
+  const registerMinMs = config.registerMinMs ?? DEFAULT_REGISTER_MIN_MS;
+  const startedAt = build.startedAt ?? new Date().toISOString();
+  /** Comprueba el tamaño de un Workspace JSON entero (crear con `initial`, reemplazar) antes de cargarlo. */
+  const checkWorkspaceSize = (ws: unknown) => {
+    if (maxDocBytes > 0 && JSON.stringify(ws).length > maxDocBytes) throw fail(413, `El espacio supera el tamaño máximo (${formatBytes(maxDocBytes)}). Reparte el modelo en varios espacios.`, { code: DOC_TOO_LARGE, limit: maxDocBytes });
+  };
   const app = new OpenAPIHono<Env>({
     defaultHook: (result, c) => {
       if (!result.success) return c.json({ error: 'validación', issues: result.error.issues }, 400);
@@ -87,13 +160,15 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
   const registerLimiter = new RateLimiter(10, 60 * 60_000);
   const passwordLimiter = new RateLimiter(10, 15 * 60_000);
   const linkLimiter = new RateLimiter(30, 15 * 60_000);
+  const accountLimiter = new RateLimiter(10, 15 * 60_000);
+  const clientErrorLimiter = new RateLimiter(30, 10 * 60_000);
   const auth = { store, hash };
   const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) return err.getResponse();
-    if (err instanceof CommandError) return c.json({ error: err.message, ...(err.issues ? { issues: err.issues } : {}) }, err.status);
-    console.error(err);
+    if (err instanceof CommandError) return c.json({ error: err.message, ...(err.issues ? { issues: err.issues } : {}), ...err.extra }, err.status);
+    logger.error('error interno', { err, method: c.req.method, path: redactPath(c.req.path) });
     return c.json({ error: 'error interno' }, 500);
   });
   app.notFound(c => c.json({ error: 'ruta desconocida' }, 404));
@@ -103,7 +178,8 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
     if (SAFE_METHODS.has(c.req.method)) return next();
     const p = c.req.path;
     const big = p === '/api/workspaces' || /\/snapshot$/.test(p) || /\/snapshots\/[^/]+\/restore$/.test(p);
-    return bodyLimit({ maxSize: big ? MAX_BODY_SNAPSHOT : MAX_BODY_DEFAULT, onError: () => { throw fail(413, 'Cuerpo demasiado grande'); } })(c, next);
+    const maxSize = p === '/api/client-errors' ? MAX_BODY_CLIENT_ERROR : big ? MAX_BODY_SNAPSHOT : MAX_BODY_DEFAULT;
+    return bodyLimit({ maxSize, onError: () => { throw fail(413, 'Cuerpo demasiado grande'); } })(c, next);
   });
 
   // Identidad + CSRF + renovación deslizante de la sesión.
@@ -120,6 +196,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
       if (cred.source === 'cookie') setCookie(c, SESSION_COOKIE, cred.token!, { httpOnly: true, sameSite: 'Lax', secure: cookieSecure(c), path: '/', expires });
     }
     c.set('principal', p);
+    onIdentity?.(c, p);
     await next();
   });
 
@@ -165,9 +242,72 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
     return token;
   }
 
+  // Anti-abuso del registro: `formToken` = `<emitido-ms>.<hash('register-form:<emitido-ms>')>` (HMAC con
+  // `SESSION_SECRET` si está). Lo da `GET /api/auth/config` y el registro exige que tenga ≥ `registerMinMs`.
+  const formToken = async (t = Date.now()) => `${t}.${(await hash(`register-form:${t}`)).slice(0, 32)}`;
+  const checkFormToken = async (token: string | undefined): Promise<string | null> => {
+    if (registerMinMs <= 0) return null;
+    const m = /^(\d{10,16})\.([0-9a-f]{32})$/.exec(token ?? '');
+    if (!m || !safeEqualString(await formToken(Number(m[1])), token!)) return 'Formulario de registro no válido o caducado: recarga la página y vuelve a intentarlo';
+    const age = Date.now() - Number(m[1]);
+    if (age > FORM_TOKEN_MAX_AGE_MS) return 'El formulario de registro ha caducado: recarga la página';
+    if (age < registerMinMs) return 'Demasiado rápido: espera un par de segundos y vuelve a enviar el formulario';
+    return null;
+  };
+  const humanUsers = async () => (await store.listUsers()).filter(u => u.email !== LEGACY_EMAIL);
+  const quotasFor = async (u: User) => ({
+    workspaces: { used: await store.countOwnedWorkspaces(u.id), limit: u.isAdmin || maxWorkspaces <= 0 ? null : maxWorkspaces },
+    docBytes: { limit: maxDocBytes > 0 ? maxDocBytes : null },
+  });
+
   // ---------------------------------------------------------------- Salud y catálogo
   app.openapi(createRoute({ method: 'get', path: '/healthz', tags: ['sistema'], responses: { 200: { description: 'ok', content: { 'text/plain': { schema: z.string() } } } } }),
     c => c.text('ok'));
+
+  const StatusOut = z.object({
+    status: z.enum(['ok', 'degraded']), version: z.string(), commit: z.string().nullable(), runtime: z.string(), startedAt: z.string(), uptimeS: z.number(),
+    db: z.object({ kind: z.string(), ok: z.boolean(), ms: z.number(), error: z.string().optional() }),
+  });
+  app.openapi(createRoute({
+    method: 'get', path: '/api/status', tags: ['sistema'], summary: 'Estado público: versión, commit, tiempo en marcha y si la base de datos responde',
+    responses: { 200: jsonRes(StatusOut, 'Todo bien'), 503: jsonRes(StatusOut, 'La base de datos no responde') },
+  }), async c => {
+    const t0 = Date.now();
+    let dbOk = true, dbError: string | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([store.countUsers(), new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), 3000); })]);
+    } catch (e) { dbOk = false; dbError = e instanceof Error && e.message === 'timeout' ? 'timeout' : 'error'; logger.error('status: la BD no responde', { err: e }); }
+    finally { clearTimeout(timer); }
+    const body = {
+      status: dbOk ? 'ok' as const : 'degraded' as const,
+      version: build.version ?? '0.0.0', commit: build.commit ?? null, runtime: build.runtime ?? 'unknown', startedAt,
+      uptimeS: Math.round((Date.now() - Date.parse(startedAt)) / 1000),
+      db: { kind: build.db ?? 'unknown', ok: dbOk, ms: Date.now() - t0, ...(dbError ? { error: dbError } : {}) },
+    };
+    c.header('cache-control', 'no-store');
+    return dbOk ? c.json(body, 200) : c.json(body, 503);
+  });
+
+  app.openapi(createRoute({
+    method: 'post', path: '/api/client-errors', tags: ['sistema'], summary: 'Informe de un error de la app web (máx. 8 KB, sin datos del diagrama); se registra en el log del servidor',
+    request: { body: jsonBody(ClientError) },
+    responses: { 204: { description: 'Registrado' }, 400: errors[400], 413: jsonRes(ErrorOut, 'Demasiado grande'), 429: jsonRes(ErrorOut, 'Demasiados informes') },
+  }), async c => {
+    const ip = clientIp(c);
+    if (!clientErrorLimiter.check(`ip:${ip}`)) throw fail(429, 'Demasiados informes de error; gracias, ya tenemos bastantes');
+    const e = c.req.valid('json');
+    const p = c.get('principal');
+    logger.warn('client-error', {
+      source: e.source ?? 'manual', message: redactTokens(e.message),
+      ...(e.stack ? { stack: redactTokens(e.stack) } : {}),
+      ...(e.componentStack ? { componentStack: redactTokens(e.componentStack) } : {}),
+      ...(e.url ? { url: redactTokens(e.url) } : {}),
+      ...(e.release ? { release: e.release } : {}), ...(e.userAgent ? { userAgent: e.userAgent } : {}), ...(e.count ? { count: e.count } : {}),
+      user: p ? (p.kind === 'user' ? p.user.id : 'link') : 'anon', ip: truncateIp(ip),
+    });
+    return c.body(null, 204);
+  });
 
   app.openapi(createRoute({
     method: 'get', path: '/api/notations', tags: ['catálogo'], summary: 'Packs de notación con sus tipos de elemento, relación y puerto (ids a usar en los comandos)',
@@ -177,16 +317,32 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
   // ---------------------------------------------------------------- Auth
   app.openapi(createRoute({
     method: 'get', path: '/api/auth/config', tags: ['auth'], summary: 'Qué necesita el registro: abierto, con código de invitación o cerrado',
-    responses: { 200: jsonRes(z.object({ registration: z.enum(['open', 'invite', 'closed']), passwordMinLength: z.number() }), 'Configuración pública') },
-  }), async c => c.json({ registration: await registrationState(), passwordMinLength: 8 }, 200));
+    responses: { 200: jsonRes(z.object({
+      registration: z.enum(['open', 'invite', 'closed']), passwordMinLength: z.number(),
+      formToken: z.string().describe('Mándalo en el registro; vale tras `formMinMs` y durante un día'), formMinMs: z.number(),
+    }), 'Configuración pública') },
+  }), async c => {
+    c.header('cache-control', 'no-store');
+    return c.json({ registration: await registrationState(), passwordMinLength: 8, formToken: await formToken(), formMinMs: registerMinMs }, 200);
+  });
 
   app.openapi(createRoute({
     method: 'post', path: '/api/auth/register', tags: ['auth'], summary: 'Crear cuenta (el primer usuario es admin)',
-    request: { body: jsonBody(z.object({ email: Email, name: z.string().trim().min(1).max(120), password: Password, inviteCode: z.string().max(200).optional() })) },
+    request: { body: jsonBody(z.object({
+      email: Email, name: z.string().trim().min(1).max(120), password: Password, inviteCode: z.string().max(200).optional(),
+      formToken: z.string().max(100).optional().describe('El de `GET /api/auth/config` (obligatorio salvo con REGISTER_MIN_MS=0)'),
+      website: z.string().max(500).optional().describe('Trampa para bots: debe ir vacío'),
+    })) },
     responses: { 201: jsonRes(AuthOut, 'Cuenta creada y sesión iniciada'), 400: errors[400], 403: errors[403], 409: jsonRes(ErrorOut, 'Email ya registrado'), 429: jsonRes(ErrorOut, 'Demasiados registros') },
   }), async c => {
     const body = c.req.valid('json');
     if (!registerLimiter.check(`ip:${clientIp(c)}`)) throw fail(429, 'Demasiados registros desde esta dirección; espera un rato');
+    if (body.website) {
+      logger.warn('registro: trampa rellenada', { ip: truncateIp(clientIp(c)) });
+      throw fail(400, 'Registro rechazado');
+    }
+    const formError = await checkFormToken(body.formToken);
+    if (formError) throw fail(400, formError, { code: 'form_token' });
     // El usuario técnico de la migración heredada no cuenta: el primer humano es admin.
     const n = (await store.countUsers()) - ((await store.getUserByEmail(LEGACY_EMAIL)) ? 1 : 0);
     if (!config.allowRegistration && (n > 0 || !config.inviteCode)) throw fail(403, 'El registro está cerrado');
@@ -234,9 +390,123 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
   });
 
   app.openapi(createRoute({
-    method: 'get', path: '/api/auth/me', tags: ['auth'], summary: 'Quién soy', security: bearer,
-    responses: { 200: jsonRes(z.object({ user: UserOut, via: z.enum(['session', 'apikey']) }), 'Usuario'), 401: errors[401], 403: errors[403] },
-  }), c => { const p = requireUser(c); return c.json({ user: publicUser(p.user), via: p.via }, 200); });
+    method: 'get', path: '/api/auth/me', tags: ['auth'], summary: 'Quién soy y mis cuotas', security: bearer,
+    responses: { 200: jsonRes(z.object({ user: UserOut, via: z.enum(['session', 'apikey']), quotas: QuotasOut }), 'Usuario'), 401: errors[401], 403: errors[403] },
+  }), async c => { const p = requireUser(c); return c.json({ user: publicUser(p.user), via: p.via, quotas: await quotasFor(p.user) }, 200); });
+
+  app.openapi(createRoute({
+    method: 'patch', path: '/api/auth/me', tags: ['auth'], summary: 'Cambiar mi nombre o mi email (el email exige la contraseña actual y una sesión)', security: bearer,
+    request: { body: jsonBody(z.object({ name: z.string().trim().min(1).max(120).optional(), email: Email.optional(), password: z.string().max(200).optional().describe('Contraseña actual (obligatoria para cambiar el email)') })) },
+    responses: { 200: jsonRes(z.object({ user: UserOut }), 'Actualizado'), 400: errors[400], 401: errors[401], 403: errors[403], 409: jsonRes(ErrorOut, 'Email ya registrado'), 429: jsonRes(ErrorOut, 'Demasiados intentos') },
+  }), async c => {
+    const p = requireUser(c);
+    const body = c.req.valid('json');
+    const patch: { name?: string; email?: string } = {};
+    if (body.name !== undefined && body.name !== p.user.name) patch.name = body.name;
+    if (body.email !== undefined && body.email !== p.user.email) {
+      if (p.via !== 'session') throw fail(403, 'Cambia el email desde una sesión, no con una API key');
+      if (!accountLimiter.check(`user:${p.user.id}`)) throw fail(429, 'Demasiados intentos; espera unos minutos');
+      if (!body.password || !p.user.passwordHash || !(await verifyPassword(body.password, p.user.passwordHash))) throw fail(403, 'Para cambiar el email escribe tu contraseña actual');
+      if (await store.getUserByEmail(body.email)) throw fail(409, 'Ese email ya está registrado');
+      patch.email = body.email;
+    }
+    let user = p.user;
+    if (patch.name !== undefined || patch.email !== undefined) {
+      try { user = (await store.updateUser(p.user.id, patch)) ?? user; }
+      catch (e) { if (String(e).includes('email ya registrado')) throw fail(409, 'Ese email ya está registrado'); throw e; }
+    }
+    return c.json({ user: publicUser(user) }, 200);
+  });
+
+  app.openapi(createRoute({
+    method: 'get', path: '/api/auth/export', tags: ['auth'], summary: 'Exportar mis datos (RGPD): cuenta, API keys, espacios propios como Workspace JSON con miembros y enlaces, y los compartidos conmigo', security: bearer,
+    responses: { 200: jsonRes(z.record(z.string(), z.unknown()), 'JSON descargable (`all-draw-account/1`)'), 401: errors[401], 403: errors[403] },
+  }), async c => {
+    const p = requireUser(c);
+    const u = p.user;
+    const rows = await store.listWorkspaces(u.id);
+    const workspaces = [];
+    for (const w of rows) {
+      if (w.role !== 'owner') { workspaces.push({ id: w.id, name: w.name, role: w.role, ownerId: w.ownerId, createdAt: w.createdAt, updatedAt: w.updatedAt }); continue; }
+      const members = (await store.listMembers(w.id)).map(m => ({ userId: m.userId, email: m.user?.email ?? null, name: m.user?.name ?? null, role: m.role, createdAt: m.createdAt }));
+      const links = (await store.listShareLinks(w.id)).map(l => ({ role: l.role, tokenPrefix: `${l.token.slice(0, 8)}…`, createdBy: l.createdBy, createdAt: l.createdAt, expiresAt: l.expiresAt }));
+      let snapshot: Workspace | null = null;
+      try { snapshot = await docs.snapshot(w.id); } catch (e) { logger.error('export: no se pudo leer el espacio', { workspace: w.id, err: e }); }
+      workspaces.push({ id: w.id, name: w.name, role: w.role, ownerId: w.ownerId, createdAt: w.createdAt, updatedAt: w.updatedAt, members, links, snapshot });
+    }
+    const apiKeys = (await store.listApiKeys(u.id)).map(({ keyHash: _h, userId: _u, ...k }) => k);
+    const stamp = new Date().toISOString();
+    c.header('content-disposition', `attachment; filename="alldraw-${u.id}-${stamp.slice(0, 10)}.json"`);
+    c.header('cache-control', 'no-store');
+    return c.json({ format: 'all-draw-account/1', exportedAt: stamp, user: publicUser(u), quotas: await quotasFor(u), apiKeys, workspaces }, 200);
+  });
+
+  app.openapi(createRoute({
+    method: 'delete', path: '/api/auth/account', tags: ['auth'],
+    summary: 'Borrar mi cuenta (confirma con la contraseña). Mis espacios pasan al editor más antiguo; si no tienen editores se borran (en el VPS, con copia final en las copias de seguridad)',
+    security: bearer,
+    request: { body: jsonBody(z.object({ password: z.string().min(1).max(200) })) },
+    responses: {
+      200: jsonRes(z.object({ ok: z.literal(true), deleted: z.array(z.string()), transferred: z.array(z.object({ id: z.string(), to: z.string() })) }), 'Cuenta borrada'),
+      400: errors[400], 401: errors[401], 403: errors[403], 409: jsonRes(ErrorOut, 'Eres el único administrador'), 429: jsonRes(ErrorOut, 'Demasiados intentos'), 500: jsonRes(ErrorOut, 'No se pudo archivar un espacio: no se ha borrado nada'),
+    },
+  }), async c => {
+    const p = requireUser(c);
+    if (p.via !== 'session') throw fail(403, 'Borra la cuenta desde una sesión, no con una API key');
+    if (!accountLimiter.check(`user:${p.user.id}`)) throw fail(429, 'Demasiados intentos; espera unos minutos');
+    const { password } = c.req.valid('json');
+    const u = p.user;
+    if (!u.passwordHash || !(await verifyPassword(password, u.passwordHash))) throw fail(403, 'La contraseña no es correcta');
+    if (u.isAdmin) {
+      const others = (await humanUsers()).filter(x => x.id !== u.id);
+      if (others.length > 0 && !others.some(x => x.isAdmin)) throw fail(409, 'Eres el único administrador: nombra antes a otro administrador (Cuenta → Usuarios del servidor)', { code: 'last_admin' });
+    }
+    // 1. Plan: cada espacio propio pasa a su editor más antiguo; sin editores, se borra (archivándolo antes).
+    const owned = (await store.listWorkspaces(u.id)).filter(w => w.role === 'owner');
+    const plan: { ws: WorkspaceRow; heir: string | null; members: (Member & { user: Pick<User, 'id' | 'email' | 'name'> | null })[]; links: ShareLink[] }[] = [];
+    for (const ws of owned) {
+      const members = await store.listMembers(ws.id);
+      const heir = members.filter(m => m.role === 'editor' && m.user && m.userId !== u.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]?.userId ?? null;
+      plan.push({ ws, heir, members, links: heir ? [] : await store.listShareLinks(ws.id) });
+    }
+    // 2. Copias finales primero: si alguna falla no se toca nada.
+    if (archiveWorkspace) {
+      for (const { ws, heir, members, links } of plan) {
+        if (heir) continue;
+        let snapshot: Workspace | null = null;
+        try { snapshot = await docs.snapshot(ws.id); } catch (e) { logger.error('borrar cuenta: no se pudo leer el espacio', { workspace: ws.id, err: e }); }
+        try {
+          await archiveWorkspace({
+            format: 'all-draw-backup/1', exportedAt: new Date().toISOString(), reason: 'account-deleted', deletedBy: { id: u.id, email: u.email },
+            workspace: { id: ws.id, name: ws.name, ownerId: ws.ownerId, ownerEmail: u.email, createdAt: ws.createdAt, updatedAt: ws.updatedAt,
+              members: members.map(m => ({ userId: m.userId, email: m.user?.email ?? null, role: m.role, createdAt: m.createdAt })),
+              links: links.map(l => ({ token: l.token, role: l.role, createdBy: l.createdBy, createdAt: l.createdAt, expiresAt: l.expiresAt })) },
+            snapshot,
+          });
+        } catch (e) {
+          logger.error('borrar cuenta: no se pudo archivar', { workspace: ws.id, err: e });
+          throw fail(500, 'No se pudo guardar la copia final de un espacio; no se ha borrado nada. Inténtalo más tarde.');
+        }
+      }
+    }
+    // 3. Transferir o borrar, y por último la cuenta (sesiones, claves y membresías).
+    const deleted: string[] = [], transferred: { id: string; to: string }[] = [];
+    for (const { ws, heir } of plan) {
+      if (heir) {
+        await store.updateMeta(ws.id, { ownerId: heir });
+        await store.setRole(ws.id, heir, null);
+        transferred.push({ id: ws.id, to: heir });
+      } else {
+        await docs.drop(ws.id);
+        await store.deleteWorkspace(ws.id);
+        deleted.push(ws.id);
+      }
+    }
+    await store.deleteUser(u.id);
+    deleteCookie(c, SESSION_COOKIE, { path: '/' });
+    logger.info('cuenta borrada', { user: u.id, deleted: deleted.length, transferred: transferred.length });
+    return c.json({ ok: true as const, deleted, transferred }, 200);
+  });
 
   app.openapi(createRoute({
     method: 'post', path: '/api/auth/password', tags: ['auth'], summary: 'Cambiar mi contraseña (actual + nueva); cierra las demás sesiones', security: bearer,
@@ -261,6 +531,22 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
   }), async c => {
     requireAdmin(c);
     return c.json({ users: (await store.listUsers()).filter(u => u.email !== LEGACY_EMAIL).map(publicUser) }, 200);
+  });
+
+  app.openapi(createRoute({
+    method: 'patch', path: '/api/admin/users/{id}', tags: ['admin'], summary: 'Nombrar o quitar administrador (admin, desde sesión)', security: bearer,
+    request: { params: Id, body: jsonBody(z.object({ isAdmin: z.boolean() })) },
+    responses: { 200: jsonRes(z.object({ user: UserOut }), 'Actualizado'), 400: errors[400], 401: errors[401], 403: errors[403], 404: errors[404], 409: jsonRes(ErrorOut, 'Quedaría sin administradores') },
+  }), async c => {
+    const p = requireAdmin(c);
+    if (p.via !== 'session') throw fail(403, 'Cambia administradores desde una sesión, no con una API key');
+    const id = c.req.valid('param').id;
+    const { isAdmin } = c.req.valid('json');
+    const target = await store.getUser(id);
+    if (!target || target.email === LEGACY_EMAIL) throw fail(404, 'Usuario desconocido');
+    if (!isAdmin && target.isAdmin && !(await humanUsers()).some(x => x.isAdmin && x.id !== id)) throw fail(409, 'Tiene que quedar al menos un administrador');
+    const user = await store.updateUser(id, { isAdmin });
+    return c.json({ user: publicUser(user!) }, 200);
   });
 
   app.openapi(createRoute({
@@ -323,15 +609,19 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
   app.openapi(createRoute({
     method: 'post', path: '/api/workspaces', tags: ['espacios'], summary: 'Crear espacio (vacío o desde un Workspace JSON)', security: bearer,
     request: { body: jsonBody(z.object({ name: z.string().trim().min(1).max(200).optional(), initial: z.unknown().optional().describe('Workspace JSON completo (esquema de @all-draw/core)') })) },
-    responses: { 201: jsonRes(WorkspaceOut, 'Creado'), 400: errors[400], 401: errors[401] },
+    responses: { 201: jsonRes(WorkspaceOut, 'Creado'), 400: errors[400], 401: errors[401], 403: jsonRes(ErrorOut, 'Cuota de espacios agotada (`code: quota_workspaces`)'), 413: jsonRes(ErrorOut, 'Demasiado grande') },
   }), async c => {
     const p = requireUser(c);
     const body = c.req.valid('json');
+    if (maxWorkspaces > 0 && !p.user.isAdmin && (await store.countOwnedWorkspaces(p.user.id)) >= maxWorkspaces) {
+      throw fail(403, `Has llegado al máximo de ${maxWorkspaces} espacios por cuenta: borra los que ya no uses para crear otros.`, { code: 'quota_workspaces', limit: maxWorkspaces });
+    }
     let initial: Workspace | null = null;
     if (body.initial !== undefined) {
       const r = WorkspaceSchema.safeParse(body.initial);
       if (!r.success) throw fail(400, 'initial no es un Workspace válido', { issues: r.error.issues });
       initial = r.data;
+      checkWorkspaceSize(initial);
     }
     const name = body.name ?? initial?.meta.name ?? 'Sin nombre';
     const row = await store.createWorkspace({ ownerId: p.user.id, name });
@@ -458,11 +748,12 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
   app.openapi(createRoute({
     method: 'put', path: '/api/workspaces/{id}/snapshot', tags: ['contenido'], summary: 'Reemplazar todo el contenido por un Workspace JSON (editor+)', security: bearer,
     request: { params: Id, body: jsonBody(WorkspaceSchema) },
-    responses: { 200: jsonRes(z.object({ ok: z.literal(true) }), 'Reemplazado'), ...errors },
+    responses: { 200: jsonRes(z.object({ ok: z.literal(true) }), 'Reemplazado'), ...errors, 413: jsonRes(ErrorOut, 'El espacio superaría MAX_DOC_BYTES (`code: doc_too_large`)') },
   }), async c => {
     const id = c.req.valid('param').id;
     await requireRole(c, id, 'editor');
     const ws = c.req.valid('json') as Workspace;
+    checkWorkspaceSize(ws);
     await docs.replace(id, ws);
     if (ws.meta.name) await store.updateMeta(id, { name: ws.meta.name });
     return c.json({ ok: true as const }, 200);
@@ -472,7 +763,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
     method: 'post', path: '/api/workspaces/{id}/commands', tags: ['contenido'], summary: 'Aplicar comandos sobre el documento vivo (editor+); los clientes conectados lo ven al instante',
     security: bearer,
     request: { params: Id, body: jsonBody(z.object({ commands: z.array(CommandSchema).min(1).max(5000), label: z.string().optional() })) },
-    responses: { 200: jsonRes(z.object({ applied: z.number(), inverse: z.unknown().describe('Comando inverso (deshacer)') }), 'Aplicados'), ...errors, 422: jsonRes(ErrorOut, 'Un comando no se pudo aplicar (nada se aplicó)') },
+    responses: { 200: jsonRes(z.object({ applied: z.number(), inverse: z.unknown().describe('Comando inverso (deshacer)') }), 'Aplicados'), ...errors, 413: jsonRes(ErrorOut, 'El espacio está en MAX_DOC_BYTES (`code: doc_too_large`)'), 422: jsonRes(ErrorOut, 'Un comando no se pudo aplicar (nada se aplicó)') },
   }), async c => {
     const id = c.req.valid('param').id;
     await requireRole(c, id, 'editor');
@@ -504,7 +795,8 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS }: 
     await requireRole(c, id, 'viewer');
     const svg = await docs.renderSvg(id, viewId, { ...(theme ? { theme } : {}), ...(padding !== undefined ? { padding } : {}) });
     if (svg === null) throw fail(404, 'La vista no existe');
-    return c.body(svg, 200, { 'content-type': 'image/svg+xml; charset=utf-8', 'cache-control': 'no-cache' });
+    // Se puede incrustar desde otras webs (`<img src=…?token=lnk_…>`): única excepción a CORP same-origin.
+    return c.body(svg, 200, { 'content-type': 'image/svg+xml; charset=utf-8', 'cache-control': 'no-cache', 'cross-origin-resource-policy': 'cross-origin' });
   });
 
   // ---------------------------------------------------------------- Historial de versiones

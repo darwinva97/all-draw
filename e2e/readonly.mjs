@@ -2,7 +2,7 @@
 import { chromium } from 'playwright-core';
 const base = process.env.BASE ?? 'http://127.0.0.1:4002';
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
-const mk = async () => (await browser.newContext({ locale: 'es-ES' })).newPage();
+const mk = async () => { const p = await (await browser.newContext({ locale: 'es-ES' })).newPage(); await p.addInitScript(() => localStorage.setItem('alldraw:tour', 'done'));; return p; };
 const a = await mk();
 await a.goto(base + '/#/', { waitUntil: 'networkidle' });
 const email = `ro-${Date.now()}@test.local`;
@@ -13,7 +13,7 @@ await a.locator('.field input:not([type=email]):not([type=password])').fill('RO'
 await a.locator('input[type=password]').fill('contraseña-larga');
 await a.getByRole('button', { name: 'Registrarme' }).click();
 await a.waitForSelector('text=En el servidor', { timeout: 15000 });
-await a.getByRole('button', { name: /Abrir la demo/ }).click();
+await a.getByRole('button', { name: /Abrir la demo|Probar sin cuenta/ }).click();
 await a.waitForURL(/#\/s\//, { waitUntil: 'commit' }); await a.waitForSelector('.react-flow__node', { timeout: 20000 });
 const wsId = /#\/s\/([^/?]+)/.exec(a.url())[1];
 const link = await a.evaluate(async id => (await fetch(`/api/workspaces/${id}/links`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role: 'viewer' }) })).json(), wsId);

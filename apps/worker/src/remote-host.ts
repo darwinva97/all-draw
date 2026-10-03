@@ -11,8 +11,10 @@ export class RemoteDocHost implements DocHost {
     const ct = res.headers.get('content-type') ?? '';
     const data = ct.includes('application/json') ? await res.json() as Record<string, unknown> : { text: await res.text() };
     if (!res.ok) {
-      const status = res.status === 400 ? 400 : 422;
-      if (res.status === 400 || res.status === 422) throw new CommandError(status, String(data.error ?? 'error'), data.issues as unknown[] | undefined);
+      if (res.status === 400 || res.status === 413 || res.status === 422) {
+        const { error, issues, ...extra } = data;
+        throw new CommandError(res.status, String(error ?? 'error'), issues as unknown[] | undefined, extra);
+      }
       if (res.status === 404) return null as T;
       throw new Error(`DO ${path}: ${res.status} ${String(data.error ?? data.text ?? '')}`);
     }

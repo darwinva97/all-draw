@@ -17,6 +17,8 @@ import type { Role } from './store/types';
 
 export const MSG_SYNC = 0, MSG_AWARENESS = 1, MSG_AUTH = 2;
 export const READ_ONLY_REASON = JSON.stringify({ error: 'read-only' });
+/** Razón del `permissionDenied` cuando un update se descarta porque el espacio llegó a `MAX_DOC_BYTES`. */
+export const quotaReason = (limit: number) => JSON.stringify({ error: 'doc_too_large', limit });
 
 export interface SyncSocket extends DocConnection {
   send(data: Uint8Array): void;
@@ -71,28 +73,32 @@ function hasContent(update: Uint8Array): boolean {
   try { const d = Y.decodeUpdate(update); return d.structs.length > 0 || d.ds.clients.size > 0; } catch { return true; }
 }
 
-function readOnlyMessage(): Uint8Array {
+function deniedMessage(reason: string): Uint8Array {
   const enc = encoding.createEncoder();
   encoding.writeVarUint(enc, MSG_AUTH);
   encoding.writeVarUint(enc, 0); // permissionDenied
-  encoding.writeVarString(enc, READ_ONLY_REASON);
+  encoding.writeVarString(enc, reason);
   return encoding.toUint8Array(enc);
 }
 
-/** Mensaje de sync recibido (ya sin el byte de tipo); devuelve la respuesta (vacía si no hay). */
+/**
+ * Mensaje de sync recibido (ya sin el byte de tipo); devuelve la respuesta (vacía si no hay).
+ * Los updates (step2 o update) se aplican sólo si la conexión puede escribir y el doc no se pasa de
+ * `live.maxBytes` (`live.accepts`); si no, se descartan y se avisa con `permissionDenied`.
+ */
 export function handleSyncMessage(live: LiveDoc, conn: SyncSocket, dec: decoding.Decoder, canWrite: boolean): Uint8Array | null {
   const enc = encoding.createEncoder();
   encoding.writeVarUint(enc, MSG_SYNC);
-  if (canWrite) {
-    syncProtocol.readSyncMessage(dec, enc, live.doc, conn);
-  } else {
-    const t = decoding.readVarUint(dec);
-    if (t === syncProtocol.messageYjsSyncStep1) syncProtocol.readSyncStep1(dec, enc, live.doc);
-    else { // step2 o update: se descarta
-      const update = decoding.readVarUint8Array(dec);
-      if (hasContent(update)) send(live, conn, readOnlyMessage());
+  const t = decoding.readVarUint(dec);
+  if (t === syncProtocol.messageYjsSyncStep1) syncProtocol.readSyncStep1(dec, enc, live.doc);
+  else if (t === syncProtocol.messageYjsSyncStep2 || t === syncProtocol.messageYjsUpdate) {
+    const update = decoding.readVarUint8Array(dec);
+    if (!canWrite) { if (hasContent(update)) send(live, conn, deniedMessage(READ_ONLY_REASON)); }
+    else if (!live.accepts(update)) send(live, conn, deniedMessage(quotaReason(live.maxBytes)));
+    else {
+      try { Y.applyUpdate(live.doc, update, conn); } catch (e) { console.error('ws update inválido', e); }
     }
-  }
+  } else throw new Error(`mensaje de sync desconocido: ${t}`);
   return encoding.length(enc) > 1 ? encoding.toUint8Array(enc) : null;
 }
 

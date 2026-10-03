@@ -7,13 +7,14 @@ const out = process.env.OUT ?? '/tmp/shots';
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
 const page = await browser.newPage({ locale: 'es-ES', viewport: { width: 1440, height: 900 } });
+await page.addInitScript(() => localStorage.setItem('alldraw:tour', 'done')); // sin recorrido guiado
 const errors = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error' && !/status of 401/.test(m.text())) errors.push('console: ' + m.text()); });
 const check = (cond, msg) => { if (!cond) errors.push('check: ' + msg); console.log(cond ? 'ok  ' : 'FAIL', msg); };
 
 await page.goto(base + '/#/', { waitUntil: 'networkidle' });
-await page.getByRole('button', { name: /Abrir la demo/ }).click();
+await page.getByRole('button', { name: /Abrir la demo|Probar sin cuenta/ }).click();
 await page.waitForURL(/#\/w\//);
 await page.waitForSelector('.react-flow__node', { timeout: 15000 });
 await page.waitForTimeout(600);

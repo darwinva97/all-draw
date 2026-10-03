@@ -4,6 +4,8 @@ import { useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { topSuggestions, linkCommand } from './traces-helpers';
 import { CommentIcon } from './Comments';
+import { Icon } from '../icons';
+import { confirmDialog } from '../ui/dialog';
 
 /** Menú contextual de un nodo: cambiar de dimensión, detalle, puertos, quitar, borrar. */
 export function NodeMenu({ x, y, nodeId, onClose }: { x: number; y: number; nodeId: string; onClose: () => void }) {
@@ -38,26 +40,26 @@ export function NodeMenu({ x, y, nodeId, onClose }: { x: number; y: number; node
   return (
     <div ref={ref} className="ad-popover ad-menu" style={{ left: x, top: y }}>
       <div className="ad-popover__title">{el.name || registry.elementType(el.typeId)?.name}</div>
-      {vn.detailViewId && store.get('views', vn.detailViewId) && <button className="ad-popover__item" onClick={() => openIn(vn.detailViewId!)}>⤵ {t('Entrar en el detalle')}</button>}
+      {vn.detailViewId && store.get('views', vn.detailViewId) && <button className="ad-popover__item" onClick={() => openIn(vn.detailViewId!)}><Icon name="drill" size={14} />{t('Entrar en el detalle')}</button>}
       <div className="ad-popover__section">{t('Abrir en otra dimensión')}</div>
       {dims.map(({ dimension: d, view }) => (
         <button key={d.id} className="ad-popover__item" onClick={() => view ? openIn(view.id) : (!readOnly && createDetail(d.notationId, d.viewpointId, d.name))}>
           <span className="ad-dot" style={{ background: d.color ?? registry.pack(d.notationId)?.color ?? '#999' }} /> {d.name} {view ? '' : <small>{t('(crear)')}</small>}
         </button>
       ))}
-      {details.filter(v => !dims.some(d => d.view?.id === v.id)).map(v => <button key={v.id} className="ad-popover__item" onClick={() => openIn(v.id)}>◇ {v.name}</button>)}
+      {details.filter(v => !dims.some(d => d.view?.id === v.id)).map(v => <button key={v.id} className="ad-popover__item" onClick={() => openIn(v.id)}><Icon name="diamond" size={12} />{v.name}</button>)}
       {!readOnly && (
         <details className="ad-popover__details">
-          <summary className="ad-popover__item">＋ {t('Nueva vista de detalle…')}</summary>
+          <summary className="ad-popover__item"><Icon name="plus" size={14} />{t('Nueva vista de detalle…')}</summary>
           {packs.map(p => <button key={p.id} className="ad-popover__item ad-popover__item--sub" onClick={() => createDetail(p.id)}>{p.name}</button>)}
         </details>
       )}
       {appearsIn.length > 0 && <div className="ad-popover__section">{t('Aparece en')}</div>}
-      {appearsIn.map(v => <button key={v.id} className="ad-popover__item" onClick={() => openIn(v.id)}>◻ {v.name}</button>)}
+      {appearsIn.map(v => <button key={v.id} className="ad-popover__item" onClick={() => openIn(v.id)}><Icon name="view" size={12} />{v.name}</button>)}
       {traceSugs.length > 0 && <div className="ad-popover__section">{t('Trazas')}</div>}
       {traceSugs.map(s => (
         <button key={s.target.id} className="ad-popover__item" title={`${s.reason} (${Math.round(s.score * 100)} %)`} onClick={() => { run(linkCommand(el.id, s)); onClose(); }}>
-          ⇢ {t('Enlazar con {name}', { name: s.target.name || t('(sin nombre)') })} <small>({registry.pack(registry.notationOf(s.target.typeId))?.name ?? registry.notationOf(s.target.typeId)})</small>
+          <Icon name="trace" size={14} />{t('Enlazar con {name}', { name: s.target.name || t('(sin nombre)') })} <small>({registry.pack(registry.notationOf(s.target.typeId))?.name ?? registry.notationOf(s.target.typeId)})</small>
         </button>
       ))}
       {!readOnly && <>
@@ -65,7 +67,7 @@ export function NodeMenu({ x, y, nodeId, onClose }: { x: number; y: number; node
         <button className="ad-popover__item" onClick={() => { openComments({ draft: { kind: 'node', id: vn.id, viewId: vn.viewId } }); onClose(); }}><CommentIcon size={12} /> {t('Comentar')}</button>
         <button className="ad-popover__item" onClick={togglePorts}>{vn.style.showPorts ? t('Ocultar pines') : t('Mostrar pines')}</button>
         <button className="ad-popover__item" onClick={() => { run({ type: 'deleteNode', id: vn.id }); onClose(); }}>{t('Quitar de esta vista')}</button>
-        <button className="ad-popover__item ad-popover__item--danger" onClick={() => { if (confirm(t('¿Borrar "{name}" del modelo y de todas las vistas?', { name: el.name }))) run({ type: 'deleteElement', id: el.id }); onClose(); }}>{t('Borrar del modelo')}</button>
+        <button className="ad-popover__item ad-popover__item--danger" onClick={async () => { onClose(); if (await confirmDialog({ title: t('¿Borrar "{name}" del modelo y de todas las vistas?', { name: el.name }), message: t('Desaparece de todas las vistas en las que aparece. Puedes deshacerlo con Ctrl+Z.'), danger: true })) run({ type: 'deleteElement', id: el.id }); }}>{t('Borrar del modelo')}</button>
       </>}
     </div>
   );

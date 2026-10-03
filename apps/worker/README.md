@@ -78,6 +78,10 @@ npx wrangler deploy                                       # = pnpm --filter @all
    | `ALLOW_REGISTRATION` | `"false"` cierra el registro una vez creado el primer usuario (el primero siempre puede y es admin). |
    | `PUBLIC_URL` | Base de los enlaces compartidos (`https://alldraw.example.com`); si falta se deduce de la petición. |
    | `INVITE_CODE` | Opcional: el registro exige este código. |
+   | `MAX_WORKSPACES_PER_USER` / `MAX_DOC_BYTES` / `REGISTER_MIN_MS` | Cuotas y anti-abuso del registro (100 / 20 MB / 2000 ms), igual que en Node. `MAX_DOC_BYTES` lo aplica cada `WorkspaceDO`. |
+   | `MAX_WS_PER_WORKSPACE` | WebSockets por espacio (100) en el DO; al pasarse, cierre `4429`. |
+   | `ALLDRAW_COMMIT` / `ALLDRAW_VERSION` | Lo que publica `GET /api/status`. `pnpm --filter @all-draw/worker deploy` pasa `--var ALLDRAW_COMMIT:$(git rev-parse --short HEAD)`. |
+   | `LOG_LEVEL` | Log JSON por `console` (Workers Observability): errores internos, `client-error`, cuentas borradas. |
    | `IMPORT_SECRET` | Opcional, sólo para migrar (`POST /api/admin/import` con `X-Import-Secret` mientras no haya usuarios). Bórralo después: `wrangler secret delete IMPORT_SECRET`. |
    La cookie de sesión va siempre con `Secure` (en Cloudflare todo es https).
 4. **Dominio**: en el panel del Worker, *Custom domains* (o `routes` en `wrangler.toml`).

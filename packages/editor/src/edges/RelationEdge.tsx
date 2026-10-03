@@ -7,6 +7,7 @@ import { resolveRelationStyle, type ArrowHead, type RuleStyle, type ViewEdge } f
 import { useEditor } from '../context';
 import { useRecord, useCollection } from '../hooks';
 import { useT } from '@all-draw/i18n';
+import { Icon } from '../icons';
 
 export type RelationEdgeData = { edge: ViewEdge };
 export type RelationRFEdge = Edge<RelationEdgeData, 'relation'>;
@@ -109,7 +110,7 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
         <EdgeLabelRenderer>
           <div className={`ad-edge-label ${p.selected ? 'is-selected' : ''}`} style={labelStyle} title={mappings || undefined}>
             {rule.icon && <span className="ad-edge-label__icon">{rule.icon}</span>}
-            {label || (type?.name ?? '')}{mappings && <span className="ad-edge-label__pins">⇄</span>}
+            {label || (type?.name ?? '')}{mappings && <span className="ad-edge-label__pins"><Icon name="swap" size={11} /></span>}
             {rule.badge && <span className="ad-node__badge" style={{ background: rule.badge }}>{rule.badgeText}</span>}
           </div>
         </EdgeLabelRenderer>

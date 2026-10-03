@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useLang, useT, LANGS, type Lang } from '@all-draw/i18n';
 import { Home } from './Home';
 import { WorkspaceScreen } from './WorkspaceScreen';
 import { KeysScreen } from './Keys';
+import { Landing } from './Landing';
+
+/** Centro de documentación (`#/docs…`): trozo perezoso, no entra en el paquete inicial. Enlaces: `./docs/links`. */
+const DocsScreen = lazy(() => import('./docs/DocsScreen'));
 
 function useHashRoute(): string {
   const [h, setH] = useState(location.hash);
@@ -24,9 +28,13 @@ export function LangSelect({ className = '' }: { className?: string }) {
 export function App() {
   const hash = useHashRoute();
   const [lang] = useLang();
+  const t = useT();
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
   const m = /^#\/(w|s)\/([^/?]+)(?:\/v\/([^/?]+))?/.exec(hash);
   if (m) return <WorkspaceScreen key={m[1]! + m[2]!} mode={m[1] === 's' ? 'server' : 'local'} id={decodeURIComponent(m[2]!)} viewId={m[3] ? decodeURIComponent(m[3]) : null} />;
+  if (/^#\/docs(?:[/?#]|$)/.test(hash)) return <Suspense fallback={<div className="home" role="status" aria-live="polite">{t('Cargando…')}</div>}><DocsScreen hash={hash} /></Suspense>;
   if (hash.startsWith('#/keys')) return <KeysScreen />;
+  // Portada siempre accesible; en `#/` el inicio muestra la portada a quien llega sin sesión ni espacios locales.
+  if (hash.startsWith('#/bienvenida')) return <Landing />;
   return <Home />;
 }

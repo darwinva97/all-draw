@@ -3,7 +3,7 @@
 // Uso: `pnpm dev --port 4352` y `BASE=http://127.0.0.1:4352 node e2e/text-panel.mjs`. Capturas en /tmp/shots/txt-*.png.
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
-const base = process.env.BASE ?? 'http://127.0.0.1:4352', out = process.env.OUT ?? '/tmp/shots';
+const base = process.env.BASE ?? 'http://127.0.0.1:4173', out = process.env.OUT ?? '/tmp/shots';
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
 const fails = []; const check = (n, ok, extra = '') => { console.log(`${ok ? 'ok ' : 'FAIL'} ${n} ${extra}`); if (!ok) fails.push(n); };

@@ -16,7 +16,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { startServer } from './lib/server.mjs';
 
-const base = (process.env.BASE ?? 'http://127.0.0.1:4361').replace(/\/$/, '');
+const base = (process.env.BASE ?? 'http://127.0.0.1:4173').replace(/\/$/, '');
 const out = process.env.OUT ?? '/tmp/shots';
 mkdirSync(out, { recursive: true });
 const LANGS = (process.env.LANGS ?? 'es,en,pt,fr').split(',').map(s => s.trim()).filter(Boolean);

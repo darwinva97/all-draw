@@ -97,6 +97,7 @@
 .ad-handle { width: 8px; height: 8px; background: var(--ad-accent); border: 1px solid #fff; opacity: 0; transition: opacity .15s; }
 .ad-node:hover .ad-handle, .react-flow__node.selected .ad-handle, .ad-canvas .react-flow.connecting .ad-handle { opacity: 1; }
 .ad-handle--body { }
+.ad-handle--inert { opacity: 0; pointer-events: none; }
 .ad-ports { position: absolute; inset: 0; pointer-events: none; }
 .ad-port { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; }
 .ad-port .ad-handle--port { opacity: 1; width: 9px; height: 9px; background: #f59e0b; border-radius: 2px; pointer-events: all; }
@@ -138,8 +139,8 @@
 .ad-problem.ad-sev-info { border-left-color: #94a3b8; }
 .ad-visual--core-header { background: #f3f4f6; border-color: #d1d5db; border-radius: 0; display: flex; align-items: center; justify-content: center; }
 .ad-visual--core-header .ad-visual__title { font-weight: 600; color: var(--ad-text); font-size: 12px; }
-.ad-node.is-container { align-items: flex-start; justify-content: flex-start; text-align: left; }
-.ad-node.is-container .ad-node__body { align-items: flex-start; }
+.ad-node.ad-node--title-left { justify-content: flex-start; text-align: left; }
+.ad-node.ad-node--title-left .ad-node__body { align-items: flex-start; }
 .ad-node.is-container.ad-shape-pool .ad-node__body, .ad-node.is-container.ad-shape-lane .ad-node__body { align-items: center; }
 
 /* Barra de alineación (flotante, arriba centro del lienzo) */
@@ -874,3 +875,28 @@ button.ad-tr-count { color: var(--ad-text); }
 @media (max-width: 1279px) {
   .ad-toolbar .ad-btn:has(> .ad-icon) > .ad-btn__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
+
+/* ==== Aspecto Archi: nombre ajustado a la caja (label.tsx), banda de título, Junction y notas con esquina doblada */
+/* El navegador parte las líneas por donde `layoutLabel` las midió (mismo ancho y letra); el recorte de líneas es la red. */
+.ad-node__label--fit { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; max-width: 100%; white-space: pre-line; overflow-wrap: normal; word-break: normal; hyphens: none; }
+.ad-node__line { display: block; white-space: pre; }
+.ad-node__type { line-height: 13px; white-space: nowrap; }
+.ad-node--archimate .ad-node__label { font-weight: 400; }
+.ad-node--archimate.r-bold .ad-node__label { font-weight: 700; }
+/* Contenedores, nodos con hijos y `labelPosition: 'top'`: título en la banda superior. */
+.ad-node.ad-node--band { align-items: flex-start; }
+/* Título pintado encima de los hijos por `ContainerTitles`: aquí solo queda el hueco (doble clic, lectores de pantalla). */
+.ad-node__label.is-under, .ad-node__type.is-under { color: transparent !important; }
+.ad-ctitles { position: absolute; left: 0; top: 0; pointer-events: none; }
+.ad-ctitle { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; gap: 1px; pointer-events: none; z-index: 1001; }
+.ad-ctitle.is-left { align-items: flex-start; text-align: left; }
+.ad-ctitle.is-center { align-items: center; text-align: center; }
+.ad-ctitle.is-dimmed { opacity: .45; }
+/* Junction: solo el círculo; su nombre, si lo tiene, debajo. */
+.ad-node--junction { padding: 0; }
+/* Nota: esquina doblada abajo a la derecha (SVG de fondo), texto arriba a la izquierda a 11 px con sus saltos de línea. */
+.ad-visual.ad-visual--core-note { background: transparent; border-color: transparent; border-radius: 0; padding: 5px 7px; position: relative; overflow: visible; }
+.ad-visual--core-note .ad-note__bg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.ad-visual--core-note .ad-visual__text { position: relative; font-size: 11px; line-height: 14px; white-space: pre-line; overflow-wrap: normal; word-break: normal; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; text-align: left; max-height: 100%; }
+.ad-editor.theme-dark .ad-visual.ad-visual--core-note { background: transparent; border-color: transparent; }
+.ad-visual--core-note.is-selected { outline-offset: 2px; }

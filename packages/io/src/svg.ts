@@ -8,7 +8,7 @@
  */
 import { allPorts, resolveStyle, type ArrowHead, type Element, type ElementType, type NotationRegistry, type Port, type RuleStyle, type Shape, type Store, type ViewEdge, type ViewNode } from '@all-draw/core';
 import { cellRects, normalizeGrid, cellKey } from '@all-draw/notation-grid';
-import { figureEntry, figureOf, figureParts, iconParts, showsIcon, textInset } from '@all-draw/notation-archimate';
+import { figureEntry, figureOf, figureParts, iconParts, showsIcon, textInset, isJunction, layoutLabel, fitText, notePath as noteFigurePath, approxTextWidth, ARCHI_FONT_SIZE, NOTE_FONT, NOTE_LINE, NOTE_PAD, TYPE_FONT, TYPE_LINE, type MeasureText } from '@all-draw/notation-archimate';
 import { edgePath, floatingEndpoints, type Box, type Endpoints, type Pt, type Router } from './bendpath-svg';
 import { renderSequenceSvg } from './svg-sequence';
 import { renderGanttSvg } from './svg-gantt';
@@ -80,6 +80,8 @@ const vars = (t: 'light' | 'dark') => Object.entries(THEME_VARS[t]).map(([k, v])
  */
 const lcRules = (scope: string) => [
   `${scope} .ad-lc>.ad-shape{fill:var(--ad-panel)}`,
+  // Figura de Archi (Grouping, Location…): el relleno va en el primer path del grupo (`ad-archi__body`), no en el grupo.
+  `${scope} .ad-lc>.ad-archi>.ad-archi__body{fill:var(--ad-panel)}`,
   `${scope} .ad-lc-text>text{fill:var(--ad-text)}`,
   `${scope} .ad-on-lc>text.ad-node__label{fill:var(--ad-text)}`,
 ].join('');
@@ -94,6 +96,8 @@ export function svgStyle(theme: SvgTheme, fontFamily: string): string {
     `svg.ad-svg{font-family:${fontFamily};font-size:13px;color:var(--ad-text)}`,
     '.ad-bg{fill:var(--ad-bg)}',
     '.ad-node__label{font-weight:500}',
+    '.ad-node--archimate .ad-node__label{font-weight:400}',
+    '.ad-node--archimate.r-bold .ad-node__label{font-weight:700}',
     '.ad-node__type{font-size:10px;opacity:.6}',
     '.ad-node__icon{font-size:16px}',
     '.ad-node__drill{font-size:11px;opacity:.6}',
@@ -111,7 +115,8 @@ export function svgStyle(theme: SvgTheme, fontFamily: string): string {
     '.ad-port__handle{fill:#f59e0b}',
     '.ad-port__label rect{fill:var(--ad-panel);stroke:var(--ad-border)}',
     '.ad-port__label text{font-size:10px;fill:var(--ad-muted)}',
-    '.ad-visual--note rect{fill:var(--ad-note);stroke:var(--ad-visual-border)}',
+    '.ad-visual--note .ad-shape{fill:var(--ad-note);stroke:var(--ad-visual-border)}',
+    '.ad-visual--note .ad-note__fold{fill:var(--ad-visual-border);fill-opacity:.5;stroke:var(--ad-visual-border)}',
     '.ad-visual--group rect{fill:var(--ad-group);stroke:var(--ad-visual-border);stroke-dasharray:4 3}',
     '.ad-visual--label rect{fill:none;stroke:none}',
     '.ad-visual text{fill:var(--ad-text)}',
@@ -184,6 +189,13 @@ export function wrapText(text: string, maxWidth: number, fontSize = 13): string[
 }
 
 const textW = (s: string, fontSize: number) => s.length * fontSize * 0.55;
+
+/** Márgenes del texto dentro de los nodos (sin el borde), como `ARCHI_PAD`/`NODE_PAD` de `ElementNode.tsx`. */
+const ARCHI_PAD = { x: 5, y: 3, icon: 16 } as const;
+const NODE_PAD = { x: 10, y: 4 } as const;
+/** Alto del icono de texto del tipo (16 px, interlineado 1). */
+const TEXT_ICON_H = 16;
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 interface TextOpts { x: number; y: number; anchor?: 'start' | 'middle' | 'end'; cls?: string; fill?: string; fontSize?: number; lineH?: number; weight?: string; extra?: Record<string, string | number | undefined> }
 /** Texto multilínea con `tspan`; `y` es el centro vertical del bloque. */
@@ -506,6 +518,54 @@ interface Ctx {
   extents: Box[];
   /** Color de las aristas sin color propio: el del editor en cada tema (`#444` claro, `#9aa3b2` oscuro). */
   edgeColor: string;
+  /** Preferencia de la vista `style.showTypeNames` (`showTypeNamesOf`). */
+  showTypeNames: boolean;
+  /** Hijos de cada nodo (cajas absolutas): su nombre va en la banda superior y, si lo tapan, encima de ellos. */
+  children: Map<string, Box[]>;
+  /** Títulos de contenedor tapados por algún hijo: se pintan después de todos los nodos. */
+  titles: string[];
+  /** Medida del texto por grosor de letra (lienzo del navegador si lo hay; si no, aproximada). */
+  measure(weight: number): MeasureText;
+}
+
+/**
+ * Preferencia de la vista `style.showTypeNames`: nombre del tipo bajo el nombre del elemento. Por defecto no en
+ * ArchiMate (el icono de la esquina ya dice el tipo) y sí en el resto. Igual que `showTypeNamesOf` del editor.
+ */
+export function showTypeNamesOf(view: { notationId: string; style?: Record<string, unknown> } | undefined): boolean {
+  const v = view?.style?.showTypeNames;
+  return typeof v === 'boolean' ? v : view?.notationId !== 'archimate';
+}
+
+/**
+ * Medidor de texto para `layoutLabel`: con lienzo (exportar desde el navegador) mide con la misma letra que el editor,
+ * así el SVG parte las líneas por los mismos sitios que el lienzo; sin él (servidor, pruebas), `approxTextWidth`.
+ */
+export function textMeasurer(fontFamily: string): (weight: number) => MeasureText {
+  type C2d = { font: string; measureText(t: string): { width: number } };
+  let found: C2d | null = null;
+  try {
+    const g = globalThis as { OffscreenCanvas?: new (w: number, h: number) => { getContext(k: '2d'): unknown }; document?: { createElement(t: 'canvas'): { getContext(k: '2d'): unknown } } };
+    found = ((g.OffscreenCanvas ? new g.OffscreenCanvas(1, 1).getContext('2d') : g.document?.createElement('canvas').getContext('2d')) ?? null) as C2d | null;
+  } catch { found = null; }
+  const c2d = found;
+  const byWeight = new Map<number, MeasureText>();
+  return (weight) => {
+    const known = byWeight.get(weight);
+    if (known) return known;
+    const cache = new Map<string, number>();
+    const m: MeasureText = !c2d ? approxTextWidth : (text, fs) => {
+      const key = `${fs}|${text}`;
+      const hit = cache.get(key);
+      if (hit !== undefined) return hit;
+      c2d.font = `${weight} ${fs}px ${fontFamily}`;
+      const w = c2d.measureText(text).width;
+      cache.set(key, w);
+      return w;
+    };
+    byWeight.set(weight, m);
+    return m;
+  };
 }
 
 function markerId(ctx: Ctx, head: ArrowHead, color: string, start: boolean): string {
@@ -580,14 +640,16 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
   const onParent = parentFill ? readable(parentFill) : 'var(--ad-text)';
   const textColor = rule.text ?? vn.style.text ?? (svgShape && below ? onParent : !explicit ? 'var(--ad-text)' : readable(explicit));
   const opacity = rule.opacity ?? vn.style.opacity ?? 1;
-  const fontSize = vn.style.fontSize ?? 13;
+  const fontSize = vn.style.fontSize ?? (ctx.reg.notationOf(el.typeId) === 'archimate' ? ARCHI_FONT_SIZE : 13);
   const strokeWidth = rule.borderWidth ?? 1;
   const dash = rule.borderStyle === 'dashed' ? '6 4' : rule.borderStyle === 'dotted' ? '2 3' : (shape === 'group' || shape === 'container') ? '4 3' : undefined;
-  // Sin nombre, una figura con la etiqueta debajo (evento, compuerta, inicial…) no repite el nombre del tipo.
+  // Sin nombre, una figura con la etiqueta debajo (evento, compuerta, inicial, Junction…) no repite el nombre del tipo.
   const label = vn.text ?? (el.name || (below ? '' : (type?.name ?? '')));
   // ArchiMate: figuras e iconos de Archi (mismas `FIGURES` que el editor).
   const archi = ctx.reg.notationOf(el.typeId) === 'archimate' ? figureEntry(el.typeId) : undefined;
-  const archiDef = archi ? figureOf(el.typeId, vn.style.figure === 1 ? 1 : 0) : undefined;
+  // Junction «or»: círculo hueco (fondo del tema y borde de tinta).
+  const junctionOr = !!archi && isJunction(el.typeId) && el.fields?.junctionType === 'or';
+  const archiDef = archi ? figureOf(el.typeId, vn.style.figure === 1 ? 1 : 0, junctionOr ? 'or' : undefined) : undefined;
   // Persona C4: el texto va en el cuerpo, bajo la cabeza.
   const extra = EXTRA_SET.has(figure);
   const inset = archiDef ? textInset(archiDef, b.w, b.h) : person ? { top: personGeometry(b.w, b.h).bodyTop - 2, right: 0, bottom: 0, left: 0 } : extraFigureInset(figure, b.w, b.h);
@@ -602,13 +664,13 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
   // Cuerpo
   if (archi && archiDef) {
     const alt = vn.style.figure === 1 && !!archi.figure1;
-    const fp = figureParts(archiDef, b.w, b.h, fill, stroke, strokeWidth, rule.borderStyle === 'dashed' ? '6 4' : rule.borderStyle === 'dotted' ? '2 3' : undefined);
-    const paths = fp.map(p => `<path${attrs({ d: p.d, fill: p.fill, stroke: p.stroke, 'stroke-width': p.strokeWidth, 'stroke-dasharray': p.dash, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' })}/>`).join('');
+    const fp = figureParts(archiDef, b.w, b.h, junctionOr ? 'var(--ad-panel)' : fill, stroke, strokeWidth, rule.borderStyle === 'dashed' ? '6 4' : rule.borderStyle === 'dotted' ? '2 3' : undefined);
+    const paths = fp.map((p, i) => `<path${attrs({ class: i === 0 ? 'ad-archi__body' : undefined, d: p.d, fill: p.fill, stroke: p.stroke, 'stroke-width': p.strokeWidth, 'stroke-dasharray': p.dash, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' })}/>`).join('');
     parts.push(`<g class="ad-shape ad-archi"${attrs({ 'data-figure': ctx.bare ? undefined : alt ? 1 : 0, transform: `translate(${num(b.x)},${num(b.y)})` })}>${paths}</g>`);
     if (showsIcon(el.typeId, vn.style.figure)) {
       const ip = iconParts(el.typeId, stroke).map(p => `<path${attrs({ d: p.d, fill: p.fill, stroke: p.stroke, 'stroke-width': p.strokeWidth, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' })}/>`).join('');
       parts.push(`<g class="ad-archi__icon"${attrs({ transform: `translate(${num(b.x + b.w - 20)},${num(b.y + 4)})` })}>${ip}</g>`);
-      inset.right += 12;
+      inset.right += ARCHI_PAD.icon;
     }
   }
   else if (extra && SVG_ONLY_FIGURES.has(figure)) parts.push(extraFigureSvg(figure, b, fill, stroke));
@@ -632,37 +694,41 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
     // `labelPosition` del nodo (importadores): `bottom` fuera, bajo la figura (datos BPMN); `top` arriba (contenedores de Archi).
     const pos = vn.style.labelPosition;
     if (below) {
-      parts.push(textBlock([label], { x: b.x + b.w / 2, y: b.y + b.h + 2 + lineH / 2, cls: 'ad-node__label', fill: textColor, fontSize }));
+      if (label) parts.push(textBlock([label], { x: b.x + b.w / 2, y: b.y + b.h + 2 + lineH / 2, cls: 'ad-node__label', fill: textColor, fontSize }));
     } else if (pos === 'bottom') {
       const lines = wrapText(label, Math.max(b.w + 40, 80), fontSize);
       parts.push(textBlock(lines, { x: b.x + b.w / 2, y: b.y + b.h + 2 + (lines.length * lineH) / 2, cls: 'ad-node__label', fill: rule.text ?? vn.style.text ?? onParent, fontSize, lineH }));
       if (icon) parts.push(textBlock([icon], { x: b.x + b.w / 2, y: b.y + b.h / 2, cls: 'ad-node__icon', fill: textColor, fontSize: 16, lineH: 17 }));
     } else {
-      const padX = 10, padY = 4;
-      // Zona útil (las figuras de Archi con cabecera o pestañas laterales reservan margen).
-      const area = { x: b.x + inset.left, y: b.y + inset.top, w: Math.max(fontSize, b.w - inset.left - inset.right), h: Math.max(lineH, b.h - inset.top - inset.bottom) };
-      const maxW = Math.max(fontSize, area.w - padX * 2);
-      // Una palabra más ancha que la caja no se parte a mitad («Manageme nt»): se reduce la letra hasta que quepa (mín. 9 px).
-      const longest = Math.max(0, ...label.split(/\s+/).map(w => w.length));
-      const fs = longest ? Math.max(9, Math.min(fontSize, Math.floor((maxW / (longest * 0.55)) * 10) / 10)) : fontSize;
-      const lh = fs * 1.25;
-      const lines = wrapText(label, maxW, fs);
+      // Zona útil, como `labelGeometry` del editor: caja menos borde, márgenes, partes de la figura (cabeceras, pestañas,
+      // puntas) e icono de Archi. El nombre se ajusta con `layoutLabel` (salto por palabras, letra hasta 9 px, «…»).
+      const pad = archi ? { top: ARCHI_PAD.y + inset.top, right: ARCHI_PAD.x + inset.right, bottom: ARCHI_PAD.y + inset.bottom, left: ARCHI_PAD.x + inset.left }
+        : { top: NODE_PAD.y + inset.top, right: NODE_PAD.x + inset.right, bottom: NODE_PAD.y + inset.bottom, left: NODE_PAD.x + inset.left };
+      const area = { x: b.x + strokeWidth + pad.left, y: b.y + strokeWidth + pad.top, w: b.w - 2 * strokeWidth - pad.left - pad.right, h: b.h - 2 * strokeWidth - pad.top - pad.bottom };
+      const band = pos === 'top' || isContainer || (ctx.children.get(vn.id)?.length ?? 0) > 0;
+      const left = archi ? el.typeId === 'archimate:Grouping' : isContainer;
+      const measure = ctx.measure(rule.bold ? 700 : archi ? 400 : 500);
+      const typeName = type && ctx.showTypeNames && label !== type.name ? type.name : undefined;
+      const lay = layoutLabel(label, { width: Math.max(0, area.w - 0.5), height: area.h, fontSize, maxLines: band ? 2 : undefined, iconHeight: icon ? TEXT_ICON_H : 0, typeName, typeSlack: band ? 0 : Math.min(pad.top, pad.bottom) * 2, measure });
       const blocks: { lines: string[]; cls: string; fontSize: number; lineH: number }[] = [];
-      if (icon) blocks.push({ lines: [icon], cls: 'ad-node__icon', fontSize: 16, lineH: 17 });
-      blocks.push({ lines, cls: 'ad-node__label', fontSize: fs, lineH: lh });
-      // El tipo, solo si cabe (en cajas pequeñas, como las de Archi, se salía por debajo).
-      const used = blocks.reduce((t, k) => t + k.lines.length * k.lineH, 0) + padY * 2;
-      // Sin nombre propio la etiqueta ya es el tipo: no se repite debajo (como el lienzo).
-      if (type && label !== type.name && (isContainer || pos === 'top' || used + 14 <= area.h)) blocks.push({ lines: [type.name], cls: 'ad-node__type', fontSize: 10, lineH: 13 });
-      const total = blocks.reduce((s, k) => s + k.lines.length * k.lineH, 0) + (blocks.length - 1);
-      const left = isContainer;
-      let y = left || pos === 'top' ? area.y + padY + 2 : area.y + (area.h - total) / 2;
-      const x = left ? area.x + padX : area.x + area.w / 2;
+      if (icon && lay.showIcon) blocks.push({ lines: [icon], cls: 'ad-node__icon', fontSize: 16, lineH: TEXT_ICON_H });
+      if (lay.lines.length) blocks.push({ lines: lay.lines, cls: 'ad-node__label', fontSize: lay.fontSize, lineH: lay.lineHeight });
+      if (lay.showType && typeName) blocks.push({ lines: [typeName], cls: 'ad-node__type', fontSize: TYPE_FONT, lineH: TYPE_LINE });
+      let y = band ? area.y : area.y + (area.h - lay.height) / 2;
+      const x = left ? area.x : area.x + area.w / 2;
+      const out: string[] = [];
       for (const k of blocks) {
         const h = k.lines.length * k.lineH;
-        parts.push(textBlock(k.lines, { x, y: y + h / 2, anchor: left ? 'start' : 'middle', cls: k.cls, fill: textColor, fontSize: k.fontSize, lineH: k.lineH }));
+        out.push(textBlock(k.lines, { x, y: y + h / 2, anchor: left ? 'start' : 'middle', cls: k.cls, fill: textColor, fontSize: k.fontSize, lineH: k.lineH }));
         y += h + 1;
       }
+      if (lay.truncated && !ctx.bare) out.push(`<title>${escapeXml(label)}</title>`);
+      // Título de contenedor tapado por un hijo: se pinta después de todos los nodos (encima), como en el lienzo.
+      const kids = band ? ctx.children.get(vn.id) ?? [] : [];
+      const tw = Math.max(lay.showIcon ? TEXT_ICON_H : 0, ...lay.lines.map(l => measure(l, lay.fontSize)), lay.showType && typeName ? measure(typeName, TYPE_FONT) : 0);
+      const tr0 = { x: left ? area.x : area.x + (area.w - tw) / 2, y: area.y, w: tw, h: lay.height };
+      if (kids.some(k => overlaps(k, tr0))) ctx.titles.push(`<g${attrs({ class: cls, opacity: opacity === 1 ? undefined : opacity, 'data-title-of': ctx.bare ? undefined : vn.id })}>${out.join('')}</g>`);
+      else parts.push(...out);
     }
   }
   // Badge, drill
@@ -695,9 +761,24 @@ function renderVisualNode(ctx: Ctx, vn: ViewNode, b: Box): string {
   const isGroup = kind === 'group';
   const fs = vn.style.fontSize ?? 13;
   const parts: string[] = [];
+  const text = vn.text ?? '';
+  if (kind === 'note') {
+    // Nota de Archi: esquina doblada abajo a la derecha; texto arriba a la izquierda a 11 px con sus saltos de línea, y lo
+    // que no cabe, recortado con «…». Colores propios en `style` (la regla del tema ganaría a los atributos).
+    const fill = vn.style.fill, stroke = vn.style.stroke ?? (fill ? darken(fill, 0.4) : undefined);
+    const p = noteFigurePath(b.w, b.h);
+    const tf = `translate(${num(b.x)},${num(b.y)})`;
+    parts.push(`<path class="ad-shape"${attrs({ d: p.body, transform: tf, 'stroke-linejoin': 'round', style: [fill && `fill:${fill}`, stroke && `stroke:${stroke}`].filter(Boolean).join(';') })}/>`);
+    parts.push(`<path class="ad-note__fold"${attrs({ d: p.fold, transform: tf, 'stroke-linejoin': 'round', style: [fill && /^#[0-9a-f]{6}$/i.test(fill) && `fill:${darken(fill, 0.12)};fill-opacity:1`, stroke && `stroke:${stroke}`].filter(Boolean).join(';') })}/>`);
+    if (text) {
+      const fit = fitText(text, { width: Math.max(0, b.w - 2 * NOTE_PAD.x - 0.5), height: b.h - 2 * NOTE_PAD.y, fontSize: NOTE_FONT, minFontSize: NOTE_FONT, lineHeight: NOTE_LINE / NOTE_FONT, measure: ctx.measure(400) });
+      const ink = vn.style.text ?? (fill ? readable(fill) : undefined);
+      if (fit.lines.length) parts.push(textBlock(fit.lines, { x: b.x + NOTE_PAD.x, y: b.y + NOTE_PAD.y + (fit.lines.length * NOTE_LINE) / 2, anchor: 'start', cls: 'ad-visual__text', fontSize: NOTE_FONT, lineH: NOTE_LINE, extra: { style: ink ? `fill:${ink}` : undefined } }));
+      if (fit.truncated && !ctx.bare) parts.push(`<title>${escapeXml(text)}</title>`);
+    }
+  } else {
   const style = attrs({ fill: vn.style.fill, stroke: vn.style.stroke });
   parts.push(`<rect${attrs({ x: b.x, y: b.y, width: b.w, height: b.h, rx: 4 })}${style}/>`);
-  const text = vn.text ?? '';
   if (text) {
     if (isGroup) parts.push(textBlock([text], { x: b.x + 6, y: b.y + 6 + 7, anchor: 'start', cls: 'ad-visual__title', fontSize: 11, lineH: 14, fill: vn.style.text }));
     else {
@@ -705,6 +786,7 @@ function renderVisualNode(ctx: Ctx, vn: ViewNode, b: Box): string {
       const lineH = fs * 1.4;
       parts.push(textBlock(lines, { x: b.x + 6, y: b.y + 6 + (lines.length * lineH) / 2, anchor: 'start', fontSize: fs, lineH, fill: vn.style.text }));
     }
+  }
   }
   const data = ctx.bare ? {} : { 'data-node': vn.id };
   return `<g${attrs({ class: `ad-visual ad-visual--${kind}`, ...data })}>${parts.join('')}</g>`;
@@ -787,7 +869,8 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
   const fontFamily = opts.fontFamily ?? 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
   const prefix = safeId(opts.idPrefix ?? `ad-${viewId}`);
   const ctx: Ctx = { store, reg, viewId, prefix, bare: !!opts.bare, markers: new Map(), abs: new Map(), portsOf: new Map(), extents: [],
-    edgeColor: theme === 'dark' ? THEME_VARS.dark['--ad-edge']! : theme === 'dual' ? 'var(--ad-edge)' : '#444' };
+    edgeColor: theme === 'dark' ? THEME_VARS.dark['--ad-edge']! : theme === 'dual' ? 'var(--ad-edge)' : '#444',
+    showTypeNames: showTypeNamesOf(view), children: new Map(), titles: [], measure: textMeasurer(fontFamily) };
 
   const nodes = store.list('nodes').filter(n => n.viewId === viewId);
   const edges = store.list('edges').filter(e => e.viewId === viewId);
@@ -813,6 +896,11 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
     return b;
   };
   nodes.forEach(n => resolve(n));
+  for (const n of nodes) if (n.parentNodeId && byId.has(n.parentNodeId)) {
+    const list = ctx.children.get(n.parentNodeId) ?? [];
+    list.push(ctx.abs.get(n.id)!);
+    ctx.children.set(n.parentNodeId, list);
+  }
   // Secuencia: líneas de vida, activaciones, fragmentos y mensajes los pinta `svg-sequence.ts` (el resto, lo genérico).
   // Gantt: rejilla de tiempo, barras y dependencias las pinta `svg-gantt.ts` (mismas piezas: fondo, frente, ids y cajas).
   const seq = renderSequenceSvg(store, reg, view, { theme, bare: ctx.bare }) ?? renderGanttSvg(store, reg, view, { bare: ctx.bare });
@@ -885,6 +973,7 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
   const edgeSvg = edges.filter(e => !seq?.edgeIds.has(e.id)).map(e => renderEdge(ctx, e)).filter(Boolean);
   if (seq) { body.push(seq.back); ctx.extents.push(...seq.extents); }
   body.push(`<g class="ad-nodes">${nodeSvg.join('')}</g>`);
+  if (ctx.titles.length) body.push(`<g class="ad-titles">${ctx.titles.join('')}</g>`);
   body.push(`<g class="ad-edges">${edgeSvg.join('')}</g>`);
   if (seq) body.push(seq.front);
 

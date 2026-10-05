@@ -15,6 +15,11 @@ export interface NodeEnv {
    * nombre del tipo). Cambia solo al cruzar el umbral, no en cada paso del zoom.
    */
   lowDetail: boolean;
+  /**
+   * Preferencia de la vista `style.showTypeNames` (`showTypeNamesOf`): nombre del tipo bajo el nombre. Sin ella (pruebas
+   * con un entorno mínimo), sí salvo en ArchiMate.
+   */
+  showTypeNames?: boolean;
   run(cmd: Command): void;
   setRenaming(id: string | null): void;
 }

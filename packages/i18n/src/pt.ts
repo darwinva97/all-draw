@@ -2226,5 +2226,8 @@ export const pt: Record<string, string> = {
   'Aplicar el texto ya (sin esperar)': 'Aplicar o texto agora (sem esperar)',
   'Esc y luego Tab': 'Esc e depois Tab',
   'Salir del texto con el teclado': 'Sair do texto com o teclado',
+  // ==== Aspecto Archi
+  'Mostrar el nombre del tipo': 'Mostrar o nome do tipo',
+  'En ArchiMate, el icono de la esquina ya dice el tipo (como en Archi).': 'No ArchiMate, o ícone do canto já indica o tipo (como no Archi).',
 };
 Object.assign(pt, ptDocs, ptFields, ptMessages, ptApi);

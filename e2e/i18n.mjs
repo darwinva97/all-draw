@@ -144,7 +144,8 @@ for (const lang of LANGS) {
     check(await page.locator('.lang-select').count() > 0, `${lang} ${id}: selector de idioma en el editor`);
     await screen(page, lang, `editor-${id}`, { wait: 900 });
     if (id !== 'archimate') continue;
-    await page.locator('.react-flow__node', { hasText: 'Business Service' }).first().click(); // nombre de tipo ArchiMate: igual en todos los idiomas
+    // Nombre de tipo ArchiMate (igual en todos los idiomas): en la etiqueta accesible del nodo, no en la caja (aspecto Archi).
+    await page.locator('.react-flow__node[aria-label*="(Business Service)"]').first().click();
     await page.waitForSelector('.ad-insp');
     await screen(page, lang, 'inspector');
     const tabs = page.locator('.ad-insp [role=tab]');

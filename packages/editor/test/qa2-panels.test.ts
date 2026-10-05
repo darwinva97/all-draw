@@ -249,7 +249,9 @@ describe('28 · sin casilla «Pública»: compartir en solo lectura', () => {
   it('sin acción de la app, remite al botón Compartir', () => {
     const html = render(createElement(Inspector));
     expect(html).not.toContain('Pública');
-    expect(html).not.toMatch(/type="checkbox"/);
+    // La única casilla de la vista es «Mostrar el nombre del tipo» (aspecto Archi), no la de «Pública».
+    expect(html.match(/type="checkbox"/g)).toHaveLength(1);
+    expect(html).toContain('Mostrar el nombre del tipo');
     expect(html).toContain('usa el botón Compartir');
   });
   it('con `onShare`, un enlace «Compartir en solo lectura…»', () => {

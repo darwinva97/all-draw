@@ -16,6 +16,8 @@ export interface ArchimateFigureProps {
   box?: boolean;
   /** Zoom bajo: sin icono (mide menos de 5 px en pantalla). */
   lowDetail?: boolean;
+  /** `or`: Junction hueca. */
+  variant?: string;
 }
 
 /**
@@ -37,10 +39,10 @@ export function archimateBox(typeId: string, figure: number | undefined, strokeW
  * (Probado: el icono como imagen `data:` de fondo compartida es más lento al cambiar de vista, por la decodificación
  * de cada SVG-imagen; ver docs/06-rendimiento.md.)
  */
-export const ArchimateFigure = memo(function ArchimateFigure({ typeId, figure, w, h, fill, stroke, strokeWidth = 1, borderStyle, box, lowDetail }: ArchimateFigureProps) {
+export const ArchimateFigure = memo(function ArchimateFigure({ typeId, figure, w, h, fill, stroke, strokeWidth = 1, borderStyle, box, lowDetail, variant }: ArchimateFigureProps) {
   const alt = figure === 1;
   const dash = borderStyle === 'dashed' ? '6 4' : borderStyle === 'dotted' ? '2 3' : undefined;
-  const parts = box ? NONE : figurePartsCached(typeId, figure, w, h, fill, stroke, strokeWidth, dash);
+  const parts = box ? NONE : figurePartsCached(typeId, figure, w, h, fill, stroke, strokeWidth, dash, variant);
   const icon = !lowDetail && showsIcon(typeId, figure) ? iconPartsCached(typeId, stroke) : NONE;
   return (
     <>

@@ -10,6 +10,7 @@ import { assignmentsTo, suggestedRoles, newAssignment } from './workspace-helper
 import { Icon } from '../icons';
 import { deleteSelection } from '../delete-selection';
 import { TabList, tabPanelProps, useTabIds } from '../ui/tabs';
+import { showTypeNamesOf } from '../nodes/label';
 
 /** Inspector: lo seleccionado (nodo→elemento, arista→relación) o la vista. */
 export function Inspector() {
@@ -199,6 +200,7 @@ function ViewInspector({ viewId }: { viewId: string | null }) {
         <option value="">{t('(ninguno: todo)')}</option>{pack.viewpoints.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>}
       <label className="ad-field"><span>{t('Elemento raíz')}</span><select className="ad-input" disabled={readOnly} value={view.rootElementId ?? ''} onChange={e => patch({ rootElementId: e.target.value || undefined })}>
         <option value="">{t('(ninguno)')}</option>{store.list('elements').filter(e => !e.template).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></label>
+      <label className="ad-field ad-field--inline" title={t('En ArchiMate, el icono de la esquina ya dice el tipo (como en Archi).')}><input type="checkbox" disabled={readOnly} checked={showTypeNamesOf(view)} onChange={e => patch({ style: { showTypeNames: e.target.checked } })} /><span>{t('Mostrar el nombre del tipo')}</span></label>
       {view.kind === 'grid' && <GridEditor viewId={view.id} grid={normalizeGrid(view.grid)} />}
       {!readOnly && (share
         ? <button type="button" className="ad-link ad-insp__share" onClick={share}><Icon name="link" size={14} />{t('Compartir en solo lectura…')}</button>

@@ -344,17 +344,20 @@ const LOCATION: FigureDef = {
     return arc(xc, r.y + ym + d / 2, d / 2, d / 2, -35, 250) + L(xc, r.y + r.h - ym) + 'Z';
   }),
 };
-/** `GroupingFigure` tipo 1: pestaña (TOPBAR_HEIGHT 18, INSET 1.4). */
+/** `GroupingFigure` tipo 1: pestaña (TOPBAR_HEIGHT 18, INSET 1.4). El título va en la pestaña. */
 const GROUP_TAB: FigureDef = {
   path: gen(({ x, y, w, h }) => { const tw = w / 1.4, th = Math.min(18, h / 2); return poly([[x, y + h], [x, y], [x + tw, y], [x + tw, y + th], [x + w, y + th], [x + w, y + h]]); }),
   lines: gen(({ x, y, w, h }) => `${M(x, y + Math.min(18, h / 2))}h${n(w / 1.4)}`),
   dash: () => '6 3',
+  inset: (w) => ({ right: w - w / 1.4 }),
 };
-/** `JunctionFigure`: círculo relleno (AND). */
+/** `JunctionFigure`: círculo relleno (AND) con el color del trazo (negro: la tinta del tema). */
 const JUNCTION: FigureDef = {
   path: gen((r) => circle(r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) / 2)),
   solid: gen((r) => circle(r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) / 2)),
 };
+/** `JunctionFigure` con `junctionType = or`: el mismo círculo, hueco (relleno del fondo, borde de tinta). */
+export const JUNCTION_OR: FigureDef = { path: JUNCTION.path };
 /** `ResourceFigure`: caja con pestaña lateral (pila) y tres barras. */
 const RESOURCE: FigureDef = {
   path: gen(({ x, y, w, h }) => {
@@ -673,10 +676,14 @@ export function figureEntry(typeId: string): Figure | undefined { return FIGURES
 /** Icono (path SVG 16×16) del tipo, o `undefined`. */
 export function iconOf(typeId: string): string | undefined { return figureEntry(typeId)?.icon; }
 
-/** Figura a pintar: `0` = por defecto de Archi (rectángulo/redondeado/octógono), `1` = alternativa (si no la hay, la de 0). */
-export function figureOf(typeId: string, figure: 0 | 1 = 0): FigureDef {
+/**
+ * Figura a pintar: `0` = por defecto de Archi (rectángulo/redondeado/octógono), `1` = alternativa (si no la hay, la de 0).
+ * `variant`: `or` = Junction hueca (`junctionType = or`).
+ */
+export function figureOf(typeId: string, figure: 0 | 1 = 0, variant?: string): FigureDef {
   const f = figureEntry(typeId);
   if (!f) return RECT;
+  if (f.base === JUNCTION && variant === 'or') return JUNCTION_OR;
   const base = f.base ?? (f.figure0 === 'rounded' ? ROUNDED : RECT);
   return figure === 1 && f.figure1 ? f.figure1 : base;
 }
@@ -750,10 +757,15 @@ const iconCache = new Bounded<FigurePart[]>(500);
  * `figureParts(figureOf(typeId, figure), …)` con caché por `(tipo, figura, w, h, colores, trazo)`: dos nodos del mismo tipo,
  * tamaño y estilo comparten la misma matriz (no hay que tratarla como mutable).
  */
-export function figurePartsCached(typeId: string, figure: number | undefined, w: number, h: number, fill: string, stroke: string, strokeWidth = 1, dash?: string): FigurePart[] {
+export function figurePartsCached(typeId: string, figure: number | undefined, w: number, h: number, fill: string, stroke: string, strokeWidth = 1, dash?: string, variant?: string): FigurePart[] {
   const alt = figure === 1 ? 1 : 0;
-  return partsCache.get(`${local(typeId)}|${alt}|${w}|${h}|${fill}|${stroke}|${strokeWidth}|${dash ?? ''}`, () => figureParts(figureOf(typeId, alt), w, h, fill, stroke, strokeWidth, dash));
+  return partsCache.get(`${local(typeId)}|${alt}|${w}|${h}|${fill}|${stroke}|${strokeWidth}|${dash ?? ''}|${variant ?? ''}`, () => figureParts(figureOf(typeId, alt, variant), w, h, fill, stroke, strokeWidth, dash));
 }
+
+/** ¿Es una Junction? (círculo pequeño sin icono ni etiqueta dentro). */
+export const isJunction = (typeId: string): boolean => local(typeId) === 'Junction';
+/** Tamaño de una Junction nueva, como en Archi. */
+export const JUNCTION_SIZE = 15;
 
 /** `iconParts` con caché por `(tipo, color)`. */
 export function iconPartsCached(typeId: string, stroke: string): FigurePart[] {
@@ -762,3 +774,184 @@ export function iconPartsCached(typeId: string, stroke: string): FigurePart[] {
 
 /** Vacía las cachés de figuras (pruebas). */
 export function clearFigureCaches(): void { partsCache.clear(); iconCache.clear(); }
+
+// ---------------------------------------------------------------- Texto dentro de las figuras
+/*
+ * Ajuste del nombre dentro de la zona útil de un nodo, igual en el lienzo (`ElementNode`, que mide con
+ * `canvas.measureText`) y en el SVG exportado (`packages/io/src/svg.ts`, que mide con un lienzo si lo hay y, sin DOM,
+ * con `approxTextWidth`): salto de línea por palabras (y dentro de una palabra tras «/», «_», «-» o «.»); si no cabe, la
+ * letra baja de medio en medio píxel hasta `MIN_LABEL_FONT`, y si aun así no cabe se recorta con «…». Nunca devuelve
+ * líneas más anchas que `width` ni más líneas de las que caben en `height`.
+ */
+/** Ancho en px de `text` con letra de `fontSize` px. */
+export type MeasureText = (text: string, fontSize: number) => number;
+
+/** Letra por defecto de los nodos ArchiMate (Archi usa 9 pt). */
+export const ARCHI_FONT_SIZE = 11.5;
+/** Letra mínima a la que se reduce un nombre que no cabe; por debajo, se recorta con «…». */
+export const MIN_LABEL_FONT = 9;
+/** Interlineado de las etiquetas (múltiplo del tamaño de letra). */
+export const LABEL_LINE_HEIGHT = 1.25;
+/** Línea del nombre del tipo (bajo el nombre, solo si cabe). */
+export const TYPE_FONT = 10;
+export const TYPE_LINE = 13;
+export const ELLIPSIS = '…';
+
+const NARROW = new Set("iljI.,:;'!|`·");
+const SEMI = new Set('frt()[]{}/\\-"*');
+const WIDE = new Set('mwMW@%');
+/**
+ * Ancho aproximado sin DOM: em por carácter de una sans-serif (entre Arial y DejaVu Sans, algo por exceso para que lo
+ * que cabe aquí quepa también al pintarlo).
+ */
+export function approxTextWidth(text: string, fontSize: number): number {
+  let em = 0;
+  for (const ch of text) {
+    if (ch === ' ') em += 0.32;
+    else if (NARROW.has(ch)) em += 0.3;
+    else if (SEMI.has(ch)) em += 0.4;
+    else if (WIDE.has(ch)) em += 0.92;
+    else if (ch !== ch.toLowerCase()) em += 0.7;
+    else if (ch >= '0' && ch <= '9') em += 0.62;
+    else em += 0.6;
+  }
+  return em * fontSize;
+}
+
+/** Trozos de un párrafo entre los que se puede saltar: palabras y, dentro de ellas, tras «/», «_», «-» o «.». */
+export function breakPieces(para: string): { text: string; space: boolean }[] {
+  const out: { text: string; space: boolean }[] = [];
+  for (const word of para.split(/\s+/).filter(Boolean)) {
+    word.split(/(?<=[/_.-])(?=[^/_.-])/).forEach((text, j) => out.push({ text, space: j === 0 && out.length > 0 }));
+  }
+  return out;
+}
+
+/** Salto de línea voraz: respeta los `\n` (un párrafo vacío es una línea en blanco). Una pieza más ancha que `width` queda sola en su línea. */
+export function wrapLines(text: string, width: number, fontSize: number, measure: MeasureText = approxTextWidth): string[] {
+  const out: string[] = [];
+  for (const para of text.split('\n')) {
+    let cur = '';
+    for (const p of breakPieces(para)) {
+      if (!cur) { cur = p.text; continue; }
+      const next = cur + (p.space ? ' ' : '') + p.text;
+      if (measure(next, fontSize) <= width) cur = next; else { out.push(cur); cur = p.text; }
+    }
+    out.push(cur);
+  }
+  return out;
+}
+
+/** `line` recortada por el final hasta que, con «…», mida como mucho `width` (con `force`, lleva «…» aunque quepa entera). */
+export function ellipsize(line: string, width: number, fontSize: number, measure: MeasureText = approxTextWidth, force = false): string {
+  if (!force && measure(line, fontSize) <= width) return line;
+  const chars = Array.from(line.trimEnd());
+  while (chars.length && measure(chars.join('').trimEnd() + ELLIPSIS, fontSize) > width) chars.pop();
+  const s = chars.join('').trimEnd() + ELLIPSIS;
+  return measure(s, fontSize) <= width ? s : '';
+}
+
+export interface FitTextOptions {
+  /** Ancho y alto disponibles (px). */
+  width: number;
+  height: number;
+  /** Letra de partida (px). */
+  fontSize: number;
+  /** Letra mínima (por defecto `MIN_LABEL_FONT`); igual a `fontSize`: no se reduce, solo se recorta. */
+  minFontSize?: number;
+  /** Interlineado, múltiplo de la letra (por defecto `LABEL_LINE_HEIGHT`). */
+  lineHeight?: number;
+  /** Máximo de líneas (título de contenedor: 2). */
+  maxLines?: number;
+  measure?: MeasureText;
+}
+export interface FittedText {
+  lines: string[];
+  fontSize: number;
+  /** Alto de línea (px). */
+  lineHeight: number;
+  /** Recortado con «…»: el texto completo va en el `title`. */
+  truncated: boolean;
+}
+
+const half = (v: number) => Math.round(v * 2) / 2;
+
+/** Ajusta `text` a `width`×`height`: salto por palabras, letra más pequeña (hasta `minFontSize`) y por último «…». */
+export function fitText(text: string, o: FitTextOptions): FittedText {
+  const measure = o.measure ?? approxTextWidth;
+  const lhf = o.lineHeight ?? LABEL_LINE_HEIGHT;
+  const min = Math.min(o.fontSize, o.minFontSize ?? MIN_LABEL_FONT);
+  const width = Math.max(0, o.width), height = Math.max(0, o.height);
+  if (!text.trim()) return { lines: [], fontSize: o.fontSize, lineHeight: o.fontSize * lhf, truncated: false };
+  for (let fs = o.fontSize; ; fs = Math.max(min, half(fs - 0.5))) {
+    const lh = fs * lhf;
+    const lines = wrapLines(text, width, fs, measure);
+    const room = Math.min(o.maxLines ?? Infinity, Math.floor((height + 0.01) / lh));
+    if (lines.length <= room && lines.every(l => measure(l, fs) <= width)) return { lines, fontSize: fs, lineHeight: lh, truncated: false };
+    if (fs <= min) {
+      const shown = lines.slice(0, Math.max(0, room));
+      const cut = lines.length > shown.length;
+      const out = shown.map((l, i) => ellipsize(l, width, fs, measure, cut && i === shown.length - 1));
+      // Sin sitio ni para «…»: nada (mejor que pintar fuera del nodo).
+      return { lines: out.some(Boolean) ? out : [], fontSize: fs, lineHeight: lh, truncated: true };
+    }
+  }
+}
+
+export interface LabelLayoutOptions extends FitTextOptions {
+  /** Nombre del tipo: una línea de `TYPE_FONT` px bajo el nombre, solo si cabe entera. */
+  typeName?: string;
+  /** Alto reservado sobre el nombre (icono de texto del tipo). */
+  iconHeight?: number;
+  /**
+   * Alto extra que puede usar la línea del tipo (el margen vertical del nodo): la letra pequeña del tipo cabe en el
+   * margen sin salirse de la caja (el bloque se centra y reparte el exceso arriba y abajo).
+   */
+  typeSlack?: number;
+}
+export interface LabelLayout extends FittedText {
+  /** Se pinta el icono de texto (se quita si sin él el nombre cabe con más letra). */
+  showIcon: boolean;
+  /** Se pinta la línea del tipo. */
+  showType: boolean;
+  /** Alto del bloque (icono, nombre y tipo, con 1 px entre ellos). */
+  height: number;
+}
+
+/**
+ * Bloque de texto de un nodo: icono (alto fijo), nombre ajustado con `fitText` y, si cabe, el nombre del tipo. El nombre
+ * manda: si con el icono hay que reducir o recortar el nombre y sin él no tanto, el icono no se pinta.
+ */
+export function layoutLabel(text: string, o: LabelLayoutOptions): LabelLayout {
+  const measure = o.measure ?? approxTextWidth;
+  let iconH = o.iconHeight ?? 0;
+  let fit = fitText(text, { ...o, height: o.height - (iconH ? iconH + 1 : 0) });
+  if (iconH && (fit.truncated || fit.fontSize < o.fontSize)) {
+    const bare = fitText(text, o);
+    if ((fit.truncated && !bare.truncated) || bare.fontSize > fit.fontSize) { fit = bare; iconH = 0; }
+  }
+  const used = (iconH ? iconH + 1 : 0) + fit.lines.length * fit.lineHeight;
+  const showType = !!o.typeName && !fit.truncated && used + (used ? 1 : 0) + TYPE_LINE <= o.height + (o.typeSlack ?? 0) + 0.01 && measure(o.typeName, TYPE_FONT) <= o.width;
+  return { ...fit, showIcon: iconH > 0, showType, height: used + (showType ? (used ? 1 : 0) + TYPE_LINE : 0) };
+}
+
+// ---------------------------------------------------------------- Nota (`core:note`) con el aspecto de Archi
+/** Letra e interlineado del texto de las notas (px). */
+export const NOTE_FONT = 11;
+export const NOTE_LINE = 14;
+/** Margen del texto de la nota, borde incluido (px): arriba a la izquierda, como Archi. */
+export const NOTE_PAD = { x: 8, y: 6 } as const;
+/** Lado de la esquina doblada de la nota (Archi: 12 px; menos en notas muy pequeñas). */
+export const noteFoldSize = (w: number, h: number): number => Math.max(0, Math.min(12, w / 3, h / 3));
+
+/**
+ * Nota de Archi (`NoteFigure`): rectángulo con la esquina inferior derecha cortada (`body`) y el triángulo de la parte
+ * doblada (`fold`), a medio píxel del borde para un trazo de 1. Coordenadas del nodo (0,0)-(w,h).
+ */
+export function notePath(w: number, h: number): { body: string; fold: string } {
+  const c = noteFoldSize(w, h), x1 = Math.max(0.5, w - 0.5), y1 = Math.max(0.5, h - 0.5);
+  return {
+    body: `${M(0.5, 0.5)}${L(x1, 0.5)}${L(x1, y1 - c)}${L(x1 - c, y1)}${L(0.5, y1)}Z`,
+    fold: `${M(x1 - c, y1)}${L(x1 - c, y1 - c)}${L(x1, y1 - c)}Z`,
+  };
+}

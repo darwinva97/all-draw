@@ -2317,4 +2317,7 @@ Object.assign(en, {
   'Aplicar el texto ya (sin esperar)': 'Apply the text now (without waiting)',
   'Esc y luego Tab': 'Esc then Tab',
   'Salir del texto con el teclado': 'Leave the text with the keyboard',
+  // ==== Aspecto Archi
+  'Mostrar el nombre del tipo': 'Show the type name',
+  'En ArchiMate, el icono de la esquina ya dice el tipo (como en Archi).': 'In ArchiMate, the corner icon already tells the type (as in Archi).',
 } satisfies Record<string, string>);

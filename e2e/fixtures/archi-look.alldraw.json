@@ -1,0 +1,1688 @@
+{
+  "comments": {},
+  "dimensions": {},
+  "edges": {
+    "ve_1Wps3lWJWKg4": {
+      "bendpoints": [],
+      "fromNodeId": "vn_QKEBxa857nRz",
+      "id": "ve_1Wps3lWJWKg4",
+      "relationId": "rel_D33GyAMXwFRD",
+      "style": {},
+      "toNodeId": "vn_PzcLm3RRh5BT",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_69cOd98f2r5R": {
+      "bendpoints": [],
+      "fromNodeId": "vn_AsTQwK53ScvX",
+      "id": "ve_69cOd98f2r5R",
+      "style": {
+        "targetHead": "none"
+      },
+      "toNodeId": "vn_5aO7MyS2zKBo",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_AfchlRDrEWtf": {
+      "bendpoints": [],
+      "fromNodeId": "vn_G7B7O6QPWwdx",
+      "id": "ve_AfchlRDrEWtf",
+      "relationId": "rel_OwdGtpuZSwVp",
+      "style": {},
+      "toNodeId": "vn_70EpHJgMVV1w",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_Aq8fixsMFq4E": {
+      "bendpoints": [],
+      "fromNodeId": "vn_xUFvpP4mCKBj",
+      "id": "ve_Aq8fixsMFq4E",
+      "relationId": "rel_ihBd6vCVPfz9",
+      "style": {},
+      "toNodeId": "vn_aHjXvAqjSUla",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_DtrgpK5xYs57": {
+      "bendpoints": [],
+      "fromNodeId": "vn_W3nqPYjoVJEA",
+      "id": "ve_DtrgpK5xYs57",
+      "relationId": "rel_QxfVlFDBypie",
+      "style": {},
+      "toNodeId": "vn_DVSx7Wh2sJo3",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_IkIPrUgmuaXk": {
+      "bendpoints": [],
+      "fromNodeId": "vn_eckLLH3WliYo",
+      "id": "ve_IkIPrUgmuaXk",
+      "relationId": "rel_dRKvyB89rObv",
+      "style": {},
+      "toNodeId": "vn_2ZyhnMfSYsq5",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_ItQUkwvcnkYZ": {
+      "bendpoints": [],
+      "fromNodeId": "vn_6TCXXI7DNdI3",
+      "id": "ve_ItQUkwvcnkYZ",
+      "relationId": "rel_zoCvHJLPytoW",
+      "style": {},
+      "toNodeId": "vn_zqH8Lm4IWfth",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_NgbXia2FOT4r": {
+      "bendpoints": [],
+      "fromNodeId": "vn_meuVRoWp1LKT",
+      "id": "ve_NgbXia2FOT4r",
+      "relationId": "rel_OpCAm60V6WOW",
+      "style": {},
+      "toNodeId": "vn_Gs1NgiAF6Cib",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_NwQYFEX29v03": {
+      "bendpoints": [],
+      "fromNodeId": "vn_lMKu6sWQ85M2",
+      "id": "ve_NwQYFEX29v03",
+      "relationId": "rel_fQ294J9lIEby",
+      "style": {},
+      "toNodeId": "vn_eckLLH3WliYo",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_S46YMKUKRdGO": {
+      "bendpoints": [],
+      "fromNodeId": "vn_eckLLH3WliYo",
+      "id": "ve_S46YMKUKRdGO",
+      "relationId": "rel_56SH8kpwYfNO",
+      "style": {},
+      "toNodeId": "vn_QKEBxa857nRz",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_WyvdtIfDXlfr": {
+      "bendpoints": [],
+      "fromNodeId": "vn_buIhQjyHZROZ",
+      "id": "ve_WyvdtIfDXlfr",
+      "style": {
+        "targetHead": "none"
+      },
+      "toNodeId": "vn_0AMWYsd0IKc0",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_XlmmWLQYuJ5M": {
+      "bendpoints": [],
+      "fromNodeId": "vn_meuVRoWp1LKT",
+      "id": "ve_XlmmWLQYuJ5M",
+      "relationId": "rel_y4SMaElcnbFG",
+      "style": {},
+      "toNodeId": "vn_emYJ3XadBt9r",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_a6J47fFGHQvF": {
+      "bendpoints": [],
+      "fromNodeId": "vn_EoEyfqT6XBRI",
+      "id": "ve_a6J47fFGHQvF",
+      "relationId": "rel_qsoye1PnAeZa",
+      "style": {},
+      "toNodeId": "vn_3ZRLCguv7zit",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_c58SttZ0yxaX": {
+      "bendpoints": [],
+      "fromNodeId": "vn_5aO7MyS2zKBo",
+      "id": "ve_c58SttZ0yxaX",
+      "relationId": "rel_6SFJr8QQrbq8",
+      "style": {},
+      "toNodeId": "vn_0AMWYsd0IKc0",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_fRma4s5QcueD": {
+      "bendpoints": [],
+      "fromNodeId": "vn_5aO7MyS2zKBo",
+      "id": "ve_fRma4s5QcueD",
+      "relationId": "rel_UV8vnTYujKwk",
+      "style": {},
+      "toNodeId": "vn_xUFvpP4mCKBj",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_g30BlEdo86mY": {
+      "bendpoints": [],
+      "fromNodeId": "vn_2ZyhnMfSYsq5",
+      "id": "ve_g30BlEdo86mY",
+      "relationId": "rel_PxLDN1HrHLEV",
+      "style": {},
+      "toNodeId": "vn_G7B7O6QPWwdx",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_gk4T01UJcUB2": {
+      "bendpoints": [],
+      "fromNodeId": "vn_TkglKakKxaXm",
+      "id": "ve_gk4T01UJcUB2",
+      "relationId": "rel_L31KcQx4f5o8",
+      "style": {},
+      "toNodeId": "vn_PVFbcriPM2a9",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_l8oAdM8OJ9BY": {
+      "bendpoints": [],
+      "fromNodeId": "vn_lMKu6sWQ85M2",
+      "id": "ve_l8oAdM8OJ9BY",
+      "relationId": "rel_KDsb93QN4scd",
+      "style": {},
+      "toNodeId": "vn_W3nqPYjoVJEA",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_nyVgCgTY3MRN": {
+      "bendpoints": [],
+      "fromNodeId": "vn_Fz9Iho1OKZZe",
+      "id": "ve_nyVgCgTY3MRN",
+      "style": {
+        "targetHead": "none"
+      },
+      "toNodeId": "vn_eckLLH3WliYo",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_o0UfpyuzPeLu": {
+      "bendpoints": [],
+      "fromNodeId": "vn_Gs1NgiAF6Cib",
+      "id": "ve_o0UfpyuzPeLu",
+      "relationId": "rel_wE49HIH3FeLQ",
+      "style": {},
+      "toNodeId": "vn_cpNcJ1WL3exU",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_oeKz4zMVEuih": {
+      "bendpoints": [],
+      "fromNodeId": "vn_emYJ3XadBt9r",
+      "id": "ve_oeKz4zMVEuih",
+      "relationId": "rel_CsxyBga0L0Nl",
+      "style": {},
+      "toNodeId": "vn_EoEyfqT6XBRI",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_qSkgNrgVXfeN": {
+      "bendpoints": [],
+      "fromNodeId": "vn_emYJ3XadBt9r",
+      "id": "ve_qSkgNrgVXfeN",
+      "relationId": "rel_u4lx76AQqs2A",
+      "style": {},
+      "toNodeId": "vn_TkglKakKxaXm",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_rivv3vmne8Ry": {
+      "bendpoints": [],
+      "fromNodeId": "vn_TkglKakKxaXm",
+      "id": "ve_rivv3vmne8Ry",
+      "relationId": "rel_ihhoxTEdmdB1",
+      "style": {},
+      "toNodeId": "vn_lMKu6sWQ85M2",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_si8z0MJWaHK8": {
+      "bendpoints": [],
+      "fromNodeId": "vn_2ZyhnMfSYsq5",
+      "id": "ve_si8z0MJWaHK8",
+      "relationId": "rel_HbV4yaLu464O",
+      "style": {},
+      "toNodeId": "vn_5aO7MyS2zKBo",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_t0IBtwP7YVrc": {
+      "bendpoints": [],
+      "fromNodeId": "vn_meuVRoWp1LKT",
+      "id": "ve_t0IBtwP7YVrc",
+      "relationId": "rel_ReROpjHvZXpC",
+      "style": {},
+      "toNodeId": "vn_xxX3edo7FJmi",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_u62bPZEYSMon": {
+      "bendpoints": [],
+      "fromNodeId": "vn_PVFbcriPM2a9",
+      "id": "ve_u62bPZEYSMon",
+      "relationId": "rel_itMVIzfofPJl",
+      "style": {},
+      "toNodeId": "vn_ethNC6IQvAhd",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_wiykq8VTBBQH": {
+      "bendpoints": [],
+      "fromNodeId": "vn_zqH8Lm4IWfth",
+      "id": "ve_wiykq8VTBBQH",
+      "relationId": "rel_1Z32TY259rF7",
+      "style": {},
+      "toNodeId": "vn_meuVRoWp1LKT",
+      "viewId": "vw_itgJjihxde6R"
+    },
+    "ve_woPv03nvWisl": {
+      "bendpoints": [],
+      "fromNodeId": "vn_DVSx7Wh2sJo3",
+      "id": "ve_woPv03nvWisl",
+      "relationId": "rel_fyu5qKQnHEI1",
+      "style": {},
+      "toNodeId": "vn_Xv0LNEBjM7d0",
+      "viewId": "vw_itgJjihxde6R"
+    }
+  },
+  "elements": {
+    "el_1SRleLIpdCpz": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_1SRleLIpdCpz",
+      "name": "Valida solicitud de credito Aliados",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:BusinessProcess"
+    },
+    "el_1geQ338zYPnk": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_1geQ338zYPnk",
+      "name": "Capa de Experiencia",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:Grouping"
+    },
+    "el_1xUluQBOhBZp": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_1xUluQBOhBZp",
+      "name": "MiBanco CLOUD",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:Grouping"
+    },
+    "el_2XkCbQXArFtS": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_2XkCbQXArFtS",
+      "name": "CANAL - AWS",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:Grouping"
+    },
+    "el_3foCLyKkcPns": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_3foCLyKkcPns",
+      "name": "Realiza consulta por DNI",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:BusinessProcess"
+    },
+    "el_3lEsfJk5o4N1": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_3lEsfJk5o4N1",
+      "name": "Valida si el cliente existe",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:BusinessProcess"
+    },
+    "el_5oTYpb1aaYmk": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_5oTYpb1aaYmk",
+      "name": "[API PROC] Eval Credit Risk",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationInterface"
+    },
+    "el_6JsIsF7XCUZw": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_6JsIsF7XCUZw",
+      "name": "Valida nivel de riesgo",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationInterface"
+    },
+    "el_CYGRR6wWnddA": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_CYGRR6wWnddA",
+      "name": "Valida nivel de riesgo",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:BusinessProcess"
+    },
+    "el_DUdNSBslMgRB": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_DUdNSBslMgRB",
+      "name": "Visualiza resumen con resultado de la validacion",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:BusinessProcess"
+    },
+    "el_HyLDhh3RVVZA": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_HyLDhh3RVVZA",
+      "name": "[MIC EXP] Registro de Prospecto (copy)",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationComponent"
+    },
+    "el_JlZtq1GtJHQ9": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_JlZtq1GtJHQ9",
+      "name": "[API EXP] Segmento de Riesgo",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationInterface"
+    },
+    "el_KgfK867mU73f": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_KgfK867mU73f",
+      "name": "Validacion de riesgo",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:Grouping"
+    },
+    "el_L7T6CKqiI6SG": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_L7T6CKqiI6SG",
+      "name": "Aplica reglas de riesgo",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:BusinessProcess"
+    },
+    "el_NAk4aLCFSCmi": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_NAk4aLCFSCmi",
+      "name": "Aplica reglas de riesgo MS 02 EXP",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationService"
+    },
+    "el_NIvrehSmEkKQ": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_NIvrehSmEkKQ",
+      "name": "",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:Junction"
+    },
+    "el_Pd8hEeqdYRgA": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_Pd8hEeqdYRgA",
+      "name": "APIs Proceso",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:Grouping"
+    },
+    "el_PvTOlbHRAB32": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_PvTOlbHRAB32",
+      "name": "API GW PROCESO",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:Grouping"
+    },
+    "el_RGvpUu1Lsp1I": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_RGvpUu1Lsp1I",
+      "name": "Consulta solicitud existente TOPAZ",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationService"
+    },
+    "el_TUVDfVoEVOMP": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_TUVDfVoEVOMP",
+      "name": "Aplica reglas de riesgo",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationInterface"
+    },
+    "el_Tcf9UiF0ACKm": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_Tcf9UiF0ACKm",
+      "name": "Consulta cliente en base negativa",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationService"
+    },
+    "el_VjrzitRhjHx5": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_VjrzitRhjHx5",
+      "name": "Valida si tiene camapaña existente",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:BusinessProcess"
+    },
+    "el_ZR0HiHY3UEN6": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_ZR0HiHY3UEN6",
+      "name": "Consulta Campaña",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationService"
+    },
+    "el_avuni2ZeHE5a": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_avuni2ZeHE5a",
+      "name": "Consulta cliente existe (MS EXP)",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationService"
+    },
+    "el_cxlDmS1AY64J": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_cxlDmS1AY64J",
+      "name": "[MIC EXP] Registro de Prospecto",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationComponent"
+    },
+    "el_d5OPQ5Jdl1jF": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_d5OPQ5Jdl1jF",
+      "name": "Consulta solicitud existente ALIADOS",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationInterface"
+    },
+    "el_dyTyZwlAc6V8": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_dyTyZwlAc6V8",
+      "name": "Consulta solicitud existente TOPAZ",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationInterface"
+    },
+    "el_g53YVhATN6nu": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_g53YVhATN6nu",
+      "name": "Consulta cliente en base negativa",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationInterface"
+    },
+    "el_j8QuKWxhZF2f": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_j8QuKWxhZF2f",
+      "name": "Consulta cliente existe",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationInterface"
+    },
+    "el_jyiUHUAsh5zv": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_jyiUHUAsh5zv",
+      "name": "Valida nivel de riesgo",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationService"
+    },
+    "el_mwmQTSVBYMb8": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_mwmQTSVBYMb8",
+      "name": "APIM GW EXP",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:Grouping"
+    },
+    "el_pvPKTmOrtATs": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_pvPKTmOrtATs",
+      "name": "MS AKS EXP",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:Grouping"
+    },
+    "el_ukH1pbFmNQ6K": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_ukH1pbFmNQ6K",
+      "name": "[API EXP] Validacion de Lead",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationInterface"
+    },
+    "el_vo4PYDtkRHH9": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_vo4PYDtkRHH9",
+      "name": "Validacion Base Negativa",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:BusinessProcess"
+    },
+    "el_wzbR4XFCq6Rj": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_wzbR4XFCq6Rj",
+      "name": "Cliente Aliado",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:BusinessActor"
+    },
+    "el_xyRyiv72ENTF": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_xyRyiv72ENTF",
+      "name": "Consulta Campaña",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationInterface"
+    },
+    "el_z79gmJHzSMmP": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_z79gmJHzSMmP",
+      "name": "Validad solicitud de credito existente",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:BusinessProcess"
+    },
+    "el_zbnUVuyxVGMP": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_zbnUVuyxVGMP",
+      "name": "Consulta solicitud existente Aliados ALIADOS",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationService"
+    },
+    "el_zzjLjBEsWcFh": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "id": "el_zzjLjBEsWcFh",
+      "name": "GET: /underwriting/{underwritingid}/retrieve",
+      "ports": [],
+      "profiles": [],
+      "props": {},
+      "tags": [],
+      "typeId": "archimate:ApplicationInterface"
+    }
+  },
+  "libraries": {},
+  "meta": {
+    "createdAt": "2026-10-05T16:14:20.976Z",
+    "currentViewId": "vw_itgJjihxde6R",
+    "description": "",
+    "name": "MiBanco · Validación de riesgo",
+    "schemaVersion": 2
+  },
+  "nodes": {
+    "vn_0AMWYsd0IKc0": {
+      "elementId": "el_DUdNSBslMgRB",
+      "h": 50,
+      "id": "vn_0AMWYsd0IKc0",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {},
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 1450,
+      "y": 215
+    },
+    "vn_2ZyhnMfSYsq5": {
+      "elementId": "el_VjrzitRhjHx5",
+      "h": 50,
+      "id": "vn_2ZyhnMfSYsq5",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {},
+      "viewId": "vw_itgJjihxde6R",
+      "w": 130,
+      "x": 1085,
+      "y": 215
+    },
+    "vn_3ZRLCguv7zit": {
+      "elementId": "el_RGvpUu1Lsp1I",
+      "h": 50,
+      "id": "vn_3ZRLCguv7zit",
+      "parentNodeId": "vn_HlEHsJoriWO8",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 247,
+      "y": 32
+    },
+    "vn_5aO7MyS2zKBo": {
+      "elementId": "el_CYGRR6wWnddA",
+      "h": 50,
+      "id": "vn_5aO7MyS2zKBo",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {},
+      "viewId": "vw_itgJjihxde6R",
+      "w": 130,
+      "x": 1265,
+      "y": 215
+    },
+    "vn_6ClRsRx9qmaR": {
+      "elementId": "el_5oTYpb1aaYmk",
+      "h": 110,
+      "id": "vn_6ClRsRx9qmaR",
+      "parentNodeId": "vn_m0uk3vQqanDq",
+      "style": {
+        "fill": "#b5ffff",
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 245,
+      "x": 625,
+      "y": 20
+    },
+    "vn_6TCXXI7DNdI3": {
+      "elementId": "el_wzbR4XFCq6Rj",
+      "h": 48,
+      "id": "vn_6TCXXI7DNdI3",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 110,
+      "x": 30,
+      "y": 120
+    },
+    "vn_70EpHJgMVV1w": {
+      "elementId": "el_ZR0HiHY3UEN6",
+      "h": 50,
+      "id": "vn_70EpHJgMVV1w",
+      "parentNodeId": "vn_Bynav5bq3vSP",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 193,
+      "y": 30
+    },
+    "vn_8rHTtEAPJRIq": {
+      "elementId": "el_1geQ338zYPnk",
+      "h": 370,
+      "id": "vn_8rHTtEAPJRIq",
+      "parentNodeId": "vn_RgKqSZVoUdXp",
+      "style": {
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 1680,
+      "x": 20,
+      "y": 30
+    },
+    "vn_AsTQwK53ScvX": {
+      "h": 118,
+      "id": "vn_AsTQwK53ScvX",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {
+        "fill": "#b5ffff"
+      },
+      "text": "Valida si califica para un financiamiento\n\nRiesgo Bajo - verde\nRiesgo Medio - amarillo\nRiesgo Alto - rojo\nRiesgo Muy Alto - rojo",
+      "viewId": "vw_itgJjihxde6R",
+      "visualType": "core:note",
+      "w": 140,
+      "x": 1262,
+      "y": 50
+    },
+    "vn_Bynav5bq3vSP": {
+      "elementId": "el_cxlDmS1AY64J",
+      "h": 102,
+      "id": "vn_Bynav5bq3vSP",
+      "parentNodeId": "vn_YXUu7QSQhkmg",
+      "style": {
+        "fill": "#ffffb5",
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 550,
+      "x": 965,
+      "y": 15
+    },
+    "vn_DVSx7Wh2sJo3": {
+      "elementId": "el_NAk4aLCFSCmi",
+      "h": 50,
+      "id": "vn_DVSx7Wh2sJo3",
+      "parentNodeId": "vn_HlEHsJoriWO8",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 570,
+      "y": 32
+    },
+    "vn_EoEyfqT6XBRI": {
+      "elementId": "el_dyTyZwlAc6V8",
+      "h": 48,
+      "id": "vn_EoEyfqT6XBRI",
+      "parentNodeId": "vn_iIFIqqTtDwVQ",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 247,
+      "y": 35
+    },
+    "vn_Fz9Iho1OKZZe": {
+      "h": 118,
+      "id": "vn_Fz9Iho1OKZZe",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {
+        "fill": "#b5ffff"
+      },
+      "text": "Validar si el cliente existe en la base de datos de aliados y si tiene campaña vigente; en caso el cliente tenga campaña vigente, se obtiene el importe preaprobado",
+      "viewId": "vw_itgJjihxde6R",
+      "visualType": "core:note",
+      "w": 140,
+      "x": 900,
+      "y": 55
+    },
+    "vn_G7B7O6QPWwdx": {
+      "elementId": "el_xyRyiv72ENTF",
+      "h": 48,
+      "id": "vn_G7B7O6QPWwdx",
+      "parentNodeId": "vn_OyIqwtXTe4Nr",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 193,
+      "y": 35
+    },
+    "vn_Gs1NgiAF6Cib": {
+      "elementId": "el_g53YVhATN6nu",
+      "h": 48,
+      "id": "vn_Gs1NgiAF6Cib",
+      "parentNodeId": "vn_iIFIqqTtDwVQ",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 20,
+      "y": 35
+    },
+    "vn_HlEHsJoriWO8": {
+      "elementId": "el_HyLDhh3RVVZA",
+      "h": 102,
+      "id": "vn_HlEHsJoriWO8",
+      "parentNodeId": "vn_YXUu7QSQhkmg",
+      "style": {
+        "fill": "#ffffb5",
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 755,
+      "x": 125,
+      "y": 20
+    },
+    "vn_OyIqwtXTe4Nr": {
+      "elementId": "el_JlZtq1GtJHQ9",
+      "h": 108,
+      "id": "vn_OyIqwtXTe4Nr",
+      "parentNodeId": "vn_wusOAgaLKW0a",
+      "style": {
+        "fill": "#ffffb5",
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 560,
+      "x": 955,
+      "y": 18
+    },
+    "vn_PVFbcriPM2a9": {
+      "elementId": "el_d5OPQ5Jdl1jF",
+      "h": 48,
+      "id": "vn_PVFbcriPM2a9",
+      "parentNodeId": "vn_iIFIqqTtDwVQ",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 408,
+      "y": 35
+    },
+    "vn_PzcLm3RRh5BT": {
+      "elementId": "el_avuni2ZeHE5a",
+      "h": 50,
+      "id": "vn_PzcLm3RRh5BT",
+      "parentNodeId": "vn_Bynav5bq3vSP",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 32,
+      "y": 30
+    },
+    "vn_QKEBxa857nRz": {
+      "elementId": "el_j8QuKWxhZF2f",
+      "h": 48,
+      "id": "vn_QKEBxa857nRz",
+      "parentNodeId": "vn_OyIqwtXTe4Nr",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 32,
+      "y": 35
+    },
+    "vn_RgKqSZVoUdXp": {
+      "elementId": "el_1xUluQBOhBZp",
+      "h": 640,
+      "id": "vn_RgKqSZVoUdXp",
+      "style": {
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 1720,
+      "x": 0,
+      "y": 390
+    },
+    "vn_TkglKakKxaXm": {
+      "elementId": "el_1SRleLIpdCpz",
+      "h": 50,
+      "id": "vn_TkglKakKxaXm",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {},
+      "viewId": "vw_itgJjihxde6R",
+      "w": 130,
+      "x": 545,
+      "y": 215
+    },
+    "vn_U8QlWfRAKCL2": {
+      "elementId": "el_2XkCbQXArFtS",
+      "h": 370,
+      "id": "vn_U8QlWfRAKCL2",
+      "style": {
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 1720,
+      "x": 0,
+      "y": 0
+    },
+    "vn_W3nqPYjoVJEA": {
+      "elementId": "el_TUVDfVoEVOMP",
+      "h": 48,
+      "id": "vn_W3nqPYjoVJEA",
+      "parentNodeId": "vn_iIFIqqTtDwVQ",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 570,
+      "y": 35
+    },
+    "vn_Xv0LNEBjM7d0": {
+      "elementId": "el_zzjLjBEsWcFh",
+      "h": 55,
+      "id": "vn_Xv0LNEBjM7d0",
+      "parentNodeId": "vn_6ClRsRx9qmaR",
+      "style": {
+        "fill": "#b5ffff"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 205,
+      "x": 20,
+      "y": 40
+    },
+    "vn_YXUu7QSQhkmg": {
+      "elementId": "el_pvPKTmOrtATs",
+      "h": 160,
+      "id": "vn_YXUu7QSQhkmg",
+      "parentNodeId": "vn_8rHTtEAPJRIq",
+      "style": {
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 1640,
+      "x": 20,
+      "y": 200
+    },
+    "vn_aDilUagR2q1t": {
+      "elementId": "el_Pd8hEeqdYRgA",
+      "h": 200,
+      "id": "vn_aDilUagR2q1t",
+      "parentNodeId": "vn_RgKqSZVoUdXp",
+      "style": {
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 1680,
+      "x": 20,
+      "y": 420
+    },
+    "vn_aHjXvAqjSUla": {
+      "elementId": "el_jyiUHUAsh5zv",
+      "h": 50,
+      "id": "vn_aHjXvAqjSUla",
+      "parentNodeId": "vn_Bynav5bq3vSP",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 387,
+      "y": 30
+    },
+    "vn_buIhQjyHZROZ": {
+      "h": 105,
+      "id": "vn_buIhQjyHZROZ",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {
+        "fill": "#b5ffff"
+      },
+      "text": "Visualiza datos de evaluación\nDNI\nMonto preaprobado (en caso cuente con una campaña vigente)\nSemáforo",
+      "viewId": "vw_itgJjihxde6R",
+      "visualType": "core:note",
+      "w": 140,
+      "x": 1452,
+      "y": 60
+    },
+    "vn_cpNcJ1WL3exU": {
+      "elementId": "el_Tcf9UiF0ACKm",
+      "h": 50,
+      "id": "vn_cpNcJ1WL3exU",
+      "parentNodeId": "vn_HlEHsJoriWO8",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 32,
+      "y": 32
+    },
+    "vn_eckLLH3WliYo": {
+      "elementId": "el_3lEsfJk5o4N1",
+      "h": 50,
+      "id": "vn_eckLLH3WliYo",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {},
+      "viewId": "vw_itgJjihxde6R",
+      "w": 130,
+      "x": 905,
+      "y": 215
+    },
+    "vn_emYJ3XadBt9r": {
+      "elementId": "el_z79gmJHzSMmP",
+      "h": 50,
+      "id": "vn_emYJ3XadBt9r",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {},
+      "viewId": "vw_itgJjihxde6R",
+      "w": 130,
+      "x": 385,
+      "y": 215
+    },
+    "vn_ethNC6IQvAhd": {
+      "elementId": "el_zbnUVuyxVGMP",
+      "h": 50,
+      "id": "vn_ethNC6IQvAhd",
+      "parentNodeId": "vn_HlEHsJoriWO8",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 408,
+      "y": 32
+    },
+    "vn_iIFIqqTtDwVQ": {
+      "elementId": "el_ukH1pbFmNQ6K",
+      "h": 108,
+      "id": "vn_iIFIqqTtDwVQ",
+      "parentNodeId": "vn_wusOAgaLKW0a",
+      "style": {
+        "fill": "#ffffb5",
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 755,
+      "x": 125,
+      "y": 18
+    },
+    "vn_lMKu6sWQ85M2": {
+      "elementId": "el_L7T6CKqiI6SG",
+      "h": 50,
+      "id": "vn_lMKu6sWQ85M2",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {},
+      "viewId": "vw_itgJjihxde6R",
+      "w": 130,
+      "x": 720,
+      "y": 215
+    },
+    "vn_m0uk3vQqanDq": {
+      "elementId": "el_PvTOlbHRAB32",
+      "h": 155,
+      "id": "vn_m0uk3vQqanDq",
+      "parentNodeId": "vn_aDilUagR2q1t",
+      "style": {
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 1640,
+      "x": 20,
+      "y": 30
+    },
+    "vn_meuVRoWp1LKT": {
+      "elementId": "el_vo4PYDtkRHH9",
+      "h": 50,
+      "id": "vn_meuVRoWp1LKT",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {},
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 160,
+      "y": 215
+    },
+    "vn_s9SBTdiptZWJ": {
+      "elementId": "el_KgfK867mU73f",
+      "h": 320,
+      "id": "vn_s9SBTdiptZWJ",
+      "parentNodeId": "vn_U8QlWfRAKCL2",
+      "style": {
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 1680,
+      "x": 20,
+      "y": 30
+    },
+    "vn_wusOAgaLKW0a": {
+      "elementId": "el_mwmQTSVBYMb8",
+      "h": 160,
+      "id": "vn_wusOAgaLKW0a",
+      "parentNodeId": "vn_8rHTtEAPJRIq",
+      "style": {
+        "labelPosition": "top"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 1640,
+      "x": 20,
+      "y": 30
+    },
+    "vn_xUFvpP4mCKBj": {
+      "elementId": "el_6JsIsF7XCUZw",
+      "h": 48,
+      "id": "vn_xUFvpP4mCKBj",
+      "parentNodeId": "vn_OyIqwtXTe4Nr",
+      "style": {
+        "fill": "#ffffb5"
+      },
+      "viewId": "vw_itgJjihxde6R",
+      "w": 140,
+      "x": 387,
+      "y": 35
+    },
+    "vn_xxX3edo7FJmi": {
+      "elementId": "el_NIvrehSmEkKQ",
+      "h": 44,
+      "id": "vn_xxX3edo7FJmi",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {},
+      "viewId": "vw_itgJjihxde6R",
+      "w": 44,
+      "x": 222,
+      "y": 70
+    },
+    "vn_zqH8Lm4IWfth": {
+      "elementId": "el_3foCLyKkcPns",
+      "h": 50,
+      "id": "vn_zqH8Lm4IWfth",
+      "parentNodeId": "vn_s9SBTdiptZWJ",
+      "style": {},
+      "viewId": "vw_itgJjihxde6R",
+      "w": 130,
+      "x": 20,
+      "y": 215
+    }
+  },
+  "people": {},
+  "relations": {
+    "rel_1Z32TY259rF7": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_3foCLyKkcPns"
+      },
+      "id": "rel_1Z32TY259rF7",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_vo4PYDtkRHH9"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_56SH8kpwYfNO": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_3lEsfJk5o4N1"
+      },
+      "id": "rel_56SH8kpwYfNO",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_j8QuKWxhZF2f"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_6SFJr8QQrbq8": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_CYGRR6wWnddA"
+      },
+      "id": "rel_6SFJr8QQrbq8",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_DUdNSBslMgRB"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_CsxyBga0L0Nl": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_z79gmJHzSMmP"
+      },
+      "id": "rel_CsxyBga0L0Nl",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_dyTyZwlAc6V8"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_D33GyAMXwFRD": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_j8QuKWxhZF2f"
+      },
+      "id": "rel_D33GyAMXwFRD",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_avuni2ZeHE5a"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_HbV4yaLu464O": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_VjrzitRhjHx5"
+      },
+      "id": "rel_HbV4yaLu464O",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_CYGRR6wWnddA"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_KDsb93QN4scd": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_L7T6CKqiI6SG"
+      },
+      "id": "rel_KDsb93QN4scd",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_TUVDfVoEVOMP"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_L31KcQx4f5o8": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_1SRleLIpdCpz"
+      },
+      "id": "rel_L31KcQx4f5o8",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_d5OPQ5Jdl1jF"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_OpCAm60V6WOW": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_vo4PYDtkRHH9"
+      },
+      "id": "rel_OpCAm60V6WOW",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_g53YVhATN6nu"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_OwdGtpuZSwVp": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_xyRyiv72ENTF"
+      },
+      "id": "rel_OwdGtpuZSwVp",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_ZR0HiHY3UEN6"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_PxLDN1HrHLEV": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_VjrzitRhjHx5"
+      },
+      "id": "rel_PxLDN1HrHLEV",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_xyRyiv72ENTF"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_QxfVlFDBypie": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_TUVDfVoEVOMP"
+      },
+      "id": "rel_QxfVlFDBypie",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_NAk4aLCFSCmi"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_ReROpjHvZXpC": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_vo4PYDtkRHH9"
+      },
+      "id": "rel_ReROpjHvZXpC",
+      "mappings": [],
+      "name": "El cliente se encuentra en base negativa",
+      "props": {},
+      "to": {
+        "elementId": "el_NIvrehSmEkKQ"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_UV8vnTYujKwk": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_CYGRR6wWnddA"
+      },
+      "id": "rel_UV8vnTYujKwk",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_6JsIsF7XCUZw"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_dRKvyB89rObv": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_3lEsfJk5o4N1"
+      },
+      "id": "rel_dRKvyB89rObv",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_VjrzitRhjHx5"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_fQ294J9lIEby": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_L7T6CKqiI6SG"
+      },
+      "id": "rel_fQ294J9lIEby",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_3lEsfJk5o4N1"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_fyu5qKQnHEI1": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_NAk4aLCFSCmi"
+      },
+      "id": "rel_fyu5qKQnHEI1",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_zzjLjBEsWcFh"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_ihBd6vCVPfz9": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_6JsIsF7XCUZw"
+      },
+      "id": "rel_ihBd6vCVPfz9",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_jyiUHUAsh5zv"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_ihhoxTEdmdB1": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_1SRleLIpdCpz"
+      },
+      "id": "rel_ihhoxTEdmdB1",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_L7T6CKqiI6SG"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_itMVIzfofPJl": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_d5OPQ5Jdl1jF"
+      },
+      "id": "rel_itMVIzfofPJl",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_zbnUVuyxVGMP"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_qsoye1PnAeZa": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_dyTyZwlAc6V8"
+      },
+      "id": "rel_qsoye1PnAeZa",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_RGvpUu1Lsp1I"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_u4lx76AQqs2A": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_z79gmJHzSMmP"
+      },
+      "id": "rel_u4lx76AQqs2A",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_1SRleLIpdCpz"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_wE49HIH3FeLQ": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_g53YVhATN6nu"
+      },
+      "id": "rel_wE49HIH3FeLQ",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_Tcf9UiF0ACKm"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_y4SMaElcnbFG": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_vo4PYDtkRHH9"
+      },
+      "id": "rel_y4SMaElcnbFG",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_z79gmJHzSMmP"
+      },
+      "typeId": "archimate:Triggering"
+    },
+    "rel_zoCvHJLPytoW": {
+      "doc": "",
+      "features": {},
+      "fields": {},
+      "from": {
+        "elementId": "el_wzbR4XFCq6Rj"
+      },
+      "id": "rel_zoCvHJLPytoW",
+      "mappings": [],
+      "name": "",
+      "props": {},
+      "to": {
+        "elementId": "el_3foCLyKkcPns"
+      },
+      "typeId": "archimate:Triggering"
+    }
+  },
+  "rules": {},
+  "views": {
+    "vw_itgJjihxde6R": {
+      "doc": "",
+      "id": "vw_itgJjihxde6R",
+      "kind": "freeform",
+      "name": "Validación de riesgo (aliados)",
+      "notationId": "archimate",
+      "props": {},
+      "style": {}
+    }
+  }
+}

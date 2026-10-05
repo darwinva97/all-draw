@@ -13,9 +13,12 @@ import {
 import { useEditor } from './context';
 import { useT, useLang } from '@all-draw/i18n';
 import { useCollection, useRecord } from './hooks';
-import { ElementNode, sameElementData, type ElementNodeData } from './nodes/ElementNode';
+import { ElementNode, sameElementData, nodeText, titleCovered, type ElementNodeData } from './nodes/ElementNode';
+import { ContainerTitles } from './nodes/ContainerTitles';
 import { VisualNode, type VisualNodeData } from './nodes/VisualNode';
 import { NodeEnvContext, LOW_DETAIL_ZOOM, type NodeEnv } from './nodes/env';
+import { showTypeNamesOf } from './nodes/label';
+import { isJunction, JUNCTION_SIZE } from '@all-draw/notation-archimate';
 import { RelationEdge } from './edges/RelationEdge';
 import { nearestSegment } from './edges/bendpath';
 import { NodeMenu } from './panels/NodeMenu';
@@ -180,6 +183,15 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     }
     if (gantt.active) synthetic.push(...gantt.synthetic());
     const cellIds = new Set(synthetic.map(n => n.id));
+    // Nodos con hijos: su nombre va en la banda superior, como en un contenedor.
+    const kidsOf = new Map<string, { x: number; y: number; w: number; h: number }[]>();
+    for (const n of mine) if (n.parentNodeId && byId.has(n.parentNodeId)) {
+      const lv = live[n.id];
+      const list = kidsOf.get(n.parentNodeId) ?? [];
+      list.push({ x: lv?.x ?? n.x, y: lv?.y ?? n.y, w: lv?.w ?? n.w, h: lv?.h ?? n.h });
+      kidsOf.set(n.parentNodeId, list);
+    }
+    const showTypes = showTypeNamesOf(view);
     const selectedIds = new Set(selection.nodes);
     const out = [...synthetic, ...ordered.map(n => {
       const el = n.elementId ? store.get('elements', n.elementId) : undefined;
@@ -198,7 +210,10 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
       const old = prev.get(n.id)?.data;
       let data: ElementNodeData | VisualNodeData;
       if (n.elementId) {
-        const d: ElementNodeData = { node: vn, element: el, type, rule: el ? styleOf(el) : NO_RULE, ports: el ? portsOf(el) : NO_PORTS, archimate: notation === 'archimate', dimmed, remoteColor, editing };
+        const kids = kidsOf.get(n.id);
+        const d: ElementNodeData = { node: vn, element: el, type, rule: el ? styleOf(el) : NO_RULE, ports: el ? portsOf(el) : NO_PORTS, archimate: notation === 'archimate', dimmed, remoteColor, editing, hasChildren: kids ? true : undefined };
+        // Un hijo tapa el título de la banda: lo pinta `ContainerTitles`, encima de los hijos.
+        if (kids && !editing && titleCovered(d, nodeText(d, { lowDetail: false, showTypeNames: showTypes }), kids)) d.titleAbove = true;
         data = old && 'rule' in old && sameElementData(old as ElementNodeData, d) ? old as ElementNodeData : d;
       } else {
         const o = old as VisualNodeData | undefined;
@@ -258,7 +273,8 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
 
   // Antes del montaje de <ReactFlow> el almacén aún tiene el zoom por defecto: se usa el del encuadre inicial.
   const lowZoom = useStore(s => (s.domNode ? s.transform[2] : initialViewport?.zoom ?? 1) < LOW_DETAIL_ZOOM);
-  const nodeEnv = useMemo<NodeEnv>(() => ({ registry, readOnly, dark: effectiveTheme === 'dark', lowDetail: lowZoom, run, setRenaming }), [registry, readOnly, effectiveTheme, lowZoom, run, setRenaming]);
+  const showTypeNames = showTypeNamesOf(view);
+  const nodeEnv = useMemo<NodeEnv>(() => ({ registry, readOnly, dark: effectiveTheme === 'dark', lowDetail: lowZoom, showTypeNames, run, setRenaming }), [registry, readOnly, effectiveTheme, lowZoom, showTypeNames, run, setRenaming]);
 
   // ---------------------------------------------------------------- montaje por tandas (vistas grandes)
   /** Plan de montaje: se calcula una vez al abrir la vista (con su encuadre inicial). */
@@ -557,7 +573,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     if (readOnly || !viewId) return;
     const a = store.get('nodes', cm.sourceId); const type = registry.elementType(c.typeId);
     if (!a?.elementId || !type) return;
-    const element = makeElement(c.typeId, type.name, { libraryId: type.notationId ? undefined : findLibraryOfType(c.typeId) });
+    const element = makeElement(c.typeId, isJunction(c.typeId) ? '' : type.name, { libraryId: type.notationId ? undefined : findLibraryOfType(c.typeId) });
     const size = defaultSize(type.shape, !!type.container, c.typeId);
     const at = placeAt(cm.flow, size);
     if (!at) { toast.warning(t('Suelta dentro de una celda para crear el elemento')); return; }
@@ -629,7 +645,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
       element = makeElement(tpl.typeId, tpl.name, { doc: tpl.doc, fields: structuredClone(tpl.fields), libraryId: tpl.libraryId, templateId: tpl.id, tags: [...tpl.tags] });
     } else if (typeId) {
       const type = registry.elementType(typeId); if (!type) return;
-      element = makeElement(typeId, type.name, { libraryId: type.notationId ? undefined : findLibraryOfType(typeId) });
+      element = makeElement(typeId, isJunction(typeId) ? '' : type.name, { libraryId: type.notationId ? undefined : findLibraryOfType(typeId) });
       noteTypeUsed(typeId);
     }
     if (!element) return;
@@ -932,6 +948,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         {ghosts && ghosts.length > 0 && <GhostLayer ghosts={ghosts} />}
         {!readOnly && !seq.active && !gantt.active && <ConnectFeedback sourceId={connectSource} evaluate={evaluateConnect} nodeAt={nodeAtPoint} overNode={overAnyNode} canCreate={canCreateConnect} />}
         <CommentLayer />
+        <ContainerTitles nodes={rfNodes} />
       </ReactFlow>}
       </NodeEnvContext.Provider>
       <AlignBar />
@@ -1110,6 +1127,8 @@ function cellOf(cellNodeId: string): { layerId: string; stageId: string } {
 }
 export function defaultSize(shape: string | undefined, container: boolean, typeId?: string): { w: number; h: number } {
   if (container) return { w: 320, h: 220 };
+  // Junction de ArchiMate: el círculo pequeño de Archi.
+  if (typeId && isJunction(typeId)) return { w: JUNCTION_SIZE, h: JUNCTION_SIZE };
   // Persona C4: cabeza y cuerpo con el texto dentro (no el monigote pequeño con la etiqueta debajo)
   if (shape === 'actor' && typeId?.startsWith('c4:')) return { w: 160, h: 150 };
   // Almacén DFD: dos líneas con el nombre entre ellas (no la barra de bifurcación)

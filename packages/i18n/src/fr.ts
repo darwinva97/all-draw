@@ -2226,5 +2226,8 @@ export const fr: Record<string, string> = {
   'Aplicar el texto ya (sin esperar)': 'Appliquer le texte maintenant (sans attendre)',
   'Esc y luego Tab': 'Esc puis Tab',
   'Salir del texto con el teclado': 'Quitter le texte au clavier',
+  // ==== Aspecto Archi
+  'Mostrar el nombre del tipo': 'Afficher le nom du type',
+  'En ArchiMate, el icono de la esquina ya dice el tipo (como en Archi).': 'En ArchiMate, l’icône du coin indique déjà le type (comme dans Archi).',
 };
 Object.assign(fr, frDocs, frFields, frMessages, frApi);

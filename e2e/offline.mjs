@@ -80,7 +80,7 @@ await a.evaluate(id => { location.hash = `#/s/${id}`; }, otherId);
 await a.waitForSelector('.state__card', { timeout: 15000 });
 const card = await a.locator('.state__card').innerText();
 check(/Sin conexión con el servidor/.test(card) && /no hay copia/.test(card), `sin copia → error claro: «${card.split('\n').slice(0, 2).join(' | ')}»`);
-check(await a.getByRole('button', { name: 'Reintentar' }).count() === 1, 'ofrece reintentar');
+check(await a.locator('.state__card').getByRole('button', { name: 'Reintentar' }).count() === 1, 'ofrece reintentar');
 
 // 5. Recarga completa sin red (el service worker sirve la app y se abre la copia)
 if (swControls) {

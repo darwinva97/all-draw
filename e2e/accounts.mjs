@@ -127,7 +127,7 @@ try {
   await b.waitForFunction(id => location.hash.startsWith(`#/s/${id}`), wsId, { timeout: 8000 }).catch(() => {});
   check((await b.evaluate(() => location.hash)).startsWith(`#/s/${wsId}`), 'el enlace lleva al espacio');
   await b.waitForSelector('.app-status', { timeout: 15000 });
-  check(await b.locator('[data-testid=bell]').count() === 1, 'la campana también está en la barra del editor');
+  check(await b.locator('[data-testid=bell]').first().waitFor({ timeout: 15000 }).then(() => true, () => false) && await b.locator('[data-testid=bell]').count() === 1, 'la campana también está en la barra del editor');
   check(!/sin leer/.test(await b.locator('[data-testid=bell]').getAttribute('aria-label') ?? ''), 'al abrirla queda leída');
   // Mención: una Persona con el correo de Bea y un comentario nuevo que la menciona (por la API, como un agente)
   const now = new Date().toISOString();

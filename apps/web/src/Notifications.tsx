@@ -4,7 +4,7 @@
  * restauradas en tus espacios). Sólo aparece con sesión; se actualiza cada minuto con la pestaña visible.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getLang, useT } from '@all-draw/i18n';
+import { formatDate, getLang, useT } from '@all-draw/i18n';
 import { api, ApiError, type NotificationInfo } from './api';
 import './accounts.css';
 
@@ -22,7 +22,7 @@ function relative(iso: string, now = Date.now()): string {
     if (abs < 86400) return rtf.format(Math.round(s / 3600), 'hour');
     if (abs < 86400 * 30) return rtf.format(Math.round(s / 86400), 'day');
   } catch { /* sin Intl */ }
-  return new Date(d).toLocaleDateString();
+  return formatDate(d, { dateStyle: 'medium' });
 }
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const roleText = (t: T, r: string) => (r === 'owner' ? t('propietario') : r === 'editor' ? t('puede editar') : r === 'viewer' ? t('solo lectura') : r);

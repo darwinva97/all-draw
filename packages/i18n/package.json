@@ -7,7 +7,9 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./en": "./src/register-en.ts"
+    "./en": "./src/register-en.ts",
+    "./pt": "./src/register-pt.ts",
+    "./fr": "./src/register-fr.ts"
   },
   "scripts": {
     "build": "tsc -b",

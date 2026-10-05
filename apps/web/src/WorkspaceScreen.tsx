@@ -17,7 +17,7 @@ import { docHref } from './help';
 import { reportError } from './notify';
 import { NotificationBell } from './Notifications';
 import { EmbedPanel, ShareTabList, WebhooksPanel, type ShareTab } from './Integrations';
-import { useT, useLang } from '@all-draw/i18n';
+import { formatDate, useLang, useT } from '@all-draw/i18n';
 
 /** El inspector de vista abre el diálogo Compartir (que vive en la barra) con este evento. */
 const SHARE_EVENT = 'alldraw:share';
@@ -434,12 +434,12 @@ function RightTools({ lw, id, mode, info, conn, offline, lost, onTour }: { lw: L
   const online = !offline && !lost;
   return <>
     {mode === 'server'
-      ? <span className="app-status" role="status" aria-live="polite" title={offline ? t('Abierto con la copia de este navegador; se sincroniza al volver la conexión') : t('Sincronizado con el servidor')}><span className={`sync-dot ${state.cls}`} aria-hidden="true" />{state.text}{info?.role && !lost ? ` · ${roleLabel(t, info.role)}` : ''}</span>
-      : <span className="app-status" role="status" title={t('Se guarda solo, también sin conexión')}><Icon name="device" size={14} />{t('guardado en este navegador')}</span>}
+      ? <span className="app-status" role="status" aria-live="polite" title={`${state.text}${info?.role && !lost ? ` · ${roleLabel(t, info.role)}` : ''} — ${offline ? t('Abierto con la copia de este navegador; se sincroniza al volver la conexión') : t('Sincronizado con el servidor')}`}><span className={`sync-dot ${state.cls}`} aria-hidden="true" /><span className="app-status__text">{state.text}{info?.role && !lost ? ` · ${roleLabel(t, info.role)}` : ''}</span></span>
+      : <span className="app-status" role="status" title={t('Se guarda solo, también sin conexión')}><Icon name="device" size={14} /><span className="app-status__text">{t('guardado en este navegador')}</span></span>}
     <ImportExport />
     {mode === 'server' && info && online && <button className="btn" aria-haspopup="dialog" onClick={() => setHistory(true)}><Icon name="history" size={14} />{t('Historial')}</button>}
     {mode === 'server' && info?.role === 'owner' && online && <button className="btn btn--primary" data-tour="share" aria-haspopup="dialog" onClick={() => setShare(true)}><Icon name="share" size={14} />{t('Compartir')}</button>}
-    {mode === 'local' && <button className="btn btn--primary" data-tour="share" disabled={uploading} onClick={() => void upload()} title={t('Copia este espacio al servidor para compartirlo')}><Icon name="upload" size={14} />{uploading ? t('Subiendo…') : t('Subir al servidor')}</button>}
+    {mode === 'local' && <button className="btn btn--primary" data-tour="share" disabled={uploading} onClick={() => void upload()} title={t('Copia este espacio al servidor para compartirlo')} aria-label={t('Subir al servidor')}><Icon name="upload" size={14} /><span className="btn__label">{uploading ? t('Subiendo…') : t('Subir al servidor')}</span></button>}
     <LangSelect className="lang-select--bar" />
     {mode === 'server' && <NotificationBell />}
     <HelpMenu onTour={onTour} />
@@ -471,7 +471,7 @@ function ShareDialog({ id, onClose }: { id: string; onClose: () => void }) {
     if (!(await confirmDialog({ title: t('¿Revocar este enlace?'), message: t('Quien lo tenga dejará de poder abrir el espacio. Las personas conectadas ahora se desconectan.'), confirmLabel: t('Revocar'), danger: true }))) return;
     try { await api.deleteLink(id, l.token); toast.success(t('Enlace revocado')); await refresh(); } catch (e) { reportError(e, { title: t('No se pudo revocar el enlace') }); }
   };
-  const label = (l: ShareLink) => t('{kind} del {date}', { kind: l.role === 'editor' ? t('edición') : t('lectura'), date: new Date(l.createdAt).toLocaleString() });
+  const label = (l: ShareLink) => t('{kind} del {date}', { kind: l.role === 'editor' ? t('edición') : t('lectura'), date: formatDate(l.createdAt) });
   // Pestañas: enlaces, insertar (iframe, imagen, oEmbed) y webhooks (`Integrations.tsx`).
   const [tab, setTab] = useState<ShareTab>('links');
   return (
@@ -489,7 +489,7 @@ function ShareDialog({ id, onClose }: { id: string; onClose: () => void }) {
           {links === null && <li className="list-empty">{t('Cargando…')}</li>}
           {links?.length === 0 && <li className="list-empty">{t('Todavía no hay enlaces. Crea uno y se copiará al portapapeles.')}</li>}
           {links?.map(l => <li key={l.token}>
-            <span className="share__what"><Icon name={l.role === 'editor' ? 'edit' : 'eye'} size={14} />{l.role === 'editor' ? t('edición') : t('lectura')} <small>{new Date(l.createdAt).toLocaleString()}</small></span>
+            <span className="share__what"><Icon name={l.role === 'editor' ? 'edit' : 'eye'} size={14} />{l.role === 'editor' ? t('edición') : t('lectura')} <small>{formatDate(l.createdAt)}</small></span>
             <button className="btn btn--sm" aria-label={t('Copiar enlace de {label}', { label: label(l) })} onClick={() => void copy(l)}><Icon name="copy" size={14} />{t('Copiar enlace')}</button>
             <button className="btn btn--ghost btn--sm" aria-label={t('Revocar enlace de {label}', { label: label(l) })} onClick={() => void revoke(l)}>{t('Revocar')}</button>
           </li>)}

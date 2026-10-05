@@ -225,9 +225,9 @@ export function linkTarget(raw: string, file: string, slug: string): LinkTarget 
   if (href.startsWith('/')) return { href, external: true, internal: false };
   const [pathPart, anchor] = href.split('#') as [string, string | undefined];
   const resolved = resolvePath(file, pathPart);
-  if (resolved.startsWith('img/') || resolved.startsWith('en/img/')) return { href: imageSrc(resolved), external: true, internal: false };
+  if (/^(?:(?:en|pt|fr)\/)?img\//.test(resolved)) return { href: imageSrc(resolved), external: true, internal: false };
   if (!resolved.startsWith('..') && resolved.endsWith('.md')) {
-    const s = resolved.replace(/^en\//, '').replace(/\.md$/, '');
+    const s = resolved.replace(/^(?:en|pt|fr)\//, '').replace(/\.md$/, '');
     return { href: isDocSlug(s) ? docHref(s, anchor) : `#/docs/${s}${anchor ? `#${anchor}` : ''}`, external: false, internal: true };
   }
   // Fuera del manual: al fichero en GitHub.

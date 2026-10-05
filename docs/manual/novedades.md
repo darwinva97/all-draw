@@ -1,5 +1,19 @@
 # Novedades
 
+## 5 de octubre de 2026 {#2026-10-05}
+
+- **Portugués y francés**, además de español e inglés.
+- **Copias de seguridad fuera del servidor**, cifradas, y un **monitor** que avisa si el servicio cae (página de estado pública).
+- **Notificaciones**, **sesiones activas** y recuperación de contraseña y verificación del correo (se activan cuando el servidor tenga correo).
+- **Edición simultánea por campo**: dos personas cambiando el mismo elemento ya no se pisan; los textos largos se fusionan.
+- **Historial** con vista previa y comparación antes de restaurar.
+- **Formatos**: importar de draw.io y Visio, exportar a PDF y un **lenguaje de texto** con panel de edición en vivo.
+- **Notaciones nuevas**: UML de casos de uso, componentes, despliegue y actividad, **Gantt** y **DDD**.
+- **Simulación** de BPMN y máquinas de estados, y **generación de código** (TypeScript, Java, SQL, XState, OpenAPI, Structurizr).
+- **Integraciones**: webhooks (Slack, Teams, Discord), MCP remoto e **insertar diagramas** en Confluence, Notion, Jira o GitHub.
+- Editor más cómodo: ayuda al conectar, crear y conectar, Ctrl+K con todas las acciones, favoritos y recientes, ayuda por campo; vistas grandes mucho más rápidas.
+
+
 Lo que ha ido cambiando en all-draw, de lo más reciente a lo más antiguo, contado desde el punto de
 vista de quien lo usa.
 

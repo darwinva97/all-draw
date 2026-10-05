@@ -98,6 +98,9 @@ p { text-wrap: pretty; }
 .chip__dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 .app-status { font-size: 12px; color: var(--ad-muted, var(--muted)); padding: 0 6px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .app-status a { color: var(--accent); }
+/* En la barra del editor el estado cede sitio antes que la ruta de vistas y los botones (textos largos en fr/pt). */
+.ad-toolbar .app-status { min-width: 32px; flex: 0 2 auto; overflow: hidden; }
+.app-status__text { overflow: hidden; text-overflow: ellipsis; }
 .app-name { margin: 0 4px; background: none; border: 1px solid transparent; border-radius: 6px; padding: 3px 6px; font: inherit; font-weight: 600; min-width: 120px; color: var(--ad-text, inherit); }
 .app-name:hover:not(:disabled) { border-color: var(--ad-border, var(--line)); }
 .app-name:focus { outline: none; border-color: var(--ad-accent, var(--accent)); background: var(--ad-panel, var(--surface)); }
@@ -171,6 +174,7 @@ p { text-wrap: pretty; }
 .sect__head .spacer { flex: 1; }
 .sect__tools { display: flex; gap: 8px; align-items: center; }
 .sect__tools .input { width: 220px; }
+.sect__tools .input[type=search] { width: 250px; } /* «Rechercher des espaces…», «Pesquisar espaços de trabalho…» */
 
 /* Galería de plantillas */
 .tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(204px, 1fr)); gap: 14px; }
@@ -340,3 +344,12 @@ p { text-wrap: pretty; }
 }
 /* Campo trampa del registro: fuera de la vista y del orden de tabulación (no `display: none`, que algunos bots detectan). */
 .hp-field { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+
+/* Barra del editor en tableta y escritorio estrecho: los botones de la app muestran solo el icono (nombre en title/aria). */
+.btn__icon-compact { display: none; }
+@media (max-width: 1279px) {
+  .ad-toolbar .btn .btn__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .ad-toolbar .btn .btn__icon-compact { display: inline-block; }
+  .ad-toolbar .btn { padding-inline: 8px; gap: 2px; }
+  .ad-toolbar .lang-select--bar { max-width: 64px; }
+}

@@ -31,7 +31,7 @@ pantalla más amplia es más cómoda. Ver [editor](editor.md).
 
 ### ¿Cómo cambio el idioma o el tema? {#idioma-y-tema}
 
-El **idioma** (español o inglés) se elige en el selector de la pantalla de inicio o en la barra del
+El **idioma** (español, inglés, portugués o francés) se elige en el selector de la pantalla de inicio o en la barra del
 editor; se recuerda en ese navegador. El **tema** se cambia con el botón de la barra del editor, que
 pasa por *sistema* → *claro* → *oscuro*. Ver [editor](editor.md).
 

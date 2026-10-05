@@ -10,12 +10,12 @@ import { useEffect } from 'react';
 import type { NotationRegistry } from '@all-draw/core';
 import { toast } from '@all-draw/editor';
 import { onNotices, WS_UPGRADE_REQUIRED, type LocalWorkspace, type RemoteConnection } from '@all-draw/sync';
-import { useT } from '@all-draw/i18n';
+import { formatDate, useT } from '@all-draw/i18n';
 
 const LONG_TEXT = new Set(['textarea', 'json']);
 
 /** Fecha y hora legibles de una versión (instantánea). */
-export const versionDate = (iso: string): string => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(); };
+export const versionDate = (iso: string): string => formatDate(iso);
 
 export function CollabBridge({ lw, conn, registry }: { lw: LocalWorkspace; conn: RemoteConnection | null; registry: NotationRegistry }) {
   const t = useT();

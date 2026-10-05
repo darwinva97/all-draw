@@ -284,7 +284,7 @@ function ChapterPage({ slug, anchor, q, lang }: { slug: DocSlug; anchor: string 
     <div className="docs-page">
       <article className="docs-article" lang={ch?.lang ?? 'es'}>
         {group && <p className="docs-crumb"><a href={docHref()}>{t('Documentación')}</a><span aria-hidden="true">/</span>{t(group.name)}</p>}
-        {ch?.fallback && <p className="docs-fallback" role="note" lang={lang}><Icon name="info" />{t('Este capítulo todavía no está traducido; se muestra la versión en español.')}</p>}
+        {ch?.fallback && <p className="docs-fallback" role="note" lang={lang}><Icon name="info" />{ch.lang === 'en' ? t('Este capítulo todavía no está traducido; se muestra la versión en inglés.') : t('Este capítulo todavía no está traducido; se muestra la versión en español.')}</p>}
         {terms.length > 0 && <p className="docs-hl-bar" lang={lang}>{t('Resaltando «{q}»', { q: q ?? '' })} <a href={docHref(slug, anchor ?? undefined)}>{t('Quitar resaltado')}</a></p>}
         {renderBlocks(blocks.slice(0, h1Index + 1), ctx)}
         {shownToc.length > 2 && <details className="docs-toc-inline" lang={lang}><summary>{t('En esta página')}</summary><TocList items={shownToc} slug={slug} /></details>}

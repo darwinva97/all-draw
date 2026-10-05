@@ -6,13 +6,13 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { confirmDialog, toast } from '@all-draw/editor';
-import { useT } from '@all-draw/i18n';
+import { formatDate, LANGS, useT, type Lang } from '@all-draw/i18n';
 import { api, type SessionInfo, type User } from './api';
 import { formError } from './Auth';
 import './accounts.css';
 
 type T = ReturnType<typeof useT>;
-const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '');
+const fmt = (iso: string | null) => (iso ? formatDate(iso) : '');
 
 /** «Firefox en Linux», «Safari en iOS (móvil)», «curl (línea de órdenes)»… */
 export function deviceLabel(d: SessionInfo['device'], t: T): string {
@@ -86,7 +86,7 @@ export function VerifyNotice({ me, pendingEmail, emailEnabled }: { me: User; pen
 export function EmailPrefsSection({ me, onChange }: { me: User; onChange: (u: User) => void }) {
   const t = useT();
   const [err, setErr] = useState('');
-  const save = async (patch: { notifyEmail?: boolean; locale?: 'es' | 'en' }) => {
+  const save = async (patch: { notifyEmail?: boolean; locale?: Lang }) => {
     setErr('');
     try { const r = await api.updateAccount(patch); onChange(r.user); toast.success(t('Preferencias guardadas')); }
     catch (x) { setErr(formError(x, t)); }
@@ -98,8 +98,8 @@ export function EmailPrefsSection({ me, onChange }: { me: User; onChange: (u: Us
       <label className="check"><input type="checkbox" checked={me.notifyEmail !== false} onChange={e => void save({ notifyEmail: e.target.checked })} /> {t('Recibir por correo cuando me mencionen')}</label>
       <div className="row" style={{ alignItems: 'center', gap: 8 }}>
         <label htmlFor="mail-lang">{t('Idioma de los correos')}</label>
-        <select id="mail-lang" className="input" style={{ width: 'auto' }} value={me.locale ?? 'es'} onChange={e => void save({ locale: e.target.value as 'es' | 'en' })}>
-          <option value="es">Español</option><option value="en">English</option>
+        <select id="mail-lang" className="input" style={{ width: 'auto' }} value={me.locale ?? 'es'} onChange={e => void save({ locale: e.target.value as Lang })}>
+          {LANGS.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
       </div>
       <p className="err" role="alert" aria-live="assertive">{err}</p>

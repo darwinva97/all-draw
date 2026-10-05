@@ -30,7 +30,7 @@ A **long press** replaces right-click. For large diagrams a bigger screen is mor
 
 ### How do I change the language or theme? {#idioma-y-tema}
 
-The **language** (Spanish or English) is chosen in the selector on the home screen or in the editor
+The **language** (Spanish, English, Portuguese or French) is chosen in the selector on the home screen or in the editor
 toolbar; it is remembered in that browser. The **theme** is changed with the editor toolbar button,
 which cycles through *system* → *light* → *dark*. See [editor](editor.md).
 

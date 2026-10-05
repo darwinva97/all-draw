@@ -29,7 +29,7 @@
 .ad-link:hover { background: var(--ad-bg); }
 .ad-link small, .ad-pal__item small, .ad-views__item small { color: var(--ad-muted); margin-left: 4px; }
 .ad-tabs { display: flex; border-bottom: 1px solid var(--ad-border); }
-.ad-tabs button { flex: 1; border: none; background: none; padding: 7px 4px; cursor: pointer; font: inherit; color: var(--ad-muted); border-bottom: 2px solid transparent; }
+.ad-tabs button { flex: 1 1 auto; min-width: 0; border: none; background: none; padding: 7px 3px; cursor: pointer; font: inherit; color: var(--ad-muted); border-bottom: 2px solid transparent; }
 .ad-tabs button.is-active { color: var(--ad-accent); border-bottom-color: var(--ad-accent); font-weight: 600; }
 .ad-field { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; }
 .ad-field > span { font-size: 11px; color: var(--ad-muted); text-transform: uppercase; letter-spacing: .03em; }
@@ -619,6 +619,7 @@ button.ad-tr-count { color: var(--ad-text); }
 .ad-tr-scroll { max-height: max(320px, 58vh); }
 
 /* Barra superior: el nombre del espacio se ve entero y el chip de la notación no se corta (cede la ruta, con «…») */
+.ad-toolbar > .ad-btn { flex-shrink: 0; } /* los botones de icono no se aplastan con textos largos */
 .ad-toolbar > input { field-sizing: content; min-width: 80px; max-width: 280px; flex: none; text-overflow: ellipsis; }
 .ad-crumbs { min-width: 0; flex: 0 1 auto; }
 .ad-crumb { min-width: 0; }

@@ -215,16 +215,16 @@ el navegador donde la instalaste.
 
 ## Idioma {#idioma}
 
-La interfaz está en **español** y en **inglés**. La primera vez se elige según el idioma de tu navegador
-(inglés si tu navegador está en inglés; español en cualquier otro caso).
+La interfaz está en **español**, **inglés**, **portugués** y **francés**. La primera vez se elige según el idioma
+de tu navegador (español si tu navegador no usa ninguno de ellos).
 
-Para cambiarlo, usa el selector **Español / English**: está en la parte superior de la pantalla de inicio y
+Para cambiarlo, usa el **selector de idioma**: está en la parte superior de la pantalla de inicio y
 también en la barra del editor (en el móvil, dentro de la hoja **Más**). El cambio es inmediato y se recuerda en este navegador.
 
 > [!NOTE]
 > El idioma cambia los textos de la interfaz, los nombres de los tipos y las categorías de la paleta. **No**
 > traduce lo que tú escribes (nombres de elementos, documentación). Los nombres de los tipos ArchiMate se
-> mantienen en inglés en los dos idiomas, como en la especificación.
+> mantienen en inglés en todos los idiomas, como en la especificación.
 
 ## Problemas frecuentes {#problemas-frecuentes}
 

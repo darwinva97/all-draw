@@ -103,7 +103,7 @@ export function ImportExport() {
   }, [open]);
   return (
     <span style={{ position: 'relative' }}>
-      <button ref={trigger} className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>{t('Importar / Exportar')}<Icon name="chevronDown" size={14} /></button>
+      <button ref={trigger} className="btn btn--io" aria-haspopup="menu" aria-expanded={open} aria-label={t('Importar / Exportar')} title={t('Importar / Exportar')} onClick={() => setOpen(o => !o)}><Icon name="download" size={14} className="btn__icon-compact" /><span className="btn__label">{t('Importar / Exportar')}</span><Icon name="chevronDown" size={14} /></button>
       <input ref={file} type="file" aria-label={t('Fichero a importar')} accept={IMPORT_FILE_ACCEPT} hidden onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
       {open && <div ref={menu} className="menu" role="menu" aria-label={t('Importar / Exportar')} onMouseLeave={() => setOpen(false)}>
         {!readOnly && <><div className="menu__title">{t('Importar (sustituye el espacio)')}</div>

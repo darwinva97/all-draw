@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 import type { Library, ElementType, FieldDef, FieldKind, Shape, Element, Command } from '@all-draw/core';
-import { useT } from '@all-draw/i18n';
+import { tn, useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
 import { useCollection, useAnyChange } from '../hooks';
 import { FieldEditor } from './Inspector';
@@ -53,7 +53,7 @@ export function LibrariesTab() {
           {libs.map(l => (
             <div key={l.id} className={`ad-ws-item ${lib?.id === l.id ? 'is-active' : ''}`} onClick={() => setSel(l.id)}>
               <span className="ad-ws-item__label">{l.name}</span>
-              <small>{l.elementTypes.length === 1 ? t('1 tipo') : t('{n} tipos', { n: l.elementTypes.length })}</small>
+              <small>{tn('{n} tipo', '{n} tipos', l.elementTypes.length)}</small>
               <button className="ad-btn ad-btn--ghost" title={t('Borrar librería')} onClick={e => { e.stopPropagation(); remove(l); }}><Icon name="close" size={14} /></button>
             </div>
           ))}
@@ -122,7 +122,7 @@ function LibraryEditor({ lib }: { lib: Library }) {
     if (!(await confirmDialog({ title: t('¿Borrar el componente "{name}"?', { name: e.name }), message: n > 0 ? t('Tiene {n} instancia(s) en el modelo, que seguirán existiendo sueltas.', { n }) : undefined, danger: true }))) return;
     run({ type: 'deleteElement', id: e.id }); if (compId === e.id) setCompId(null);
   };
-  const instances = (n: number) => (n === 1 ? t('1 instancia') : t('{n} instancias', { n }));
+  const instances = (n: number) => tn('{n} instancia', '{n} instancias', n);
 
   return (
     <>
@@ -277,13 +277,13 @@ function TemplateEditor({ el, lib }: { el: Element; lib: Library }) {
   const touched = plan?.touched.length ?? 0;
   return (
     <>
-      <div className="ad-section">{t('Componente')} · {registry.elementType(el.typeId)?.name ?? el.typeId} · {n === 1 ? t('1 instancia') : t('{n} instancias', { n })}</div>
+      <div className="ad-section">{t('Componente')} · {registry.elementType(el.typeId)?.name ?? el.typeId} · {tn('{n} instancia', '{n} instancias', n)}</div>
       {n > 0 && (
         <div className={`ad-ws-notice ${dirty ? '' : 'is-ok'}`}>
           {dirty
             ? <>{t('Has cambiado el componente.')} <b>{touched}</b> {t('de {n} instancia(s) recibirán los cambios (solo los campos que no habían modificado)', { n })}{plan && plan.skipped.length > 0 ? t('; {n} los tenían sobreescritos', { n: plan.skipped.length }) : ''}.</>
             : <>{t('Las instancias están al día con el componente.')}</>}
-          <div className="ad-row"><button className="ad-btn ad-btn--primary" disabled={!dirty || !plan?.commands.length} onClick={apply}>{touched === 1 ? t('Aplicar a 1 instancia') : t('Aplicar a {n} instancias', { n: touched })}</button></div>
+          <div className="ad-row"><button className="ad-btn ad-btn--primary" disabled={!dirty || !plan?.commands.length} onClick={apply}>{tn('Aplicar a {n} instancia', 'Aplicar a {n} instancias', touched)}</button></div>
         </div>
       )}
       <label className="ad-field"><span>{t('Nombre')}</span><input className="ad-input ad-input--title" value={el.name} onChange={e => patch({ name: e.target.value })} /></label>

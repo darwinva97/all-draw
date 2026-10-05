@@ -106,8 +106,8 @@ type Reader = Pick<Store, 'get' | 'list'>;
 export interface GanttOpts {
   /** Escala fija (si no, la de `View.style.ganttScale` o la automática). */
   scale?: GanttScale;
-  /** Idioma de los meses de la cabecera. */
-  lang?: 'es' | 'en';
+  /** Idioma de los meses de la cabecera (`es`, `en`, `pt`, `fr`…; los que no tienen tabla propia salen de `Intl`). */
+  lang?: string;
   /** Hoy (día UTC) para la línea vertical; `undefined` = sin línea. */
   today?: number;
 }
@@ -214,10 +214,22 @@ export function resolveDates(s: Reader, viewId: string, rows: { node: ViewNode; 
   return out;
 }
 
-const MONTHS: Record<'es' | 'en', string[]> = {
+const MONTHS: Record<string, string[]> = {
   es: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
   en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
 };
+/** Meses abreviados del idioma: tabla propia (es, en) o `Intl.DateTimeFormat` (pt: «jan», fr: «janv.»). */
+export function monthLabels(lang: string): string[] {
+  let m = MONTHS[lang];
+  if (!m) {
+    try {
+      const f = new Intl.DateTimeFormat(lang, { month: 'short', timeZone: 'UTC' });
+      m = Array.from({ length: 12 }, (_, i) => { const x = f.format(Date.UTC(2024, i, 15)); return lang.startsWith('pt') ? x.replace(/\.$/, '') : x; });
+    } catch { m = MONTHS.es!; }
+    MONTHS[lang] = m;
+  }
+  return m;
+}
 const ymd = (day: number) => { const d = new Date(day * DAY_MS); return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate(), wd: d.getUTCDay() }; };
 const monthStart = (y: number, m: number) => Math.round(Date.UTC(y, m, 1) / DAY_MS);
 
@@ -291,7 +303,7 @@ export function ganttLayout(s: Reader, viewId: string, opts: GanttOpts = {}): Ga
     deps.push({ edgeId: e.id, from: a.index, to: b.index, kind, lag: Math.round(num(rel.fields['lag']) ?? 0), points: elbowRoute(pa, aDir, pb, dir), dir });
   }
   // Cabecera
-  const lang = opts.lang ?? 'es';
+  const months = monthLabels(opts.lang ?? 'es');
   const majors: GanttTick[] = [], minors: GanttTick[] = [], weekends: GanttTick[] = [];
   const end = day0 + days;
   if (scale === 'month') {
@@ -302,7 +314,7 @@ export function ganttLayout(s: Reader, viewId: string, opts: GanttOpts = {}): Ga
     }
     for (let m = monthStart(t.y, t.m); m < end;) {
       t = ymd(m); const next = monthStart(t.y, t.m + 1);
-      minors.push({ x: xOfDay(L, m), w: (Math.min(next, end) - m) * px, label: MONTHS[lang][t.m]! });
+      minors.push({ x: xOfDay(L, m), w: (Math.min(next, end) - m) * px, label: months[t.m]! });
       m = next;
     }
   } else {
@@ -310,7 +322,7 @@ export function ganttLayout(s: Reader, viewId: string, opts: GanttOpts = {}): Ga
     for (let m = monthStart(t.y, t.m); m < end;) {
       t = ymd(m); const next = monthStart(t.y, t.m + 1);
       const a = Math.max(m, day0), b = Math.min(next, end);
-      majors.push({ x: xOfDay(L, a), w: (b - a) * px, label: `${MONTHS[lang][t.m]} ${t.y}` });
+      majors.push({ x: xOfDay(L, a), w: (b - a) * px, label: `${months[t.m]} ${t.y}` });
       m = next;
     }
     if (scale === 'day') {
@@ -320,7 +332,7 @@ export function ganttLayout(s: Reader, viewId: string, opts: GanttOpts = {}): Ga
         if (k.wd === 0 || k.wd === 6) weekends.push({ x: xOfDay(L, d), w: px, label: '' });
       }
     } else {
-      for (let d = day0; d < end; d += 7) { const k = ymd(d); minors.push({ x: xOfDay(L, d), w: Math.min(7, end - d) * px, label: `${k.d} ${MONTHS[lang][k.m]}` }); }
+      for (let d = day0; d < end; d += 7) { const k = ymd(d); minors.push({ x: xOfDay(L, d), w: Math.min(7, end - d) * px, label: `${k.d} ${months[k.m]}` }); }
     }
   }
   const todayX = today !== undefined && today >= day0 && today < end ? xOfDay(L, today) : undefined;

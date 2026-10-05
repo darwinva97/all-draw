@@ -108,7 +108,8 @@ export function registerIntegrationRoutes(app: OpenAPIHono<{ Variables: { princi
     const secret = newWebhookSecret();
     const hook = await store.createWebhook({
       workspaceId: id, url: url.toString(), events: [...new Set(body.events)], format: resolveWebhookFormat(body.format, url.toString()),
-      lang: body.lang ?? mailLang(principal.user.locale), secret, createdBy: principal.user.id,
+      // Los mensajes de webhook existen en español e inglés: una cuenta en portugués o francés los recibe en inglés.
+      lang: body.lang ?? (mailLang(principal.user.locale) === 'es' ? 'es' : 'en'), secret, createdBy: principal.user.id,
     });
     logger.info('webhook creado', { workspace: id, webhook: hook.id, host: url.host, events: hook.events.join(','), format: hook.format });
     await svc.invalidate?.(id).catch(e => logger.error('webhook: no se pudo avisar del alta', { workspace: id, err: e }));

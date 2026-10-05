@@ -79,12 +79,17 @@ export interface LoadedChapter { slug: string; source: string; file: string; lan
 
 const cache = new Map<string, Promise<LoadedChapter | null>>();
 
-/** Carga el capítulo en `lang`; si no existe, en español (`fallback: true`). `null` si no existe en ninguno. */
+/** Orden de búsqueda de un capítulo: el idioma pedido; para portugués y francés, luego el inglés; al final, el español. */
+export function chapterLangs(lang: Lang): Lang[] {
+  return [...new Set<Lang>([lang, ...(lang === 'pt' || lang === 'fr' ? ['en' as const] : []), 'es'])];
+}
+
+/** Carga el capítulo en `lang`; si no existe, en el primer idioma de respaldo que lo tenga (`fallback: true`). `null` si no existe en ninguno. */
 export function loadChapter(lang: Lang, slug: string): Promise<LoadedChapter | null> {
   const key = `${lang}:${slug}`;
   let p = cache.get(key);
   if (!p) {
-    const pick: Lang | null = hasFile(lang, slug) ? lang : hasFile('es', slug) ? 'es' : null;
+    const pick: Lang | null = chapterLangs(lang).find(l => hasFile(l, slug)) ?? null;
     p = pick
       ? FILES[`${PREFIX}${fileFor(pick, slug)}`]!().then(source => ({ slug, source, file: fileFor(pick, slug), lang: pick, fallback: pick !== lang }))
       : Promise.resolve(null);

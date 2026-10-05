@@ -1,5 +1,19 @@
 # What's new
 
+## 5 October 2026 {#2026-10-05}
+
+- **Portuguese and French**, alongside Spanish and English.
+- **Off-site backups**, encrypted, and a **monitor** that alerts if the service goes down (public status page).
+- **Notifications**, **active sessions**, and password recovery and email verification (enabled once the server has email).
+- **Per-field simultaneous editing**: two people changing the same element no longer overwrite each other; long texts merge.
+- **History** with preview and comparison before restoring.
+- **Formats**: import from draw.io and Visio, export to PDF, and a **text language** with a live editing panel.
+- **New notations**: UML use case, component, deployment and activity, **Gantt** and **DDD**.
+- **Simulation** of BPMN and state machines, and **code generation** (TypeScript, Java, SQL, XState, OpenAPI, Structurizr).
+- **Integrations**: webhooks (Slack, Teams, Discord), remote MCP and **embedding diagrams** in Confluence, Notion, Jira or GitHub.
+- A more comfortable editor: connection hints, create-and-connect, Ctrl+K with every action, favorites and recents, per-field help; large views much faster.
+
+
 What has changed in all-draw, newest first, told from the point of view of the people who use it.
 
 ## 3 October 2026 {#novedades-2026-10-03}

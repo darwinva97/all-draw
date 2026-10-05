@@ -1,7 +1,8 @@
 # Centro de documentación (`#/docs`)
 
-Visor del manual de usuario dentro de la app. El contenido vive en `docs/manual/` (Markdown, español) y
-`docs/manual/en/` (inglés, mismos nombres de fichero); este directorio solo tiene el visor.
+Visor del manual de usuario dentro de la app. El contenido vive en `docs/manual/` (Markdown, español),
+`docs/manual/en/` (inglés, completo) y `docs/manual/pt/` y `docs/manual/fr/` (portugués de Brasil y francés, en parte),
+siempre con los mismos nombres de fichero; este directorio solo tiene el visor.
 
 | Fichero | Qué hace |
 |---|---|
@@ -54,9 +55,13 @@ El renderizador entiende un subconjunto de GitHub Markdown. Lo que no está aqu�
 
 ## Idioma
 
-`useLang()` decide la carpeta. Si un capítulo no existe en `docs/manual/en/`, se muestra el español con un aviso.
+`useLang()` decide la carpeta. Si un capítulo no existe en ese idioma se usa el primero que lo tenga según
+`chapterLangs()` (portugués y francés → inglés → español) y se muestra un aviso traducido («Este capítulo todavía no
+está traducido; se muestra la versión en inglés/español»). En pt y fr están traducidos `primeros-pasos`, `conceptos`,
+`faq`, `glosario`, `privacidad`, `terminos` y `atajos`; usan las capturas inglesas (`../img/*-en.png`, `*.en.svg`).
+En francés, espacio insecable antes de `: ; ? !` y dentro de « ».
 Los textos de la interfaz del visor usan `useT()`; sus claves están en `packages/i18n/src/en.ts`, bloque
-`// ==== Documentación`.
+`// ==== Documentación` (y las mismas claves en `pt.ts` y `fr.ts`).
 
 ## Comprobación
 

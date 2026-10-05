@@ -212,16 +212,16 @@ browser where you installed it.
 
 ## Language {#idioma}
 
-The interface is available in **Spanish** and **English**. The first time, it follows your browser's
-language (English if your browser is set to English; Spanish otherwise).
+The interface is available in **Spanish**, **English**, **Portuguese** and **French**. The first time, it follows
+your browser's language (Spanish if your browser uses none of them).
 
-To change it, use the **Español / English** selector: it is at the top of the home screen and also in the
+To change it, use the **language selector**: it is at the top of the home screen and also in the
 editor toolbar (on a phone, inside the **More** sheet). The change is immediate and remembered in this browser.
 
 > [!NOTE]
 > The language changes the interface texts and the names of the palette's types and categories. It does
 > **not** translate what you write (element names, documentation). ArchiMate type names stay in English in
-> both languages, as in the specification.
+> every language, as in the specification.
 
 ## Common problems {#problemas-frecuentes}
 

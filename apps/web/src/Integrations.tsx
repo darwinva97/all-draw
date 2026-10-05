@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Icon, confirmDialog, toast, useCollection, useEditor } from '@all-draw/editor';
-import { useT } from '@all-draw/i18n';
+import { formatDate, useT } from '@all-draw/i18n';
 import { api, type EmbedLink, type WebhookEvent, type WebhookFormat, type WebhookInfo } from './api';
 import { reportError } from './notify';
 import './integrations.css';
@@ -119,7 +119,7 @@ export function EmbedPanel({ id }: { id: string }) {
         {embeds === null && <li className="list-empty">{t('Cargando…')}</li>}
         {embeds?.length === 0 && <li className="list-empty">{t('Todavía no hay enlaces de inserción.')}</li>}
         {embeds?.map(e => <li key={e.token}>
-          <span className="share__what"><Icon name="eye" size={14} />{viewName(e.viewId)} <small>{new Date(e.createdAt).toLocaleString()}</small></span>
+          <span className="share__what"><Icon name="eye" size={14} />{viewName(e.viewId)} <small>{formatDate(e.createdAt)}</small></span>
           <button className="btn btn--ghost btn--sm" aria-label={t('Revocar el enlace de inserción de {view}', { view: viewName(e.viewId) })} onClick={() => void revoke(e)}>{t('Revocar')}</button>
         </li>)}
       </ul>
@@ -218,7 +218,7 @@ export function WebhooksPanel({ id }: { id: string }) {
               <table>
                 <thead><tr><th>{t('Cuándo')}</th><th>{t('Evento')}</th><th>{t('Estado')}</th><th>{t('Latencia')}</th><th>{t('Intentos')}</th></tr></thead>
                 <tbody>{h.deliveries.map(d => <tr key={d.id} className={d.ok ? 'is-ok' : d.pending ? 'is-wait' : 'is-ko'} title={d.error ?? ''}>
-                  <td>{new Date(d.at).toLocaleString()}</td><td>{eventLabel(d.event)}</td><td>{d.status || '—'}{d.error && !d.ok ? ` · ${d.error.slice(0, 60)}` : ''}</td><td>{d.ms} ms</td><td>{d.attempts}{d.pending ? '…' : ''}</td>
+                  <td>{formatDate(d.at)}</td><td>{eventLabel(d.event)}</td><td>{d.status || '—'}{d.error && !d.ok ? ` · ${d.error.slice(0, 60)}` : ''}</td><td>{d.ms} ms</td><td>{d.attempts}{d.pending ? '…' : ''}</td>
                 </tr>)}</tbody>
               </table>
             </details>}

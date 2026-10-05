@@ -1,25 +1,45 @@
 /**
  * Internacionalización mínima. La **clave es el texto en español** tal como aparece en la interfaz;
- * los diccionarios traducen a otros idiomas y, si falta una entrada, se devuelve la clave.
+ * los diccionarios traducen a otros idiomas y, si falta una entrada, se usa el idioma de respaldo (`FALLBACK`: el
+ * inglés para portugués y francés) y, en último término, la clave.
  * `{nombre}` interpola variables. Sin dependencias; válido en React (hook) y fuera (funciones puras).
  */
 import { useSyncExternalStore } from 'react';
 
-export type Lang = 'es' | 'en';
-export const LANGS: { id: Lang; name: string }[] = [{ id: 'es', name: 'Español' }, { id: 'en', name: 'English' }];
+export type Lang = 'es' | 'en' | 'pt' | 'fr';
+/** Idiomas de la interfaz con su nombre nativo (el selector no se traduce). */
+export const LANGS: { id: Lang; name: string }[] = [
+  { id: 'es', name: 'Español' }, { id: 'en', name: 'English' }, { id: 'pt', name: 'Português' }, { id: 'fr', name: 'Français' },
+];
+const LANG_IDS = LANGS.map(l => l.id);
+export const isLang = (v: unknown): v is Lang => typeof v === 'string' && (LANG_IDS as string[]).includes(v);
+/** Etiqueta BCP 47 para `Intl` (`pt` es la variante brasileña). */
+export const LOCALES: Record<Lang, string> = { es: 'es-ES', en: 'en-US', pt: 'pt-BR', fr: 'fr-FR' };
+/** Si a un diccionario le falta una clave, antes que la clave (español) se prueba este idioma. */
+const FALLBACK: Partial<Record<Lang, Lang>> = { pt: 'en', fr: 'en' };
 
-const dicts: Record<Lang, Record<string, string>> = { es: {}, en: {} };
+const dicts: Record<Lang, Record<string, string>> = { es: {}, en: {}, pt: {}, fr: {} };
 /**
- * Los diccionarios se cargan bajo demanda (en un trozo aparte del bundle): quien usa la app en español no descarga
- * el inglés. `ready()` antes de pintar evita ver un instante en español; en Node/tests, `import '@all-draw/i18n/en'`.
+ * Los diccionarios se cargan bajo demanda (un trozo del bundle por idioma): quien usa la app en español no descarga
+ * ninguno. `ready()` antes de pintar evita ver un instante en español; en Node/tests, `import '@all-draw/i18n/en'`
+ * (o `/pt`, `/fr`). Portugués y francés cargan también el inglés, su respaldo.
  */
-const LOADERS: Partial<Record<Lang, () => Promise<Record<string, string>>>> = { en: () => import('./en').then(m => m.en) };
+const LOADERS: Partial<Record<Lang, () => Promise<Record<string, string>>>> = {
+  en: () => import('./en').then(m => m.en),
+  pt: () => import('./pt').then(m => m.pt),
+  fr: () => import('./fr').then(m => m.fr),
+};
 const loading = new Map<Lang, Promise<void>>();
 export function ensureLang(l: Lang): Promise<void> {
   const load = LOADERS[l];
   if (!load) return Promise.resolve();
   let p = loading.get(l);
-  if (!p) { p = load().then(d => addTranslations(l, d), () => { loading.delete(l); }); loading.set(l, p); }
+  if (!p) {
+    const fb = FALLBACK[l];
+    const own = load().then(d => addTranslations(l, d), () => { loading.delete(l); });
+    p = fb ? Promise.all([own, ensureLang(fb)]).then(() => undefined) : own;
+    loading.set(l, p);
+  }
   return p;
 }
 /** Promesa que se cumple cuando el diccionario del idioma activo está cargado. */
@@ -27,12 +47,17 @@ export function ready(): Promise<void> { return ensureLang(current); }
 const listeners = new Set<() => void>();
 let current: Lang = detect();
 
+/** Idioma de un `navigator.language`, `Accept-Language` o similar (`pt-BR` → `pt`); `null` si no es de los nuestros. */
+export function langOf(tag: string | null | undefined): Lang | null {
+  const base = (tag ?? '').trim().toLowerCase().split(/[-_,;]/)[0] ?? '';
+  return isLang(base) ? base : null;
+}
+
 function detect(): Lang {
   try {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('alldraw:lang') : null;
-    if (saved === 'es' || saved === 'en') return saved;
-    const nav = typeof navigator !== 'undefined' ? navigator.language : 'es';
-    return nav.toLowerCase().startsWith('en') ? 'en' : 'es';
+    if (isLang(saved)) return saved;
+    return (typeof navigator !== 'undefined' ? langOf(navigator.language) : null) ?? 'es';
   } catch { return 'es'; }
 }
 
@@ -62,13 +87,19 @@ function interpolate(s: string, vars?: Vars): string {
 
 /** Traduce un texto en español al idioma activo. */
 export function t(key: string, vars?: Vars): string {
-  const d = dicts[current];
-  return interpolate(d[key] ?? key, vars);
+  return interpolate(lookup(current, key), vars);
+}
+
+function lookup(lang: Lang, key: string): string {
+  const own = dicts[lang][key];
+  if (own !== undefined) return own;
+  const fb = FALLBACK[lang];
+  return (fb && dicts[fb][key]) ?? key;
 }
 
 /** Traduce a un idioma concreto (exportaciones, servidor). */
 export function tIn(lang: Lang, key: string, vars?: Vars): string {
-  return interpolate(dicts[lang][key] ?? key, vars);
+  return interpolate(lookup(lang, key), vars);
 }
 
 /** Hook: devuelve `t` y provoca re-render al cambiar de idioma. */
@@ -81,19 +112,39 @@ export function useLang(): [Lang, (l: Lang) => void] {
   return [l, setLang];
 }
 
-/** Claves en español que no tienen traducción en `lang` (para tests y para completar diccionarios). */
+/** Claves en español que no tienen traducción propia en `lang`, sin contar el respaldo (para tests y para completar diccionarios). */
 export function missing(lang: Lang, keys: Iterable<string>): string[] {
   const d = dicts[lang];
   return [...keys].filter(k => !(k in d));
 }
 
+const pluralRules = new Map<Lang, Intl.PluralRules>();
+/** ¿`n` va en singular en `lang`? Con `Intl.PluralRules`: en francés y portugués 0 también es singular («0 commentaire»). */
+export function isSingular(n: number, lang: Lang = current): boolean {
+  let r = pluralRules.get(lang);
+  if (!r) { r = new Intl.PluralRules(LOCALES[lang]); pluralRules.set(lang, r); }
+  return r.select(n) === 'one';
+}
+
 /**
- * Plural: elige `singular` si `n` es 1 y `plural` en otro caso, y lo traduce con `{n}` y `vars`.
- * Las dos claves son textos en español (`'{n} respuesta'`, `'{n} respuestas'`); el diccionario inglés tiene las dos.
- * Español e inglés comparten la regla (1 → singular; 0 y el resto → plural).
+ * Plural: elige `singular` o `plural` según la regla del idioma activo (`Intl.PluralRules`: categoría `one` →
+ * singular; el resto → plural) y lo traduce con `{n}` y `vars`. Las dos claves son textos en español
+ * (`'{n} respuesta'`, `'{n} respuestas'`); cada diccionario tiene las dos.
  */
 export function tn(singular: string, plural: string, n: number, vars?: Vars): string {
-  return t(n === 1 ? singular : plural, { n, ...vars });
+  return t(isSingular(n) ? singular : plural, { n, ...vars });
+}
+
+/** Fecha (y hora, por defecto) en el formato del idioma activo. Acepta ISO, milisegundos o `Date`. */
+export function formatDate(d: string | number | Date, opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' }, lang: Lang = current): string {
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return String(d);
+  try { return date.toLocaleString(LOCALES[lang], opts); } catch { return date.toISOString().slice(0, 16).replace('T', ' '); }
+}
+
+/** Número con los separadores del idioma activo (`1 234,5` en francés). */
+export function formatNumber(n: number, opts?: Intl.NumberFormatOptions, lang: Lang = current): string {
+  try { return n.toLocaleString(LOCALES[lang], opts); } catch { return String(n); }
 }
 
 /**

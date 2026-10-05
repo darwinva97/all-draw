@@ -10,7 +10,7 @@
  */
 import type { Element, NotationRegistry, Store, View, ViewNode } from '@all-draw/core';
 import type { SequenceSvg } from './svg-sequence';
-import { ioLang } from './i18n';
+import { ioLang, ioMonths } from './i18n';
 
 export const GANTT_TASK = 'gantt:Task', GANTT_MILESTONE = 'gantt:Milestone', GANTT_GROUP = 'gantt:Group', GANTT_DEPENDENCY = 'gantt:Dependency';
 const TYPES = new Set([GANTT_TASK, GANTT_MILESTONE, GANTT_GROUP]);
@@ -174,7 +174,7 @@ export function renderGanttSvg(store: Store, reg: NotationRegistry, view: View, 
   const g = ganttGeometry(store, view);
   const { headerH, labelW, rowH } = GANTT, mid = headerH / 2;
   const W = g.width, H = g.height, end = g.day0 + g.days;
-  const months = MONTHS[ioLang()] ?? MONTHS.es!;
+  const months = MONTHS[ioLang()] ?? ioMonths();
   const xOf = (day: number) => labelW + (day - g.day0) * g.px;
   const ymd = (day: number) => { const d = new Date(day * DAY_MS); return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate(), wd: d.getUTCDay() }; };
   const ms = (y: number, m: number) => Math.round(Date.UTC(y, m, 1) / DAY_MS);

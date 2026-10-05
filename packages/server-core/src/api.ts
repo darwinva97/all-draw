@@ -26,7 +26,7 @@ import {
 } from './auth';
 import { atLeast, type Member, type Role, type ShareLink, type SnapshotMeta, type User, type WorkspaceRow, type WorkspaceStore } from './store/types';
 import { noneMailer, type Mailer } from './mail';
-import { mailLang } from './mail-templates';
+import { MAIL_LANGS, mailLang } from './mail-templates';
 import { Notifier } from './notifications';
 import { describeUserAgent } from './devices';
 import { DEFAULT_FORGOT_MIN_MS, background, registerAccountRoutes } from './api-accounts';
@@ -148,7 +148,7 @@ const RoleSchema = z.enum(['owner', 'editor', 'viewer']);
 const MemberRoleSchema = z.enum(['editor', 'viewer']);
 const UserOut = z.object({
   id: z.string(), email: z.string(), name: z.string(), isAdmin: z.boolean(), createdAt: z.string(),
-  emailVerified: z.boolean().describe('¿Ha confirmado su correo actual con el enlace?'), locale: z.enum(['es', 'en']).describe('Idioma de los correos'),
+  emailVerified: z.boolean().describe('¿Ha confirmado su correo actual con el enlace?'), locale: z.enum(MAIL_LANGS).describe('Idioma de los correos'),
   notifyEmail: z.boolean().describe('Recibir por correo las menciones (si el servidor tiene correo)'),
 }).meta({ id: 'User' });
 const AuthOut = z.object({ user: UserOut, token: z.string().describe('Token de sesión (también va en la cookie)') });
@@ -629,7 +629,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     security: bearer,
     request: { body: jsonBody(z.object({
       name: z.string().trim().min(1).max(120).optional(), email: Email.optional(), password: z.string().max(200).optional().describe('Contraseña actual (obligatoria para cambiar el email)'),
-      locale: z.enum(['es', 'en']).optional().describe('Idioma de los correos'), notifyEmail: z.boolean().optional().describe('Recibir por correo las menciones'),
+      locale: z.enum(MAIL_LANGS).optional().describe('Idioma de los correos'), notifyEmail: z.boolean().optional().describe('Recibir por correo las menciones'),
     })) },
     responses: { 200: jsonRes(z.object({ user: UserOut, pendingEmail: z.string().optional().describe('Correo nuevo pendiente de confirmar (se ha enviado el enlace)') }), 'Actualizado'), 400: errors[400], 401: errors[401], 403: errors[403], 409: jsonRes(ErrorOut, 'Email ya registrado'), 429: jsonRes(ErrorOut, 'Demasiados intentos') },
   }), async c => {

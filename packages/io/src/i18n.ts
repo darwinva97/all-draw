@@ -39,5 +39,22 @@ export function tr(key: string, vars?: IoLooseVars): string {
 /** Idioma activo (`es` si nadie lo ha inyectado). */
 export const ioLang = (): string => langOf();
 
-/** Plural: `singular` si `n` es 1 y `plural` si no (las dos claves en español, con `{n}`). */
-export const trn = (singular: string, plural: string, n: number, vars?: IoLooseVars): string => tr(n === 1 ? singular : plural, { n, ...vars });
+const pluralRules = new Map<string, Intl.PluralRules | null>();
+/** ¿`n` va en singular en el idioma activo? `Intl.PluralRules` (en francés y portugués también 0); sin `Intl`, sólo 1. */
+function singular(n: number): boolean {
+  const lang = langOf();
+  let r = pluralRules.get(lang);
+  if (r === undefined) { try { r = new Intl.PluralRules(lang); } catch { r = null; } pluralRules.set(lang, r); }
+  return r ? r.select(n) === 'one' : n === 1;
+}
+
+/** Plural: `singular` o `plural` según la regla del idioma activo (las dos claves en español, con `{n}`). */
+export const trn = (singularKey: string, plural: string, n: number, vars?: IoLooseVars): string => tr(singular(n) ? singularKey : plural, { n, ...vars });
+
+/** Meses abreviados del idioma activo (`Intl`, zona UTC), para las cabeceras de fechas. */
+export function ioMonths(lang: string = langOf()): string[] {
+  try {
+    const f = new Intl.DateTimeFormat(lang, { month: 'short', timeZone: 'UTC' });
+    return Array.from({ length: 12 }, (_, i) => { const x = f.format(Date.UTC(2024, i, 15)); return lang.startsWith('pt') ? x.replace(/\.$/, '') : x; });
+  } catch { return ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']; }
+}

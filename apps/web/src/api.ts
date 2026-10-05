@@ -1,6 +1,6 @@
 /** Cliente de la API del servidor (misma origen; la sesión va en cookie). */
-import { getLang, t } from '@all-draw/i18n';
-export interface User { id: string; email: string; name: string; isAdmin: boolean; emailVerified?: boolean; locale?: 'es' | 'en'; notifyEmail?: boolean }
+import { getLang, t, type Lang } from '@all-draw/i18n';
+export interface User { id: string; email: string; name: string; isAdmin: boolean; emailVerified?: boolean; locale?: Lang; notifyEmail?: boolean }
 export type Role = 'owner' | 'editor' | 'viewer';
 export interface WorkspaceInfo { id: string; name: string; ownerId: string; createdAt: string; updatedAt: string; role: Role }
 export interface ShareLink { token: string; url: string; role: 'editor' | 'viewer'; createdAt: string; expiresAt: string | null }
@@ -203,7 +203,7 @@ export const api = {
   account: () => req<{ user: User; quotas: Quotas }>('GET', '/api/auth/me'),
   updateMe: (patch: { name?: string; email?: string; password?: string }) => req<{ user: User }>('PATCH', '/api/auth/me', patch).then(r => r.user),
   /** Como `updateMe` pero dice si el correo nuevo espera confirmación (`pendingEmail`); también idioma y «recibir por correo». */
-  updateAccount: (patch: { name?: string; email?: string; password?: string; locale?: 'es' | 'en'; notifyEmail?: boolean }) => req<{ user: User; pendingEmail?: string }>('PATCH', '/api/auth/me', patch),
+  updateAccount: (patch: { name?: string; email?: string; password?: string; locale?: Lang; notifyEmail?: boolean }) => req<{ user: User; pendingEmail?: string }>('PATCH', '/api/auth/me', patch),
   /** Registro, correo y verificación del servidor; sin servidor, registro abierto y sin correo. */
   authInfo: () => loadAuthInfo().catch((): AuthInfo => ({ registration: 'open', email: false, emailVerificationRequired: false })),
   /** Pide el enlace para restablecer la contraseña (la respuesta es la misma exista o no la cuenta). */

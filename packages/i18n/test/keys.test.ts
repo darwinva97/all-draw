@@ -1,6 +1,6 @@
 /**
- * Todas las claves `t('…')` del editor y de la web tienen entrada en el diccionario inglés.
- * Recorre los fuentes con `fs`, extrae las llamadas con literal simple (sin `${}`) y comprueba `missing('en', …)`.
+ * Todas las claves `t('…')` del editor y de la web tienen entrada en los diccionarios inglés, portugués y francés.
+ * Recorre los fuentes con `fs`, extrae las llamadas con literal simple (sin `${}`) y comprueba `missing(lang, …)`.
  */
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -42,20 +42,21 @@ describe('claves de traducción', () => {
     expect(extractKeys(`t('Hola'); t("Adiós"); t(\`Qué tal\`); t(\`No \${x}\`); t('Con {n}', { n: 1 }); t('It\\'s')`)).toEqual(['Hola', 'Adiós', 'Qué tal', 'Con {n}', "It's"]);
   });
 
-  it('todas las claves del editor y de la web están en el diccionario inglés', () => {
-    const byKey = new Map<string, string[]>();
-    for (const { dir, ext } of DIRS) {
-      for (const file of walk(dir, ext)) {
-        for (const k of extractKeys(readFileSync(file, 'utf8'))) {
-          const rel = relative(ROOT, file);
-          const list = byKey.get(k) ?? [];
-          if (!list.includes(rel)) list.push(rel);
-          byKey.set(k, list);
-        }
+  const byKey = new Map<string, string[]>();
+  for (const { dir, ext } of DIRS) {
+    for (const file of walk(dir, ext)) {
+      for (const k of extractKeys(readFileSync(file, 'utf8'))) {
+        const rel = relative(ROOT, file);
+        const list = byKey.get(k) ?? [];
+        if (!list.includes(rel)) list.push(rel);
+        byKey.set(k, list);
       }
     }
+  }
+
+  it.each(['en', 'pt', 'fr'] as const)('todas las claves del editor y de la web están en el diccionario %s', lang => {
     expect(byKey.size).toBeGreaterThan(50);
-    const lacking = missing('en', byKey.keys()).map(k => `${JSON.stringify(k)}  ←  ${byKey.get(k)!.join(', ')}`);
-    expect(lacking, `Claves sin traducción inglesa:\n${lacking.join('\n')}`).toEqual([]);
+    const lacking = missing(lang, byKey.keys()).map(k => `${JSON.stringify(k)}  ←  ${byKey.get(k)!.join(', ')}`);
+    expect(lacking, `Claves sin traducción (${lang}):\n${lacking.join('\n')}`).toEqual([]);
   });
 });

@@ -1,11 +1,12 @@
 /**
  * Los mensajes que el núcleo, io y layout generan en español con clave traducible (`say`, `fix`, `tr`, `trn`, `{ key: … }`)
- * y los plurales de la interfaz (`tn`) tienen traducción inglesa. Recorre los fuentes y comprueba `missing('en', …)`.
+ * y los plurales de la interfaz (`tn`) tienen traducción inglesa, portuguesa y francesa. Recorre los fuentes y comprueba
+ * `missing(lang, …)`.
  */
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { missing, setLang, tn, tMsg } from '../src';
+import { missing, setLang, tIn, tn, tMsg } from '../src';
 
 const ROOT = resolve(__dirname, '../../..');
 const DIRS = ['packages/core/src', 'packages/io/src', 'packages/layout/src', 'packages/editor/src', 'apps/web/src'].map(d => join(ROOT, d));
@@ -48,7 +49,7 @@ describe('mensajes traducibles', () => {
       .toEqual(['Hola {n}', 'Borrar', 'Uno', 'Anidado', '{n} vista', '{n} vistas', '{n} nodo', '{n} nodos', 'motivo', 'Mensaje {x}']);
   });
 
-  it('todos los mensajes del núcleo, io, layout y los plurales de la interfaz tienen traducción inglesa', () => {
+  it.each(['en', 'pt', 'fr'] as const)('todos los mensajes del núcleo, io, layout y los plurales de la interfaz tienen traducción (%s)', lang => {
     const byKey = new Map<string, string[]>();
     for (const dir of DIRS) for (const file of walk(dir)) for (const k of extractMessageKeys(readFileSync(file, 'utf8'))) {
       const rel = relative(ROOT, file);
@@ -57,8 +58,8 @@ describe('mensajes traducibles', () => {
       byKey.set(k, list);
     }
     expect(byKey.size).toBeGreaterThan(150);
-    const lacking = missing('en', byKey.keys()).map(k => `${JSON.stringify(k)}  ←  ${byKey.get(k)!.join(', ')}`);
-    expect(lacking, `Mensajes sin traducción inglesa:\n${lacking.join('\n')}`).toEqual([]);
+    const lacking = missing(lang, byKey.keys()).map(k => `${JSON.stringify(k)}  ←  ${byKey.get(k)!.join(', ')}`);
+    expect(lacking, `Mensajes sin traducción (${lang}):\n${lacking.join('\n')}`).toEqual([]);
   });
 
   it('tn elige singular o plural y tMsg traduce mensajes anidados', () => {
@@ -70,5 +71,19 @@ describe('mensajes traducibles', () => {
     setLang('es');
     expect(tn('{n} respuesta', '{n} respuestas', 1)).toBe('1 respuesta');
     expect(tn('{n} respuesta', '{n} respuestas', 0)).toBe('0 respuestas');
+  });
+
+  it('tn usa la regla de plural de cada idioma (Intl.PluralRules): en francés y portugués 0 es singular', () => {
+    setLang('en');
+    expect(tn('{n} respuesta', '{n} respuestas', 0)).toBe('0 replies');
+    setLang('fr');
+    expect(tn('{n} respuesta', '{n} respuestas', 0)).toBe(tIn('fr', '{n} respuesta', { n: 0 }));
+    expect(tn('{n} respuesta', '{n} respuestas', 1)).toBe(tIn('fr', '{n} respuesta', { n: 1 }));
+    expect(tn('{n} respuesta', '{n} respuestas', 2)).toBe(tIn('fr', '{n} respuestas', { n: 2 }));
+    expect(tIn('fr', '{n} respuestas', { n: 2 })).not.toBe('{n} respuestas');
+    setLang('pt');
+    expect(tn('{n} respuesta', '{n} respuestas', 0)).toBe(tIn('pt', '{n} respuesta', { n: 0 }));
+    expect(tn('{n} respuesta', '{n} respuestas', 5)).toBe(tIn('pt', '{n} respuestas', { n: 5 }));
+    setLang('es');
   });
 });

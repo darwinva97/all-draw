@@ -56,7 +56,7 @@ describe('fallo 5: importar sustituye el espacio con un comando que se puede des
 
 /** Fallo 64: las plantillas y la demo nacen sin avisos del validador (los símbolos sin nombre ya no son falsos positivos). */
 describe('fallo 64: plantillas y demo sin avisos del validador', () => {
-  for (const lang of ['es', 'en'] as const) {
+  for (const lang of ['es', 'en', 'pt', 'fr'] as const) {
     for (const tpl of TEMPLATES) {
       it(`${tpl.id} (${lang})`, () => {
         setLang(lang);

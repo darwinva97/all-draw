@@ -331,7 +331,7 @@ function TemplateCard({ tpl, busy, onPick, colors }: { tpl: Template; busy: stri
   const name = t(tpl.name);
   const label = tpl.id === 'demo' ? t('Abrir la demo: {name}', { name }) : t('Crear desde la plantilla «{name}»', { name });
   return (
-    <button type="button" className="tpl" disabled={!!busy} aria-busy={busy === tpl.id} aria-label={label} aria-description={`${t(tpl.description)} ${t(tpl.about)}`} title={t(tpl.about)} onClick={() => onPick(tpl)}>
+    <button type="button" className="tpl" data-tpl={tpl.id} disabled={!!busy} aria-busy={busy === tpl.id} aria-label={label} aria-description={`${t(tpl.description)} ${t(tpl.about)}`} title={t(tpl.about)} onClick={() => onPick(tpl)}>
       <div className="tpl__thumb" ref={ref} aria-hidden="true">
         {tpl.id === 'blank' ? <span className="tpl__blank"><Icon name="plus" size={22} /></span>
           : url ? <img src={url} alt="" draggable={false} /> : url === undefined ? <span className="skel" /> : null}

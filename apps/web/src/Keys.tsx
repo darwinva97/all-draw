@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type AdminUser, type ApiKey, type AuthInfo, type Quotas, type User } from './api';
-import { useT } from '@all-draw/i18n';
+import { formatDate, useT } from '@all-draw/i18n';
 import { Icon, confirmDialog, toast } from '@all-draw/editor';
 import { AppFooter, AppHeader, UserMenu } from './Chrome';
 import { formError } from './Auth';
@@ -40,7 +40,7 @@ export function KeysScreen() {
       <p className="err" role="alert" aria-live="assertive">{err}</p>
       {created?.key && <p className="ok" role="status">{t('Copia la clave ahora, no se vuelve a mostrar:')} <code>{created.key}</code></p>}
       <div className="home__list">
-        {keys.map(k => <div key={k.id} className="home__item"><div>{k.name} <small>{k.prefix}…</small><br /><small>{t('creada {date}', { date: new Date(k.createdAt).toLocaleString() })}{k.lastUsedAt ? ` · ${t('usada {date}', { date: new Date(k.lastUsedAt).toLocaleString() })}` : ''}</small></div><button className="btn btn--ghost" aria-label={t('Revocar la clave {name}', { name: k.name })} onClick={async () => { if (!(await confirmDialog({ title: t('¿Revocar la clave «{name}»?', { name: k.name }), message: t('Los agentes y scripts que la usen dejarán de tener acceso.'), confirmLabel: t('Revocar'), danger: true }))) return; await api.deleteKey(k.id); toast.success(t('Clave revocada')); refresh(); }}>{t('Revocar')}</button></div>)}
+        {keys.map(k => <div key={k.id} className="home__item"><div>{k.name} <small>{k.prefix}…</small><br /><small>{t('creada {date}', { date: formatDate(k.createdAt) })}{k.lastUsedAt ? ` · ${t('usada {date}', { date: formatDate(k.lastUsedAt) })}` : ''}</small></div><button className="btn btn--ghost" aria-label={t('Revocar la clave {name}', { name: k.name })} onClick={async () => { if (!(await confirmDialog({ title: t('¿Revocar la clave «{name}»?', { name: k.name }), message: t('Los agentes y scripts que la usen dejarán de tener acceso.'), confirmLabel: t('Revocar'), danger: true }))) return; await api.deleteKey(k.id); toast.success(t('Clave revocada')); refresh(); }}>{t('Revocar')}</button></div>)}
       </div>
       {me && <ProfileSection me={me} onChange={setMe} emailEnabled={!!info?.email} />}
       {me && info?.email && <EmailPrefsSection me={me} onChange={setMe} />}
@@ -133,7 +133,7 @@ function AdminUsers({ meId }: { meId: string }) {
       <p className="err" role="alert" aria-live="assertive">{err}</p>
       <div className="home__list">
         {users.map(u => <div key={u.id} className="home__item">
-          <div>{u.name} <small>{u.email}</small>{u.isAdmin && <small> · {t('administrador')}</small>}<br /><small>{t('creada {date}', { date: new Date(u.createdAt).toLocaleString() })}</small>
+          <div>{u.name} <small>{u.email}</small>{u.isAdmin && <small> · {t('administrador')}</small>}<br /><small>{t('creada {date}', { date: formatDate(u.createdAt) })}</small>
             {reset?.id === u.id && <p className="ok" role="status">{t('Contraseña temporal (cópiala ahora):')} <code>{reset.password}</code></p>}
           </div>
           {u.id !== meId && <button className="btn btn--ghost" aria-label={t('Restablecer la contraseña de {email}', { email: u.email })} onClick={() => doReset(u)}>{t('Restablecer')}</button>}

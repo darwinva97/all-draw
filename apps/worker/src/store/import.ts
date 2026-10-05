@@ -19,7 +19,7 @@ export const IMPORT_TABLES = {
   users: { table: 'users', cols: [t('id'), t('email'), t('name'), t('password_hash'), { name: 'is_admin', kind: 'bool' }, t('created_at'), opt('email_verified_at'), opt('locale'), { name: 'notify_email', kind: 'bool1' }] },
   workspaces: { table: 'workspaces', cols: [t('id'), t('owner_id'), t('name'), t('created_at'), t('updated_at')] },
   members: { table: 'workspace_members', cols: [t('workspace_id'), t('user_id'), t('role'), t('created_at')] },
-  links: { table: 'share_links', cols: [t('token'), t('workspace_id'), t('role'), t('created_by'), t('created_at'), opt('expires_at')] },
+  links: { table: 'share_links', cols: [t('token'), t('workspace_id'), t('role'), t('created_by'), t('created_at'), opt('expires_at'), opt('view_id')] },
   apiKeys: { table: 'api_keys', cols: [t('id'), t('user_id'), t('name'), t('prefix'), t('key_hash'), t('created_at'), opt('last_used_at')] },
 } as const satisfies Record<string, { table: string; cols: Col[] }>;
 export type ImportGroup = keyof typeof IMPORT_TABLES;

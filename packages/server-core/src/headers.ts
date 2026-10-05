@@ -13,6 +13,11 @@ export interface SecurityHeaderOpts {
   https: boolean;
   /** Host público (para `connect-src` del WebSocket en navegadores que no cuentan ws(s) como `'self'`). */
   host?: string | null;
+  /**
+   * Rutas de inserción (`/embed/*`): otras webs pueden incrustarlas (`frame-ancestors *`, sin `X-Frame-Options`,
+   * `Cross-Origin-Resource-Policy: cross-origin`), con su propia CSP mínima y sin `Referer` (el token va en la URL).
+   */
+  embed?: boolean;
 }
 
 /** Nonce por respuesta: Cloudflare (y otros proxies) lo copian a los scripts que inyectan (detección de bots), que si no violarían la CSP. */
@@ -42,7 +47,36 @@ export function contentSecurityPolicy(host?: string | null, nonce?: string): str
   ].join('; ');
 }
 
-export function securityHeaders({ https, host }: SecurityHeaderOpts): Record<string, string> {
+/**
+ * CSP de las páginas de inserción (`/embed/*`): sin nada externo salvo imágenes `https:` (nodos «imagen»), el único script
+ * es el propio con `nonce`, `fetch` sólo al propio origen (sondeo del SVG) y se deja incrustar desde cualquier web.
+ */
+export function embedContentSecurityPolicy(nonce?: string): string {
+  return [
+    "default-src 'none'",
+    `script-src ${nonce ? `'nonce-${nonce}'` : "'none'"}`,
+    "style-src 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    'frame-ancestors *',
+  ].join('; ');
+}
+
+export function securityHeaders({ https, host, embed }: SecurityHeaderOpts): Record<string, string> {
+  if (embed) {
+    const e: Record<string, string> = {
+      'content-security-policy': embedContentSecurityPolicy(),
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer',
+      'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+      'cross-origin-resource-policy': 'cross-origin',
+    };
+    if (https) e['strict-transport-security'] = 'max-age=15552000; includeSubDomains';
+    return e;
+  }
   const h: Record<string, string> = {
     'content-security-policy': contentSecurityPolicy(host, cspNonce()),
     'x-content-type-options': 'nosniff',

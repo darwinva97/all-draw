@@ -15,7 +15,7 @@ export default defineConfig({
         lang: 'es', theme_color: '#2563eb', background_color: '#f6f7f9', display: 'standalone', start_url: '/',
         icons: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
       },
-      workbox: { maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, globPatterns: ['**/*.{js,css,html,svg,woff2}'], navigateFallback: '/index.html', navigateFallbackDenylist: [/^\/ws\//, /^\/healthz/] },
+      workbox: { maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, globPatterns: ['**/*.{js,css,html,svg,woff2}'], navigateFallback: '/index.html', navigateFallbackDenylist: [/^\/ws\//, /^\/healthz/, /^\/embed\//, /^\/api\//, /^\/mcp/, /^\/\.well-known\//] },
     }),
   ],
   server: { host: '127.0.0.1', port: 4173, strictPort: false },

@@ -14,13 +14,14 @@ const RESERVOIR = 1024;
 const MAX_ROUTES = 200;
 
 /** Segmentos que van detrás de estos se tratan como ids. */
-const PARAM_AFTER = new Set(['workspaces', 'snapshots', 'keys', 'members', 'links', 'users', 'views']);
+const PARAM_AFTER = new Set(['workspaces', 'snapshots', 'keys', 'members', 'links', 'users', 'views', 'webhooks', 'embeds']);
 
 /** `/api/workspaces/ws_1/views/v_2/svg?x` → `/api/workspaces/:id/views/:id/svg`; estáticos → `static`. */
 export function routeOf(rawPath: string): string {
   const q = rawPath.search(/[?#]/);
   const p = q >= 0 ? rawPath.slice(0, q) : rawPath;
-  if (p === '/healthz' || p === '/metrics' || p === '/.well-known/security.txt') return p;
+  if (p === '/healthz' || p === '/metrics' || p === '/.well-known/security.txt' || p === '/mcp') return p;
+  if (p.startsWith('/embed/')) return p.endsWith('.svg') ? '/embed/:id/:id.svg' : '/embed/:id/:id';
   if (!p.startsWith('/api/') && p !== '/api') return 'static';
   const segs = p.split('/');
   for (let i = 1; i < segs.length; i++) if (PARAM_AFTER.has(segs[i - 1]!) && segs[i]) segs[i] = ':id';

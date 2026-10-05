@@ -15,7 +15,7 @@
  *
  * Las referencias rotas producen **warnings**, nunca errores. Los ids se conservan en ambos sentidos.
  */
-import { SCHEMA_VERSION, parseWorkspace, type Workspace, type Element, type Relation, type View, type ViewNode, type ViewEdge, type ElementType, type Library, type NodeStyle } from '@all-draw/core';
+import { parseWorkspace, type Workspace, type Element, type Relation, type View, type ViewNode, type ViewEdge, type ElementType, type Library, type NodeStyle } from '@all-draw/core';
 import { ELEMENTS, RELATIONS } from '@all-draw/notation-archimate';
 import { parseXml, buildXml, attr, attrNum, children, child, childText, attrs, type XmlNode } from './xml';
 import { tr } from './i18n';
@@ -361,9 +361,8 @@ export function pruneRelations(relations: Relation[], relIds: Set<string>, okEnd
     }
   }
 }
-export function emptyWs(name: string): Workspace {
-  return { meta: { schemaVersion: SCHEMA_VERSION, name, description: '' }, libraries: {}, elements: {}, relations: {}, views: {}, nodes: {}, edges: {}, dimensions: {}, people: {}, rules: {}, comments: {} };
-}
+import { emptyWs } from './empty';
+export { emptyWs };
 export function makeEl(id: string, typeId: string, name: string): Element {
   return { id, typeId, name, doc: '', fields: {}, ports: [], profiles: [], props: {}, features: {}, tags: [] };
 }

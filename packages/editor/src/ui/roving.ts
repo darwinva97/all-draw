@@ -30,15 +30,28 @@ export const isShown = (el: Element): boolean => el.getClientRects().length > 0;
  */
 export function useRoving(ref: RefObject<HTMLElement | null>, selector: string) {
   const active = useRef<HTMLElement | null>(null);
+  // Tras cada render: solo se mide (`getClientRects`, que fuerza el layout) el activo y, si ya no se ve, los
+  // siguientes hasta dar con uno visible; antes se medían todos (cientos en la paleta) en cada render del panel.
   const sync = useCallback(() => {
     const el = ref.current; if (!el) return;
-    const all = [...el.querySelectorAll<HTMLElement>(selector)];
-    const shown = all.filter(isShown);
-    if (!active.current || !shown.includes(active.current)) active.current = shown[0] ?? null;
-    for (const it of all) it.tabIndex = it === active.current ? 0 : -1;
+    const all = el.querySelectorAll<HTMLElement>(selector);
+    const cur = active.current;
+    if (!cur || !el.contains(cur) || !isShown(cur)) {
+      active.current = null;
+      for (const it of all) if (isShown(it)) { active.current = it; break; }
+    }
+    // Por atributo: un `div` sin `tabindex` ya devuelve `tabIndex === -1`, pero sin el atributo no se puede enfocar.
+    for (const it of all) { const ti = it === active.current ? '0' : '-1'; if (it.getAttribute('tabindex') !== ti) it.setAttribute('tabindex', ti); }
   }, [ref, selector]);
-  // Tras cada render (filtrar, cambiar de pestaña) y al plegar/desplegar una categoría (`toggle` no burbujea).
-  useEffect(() => { sync(); });
+  // Tras cada render (filtrar, cambiar de pestaña) y al plegar/desplegar una categoría (`toggle` no burbujea). En el
+  // siguiente frame y una sola vez aunque haya varios renders: medir aquí, en mitad de un commit grande (cambiar a una
+  // vista de cientos de nodos), forzaba un layout síncrono que después se repetía al pintar.
+  const pending = useRef(0);
+  useEffect(() => {
+    if (typeof requestAnimationFrame !== 'function') { sync(); return; }
+    if (!pending.current) pending.current = requestAnimationFrame(() => { pending.current = 0; sync(); });
+  });
+  useEffect(() => () => { if (pending.current) cancelAnimationFrame(pending.current); }, []);
   useEffect(() => {
     const el = ref.current; if (!el) return;
     el.addEventListener('toggle', sync, true);

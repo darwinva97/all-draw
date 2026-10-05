@@ -1,6 +1,6 @@
 /** `DocHost` que reenvía cada operación al Durable Object del espacio (`WorkspaceDO`). */
 import type { Command, Diagnostic, Workspace, WorkspaceMeta } from '@all-draw/core';
-import { CommandError, type ConnMatch, type DocHost, type SnapshotMeta, type SvgOpts } from '@all-draw/server-core';
+import { CommandError, type ConnMatch, type DocHost, type SnapshotMeta, type SvgOpts, type WebhookEvent } from '@all-draw/server-core';
 
 export class RemoteDocHost implements DocHost {
   constructor(private ns: DurableObjectNamespace) {}
@@ -36,6 +36,11 @@ export class RemoteDocHost implements DocHost {
   }
   async drop(id: string) { await this.call(id, 'POST', '/drop'); }
   async revoke(id: string, match: ConnMatch, code: number, reason: string) { return (await this.call<{ closed: number }>(id, 'POST', '/revoke', { ...match, code, reason })).closed; }
+
+  /** Evento de webhook de la API (`member.added`, `snapshot.*`): lo envía el DO del espacio con `ctx.waitUntil`. */
+  async emitWebhook(id: string, event: WebhookEvent, data: Record<string, unknown>, baseUrl?: string) { await this.call(id, 'POST', '/webhook', { event, data, baseUrl: baseUrl ?? null }); }
+  /** Los webhooks del espacio cambiaron: el DO vuelve a mirar si hay suscritos a `workspace.changed`. */
+  async refreshWebhooks(id: string) { await this.call(id, 'POST', '/webhook/refresh'); }
 
   async listSnapshots(id: string) { return (await this.call<{ snapshots: SnapshotMeta[] }>(id, 'GET', '/snapshots')).snapshots; }
   createSnapshot(id: string, authorId: string | null, label: string | null) { return this.call<SnapshotMeta>(id, 'POST', '/snapshots', { authorId, label }); }

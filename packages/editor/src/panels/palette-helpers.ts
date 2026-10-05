@@ -125,3 +125,14 @@ export function addToCanvas(item: HTMLElement, sizeModel: { w: number; h: number
   pane.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: at.x, clientY: at.y }));
   return true;
 }
+
+/**
+ * Añade al lienzo visible un elemento de la paleta sin que haya un elemento de la paleta en pantalla (Ctrl+K →
+ * «Añadir <tipo>»): un emisor temporal hace el mismo `dragstart` que la paleta y se suelta igual que con un clic.
+ */
+export function addPayloadToCanvas(payload: PaletteDrag, store: Store, registry: NotationRegistry, viewId: string, spread = true): boolean {
+  if (typeof document === 'undefined') return false;
+  const source = document.createElement('div');
+  source.addEventListener('dragstart', e => { e.dataTransfer?.setData(payload.kind, payload.data); });
+  return addToCanvas(source, paletteItemSize(payload, store, registry), containerNodeIds(store, registry, viewId), spread);
+}

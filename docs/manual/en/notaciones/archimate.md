@@ -16,7 +16,7 @@ The all-draw pack is generated from the files of the Archi tool, so it follows t
 closely: **61 elements** (the 60 of ArchiMate 3.2 plus *Junction*), **11 relations**, the complete
 validity matrix and **25 viewpoints**.
 
-![ArchiMate view of the demo in the editor (Spanish interface)](../../img/03-editor-archimate.png)
+![ArchiMate view of the demo in the editor](../../img/03-editor-archimate-en.png)
 
 ## Key elements {#elementos-clave}
 

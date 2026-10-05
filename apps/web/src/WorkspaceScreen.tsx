@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EditorProvider, Editor, HelpLink, Icon, useEditor, useMeta, useCollection, confirmDialog, toast, type PresenceMe } from '@all-draw/editor';
+import { EditorProvider, Editor, HelpLink, Icon, useEditor, useMeta, useCollection, confirmDialog, toast, type PresenceMe, type AppCommand } from '@all-draw/editor';
 import { listLocalWorkspaces, localWorkspaceRole, openLocalWorkspace, setLocalWorkspaceRole, type LocalWorkspace, type RemoteConnection } from '@all-draw/sync';
-import { traceCoverage, type Validator } from '@all-draw/core';
+import { traceCoverage, type Store, type Validator } from '@all-draw/core';
 import { createRegistry, bindLibraries } from './registry';
 import { connectRoom, takeShareToken } from './share';
 import { api, setBearer, ApiError, ACCOUNT_KEY, cachedAccount, isNetworkError, type WorkspaceInfo, type ShareLink } from './api';
@@ -16,10 +16,29 @@ import { Tour, editorTourSteps, tourSeen } from './Tour';
 import { docHref } from './help';
 import { reportError } from './notify';
 import { NotificationBell } from './Notifications';
+import { EmbedPanel, ShareTabList, WebhooksPanel, type ShareTab } from './Integrations';
 import { useT, useLang } from '@all-draw/i18n';
 
 /** El inspector de vista abre el diálogo Compartir (que vive en la barra) con este evento. */
 const SHARE_EVENT = 'alldraw:share';
+/** Ctrl+K → «Historial de versiones…» abre el diálogo de la barra con este evento. */
+const HISTORY_EVENT = 'alldraw:history';
+/**
+ * Órdenes de Ctrl+K (`onCommand` del editor): compartir e historial abren sus diálogos; exportar, importar y generar
+ * código pulsan la opción equivalente del menú Importar / Exportar de la barra (mismo código, mismos avisos).
+ */
+function runAppCommand(id: AppCommand, t: (k: string) => string) {
+  if (id === 'share') { window.dispatchEvent(new Event(SHARE_EVENT)); return; }
+  if (id === 'history') { window.dispatchEvent(new Event(HISTORY_EVENT)); return; }
+  const want: Record<string, (s: string) => boolean> = {
+    'export:svg': s => s === t('SVG (tema claro y oscuro)'), 'export:png': s => s === 'PNG (2×)', 'export:pdf': s => s === 'PDF', 'export:mermaid': s => s === 'Mermaid',
+    'export:drawio': s => s === 'draw.io', 'export:json': s => s === t('JSON de all-draw'), import: s => s.startsWith('.drawer'), codegen: s => s === t('Generar código…'),
+  };
+  const trigger = [...document.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="menu"]')].find(b => b.textContent?.trim() === t('Importar / Exportar'));
+  if (!trigger || !want[id]) { toast.info(t('Usa el menú Importar / Exportar de la barra')); return; }
+  if (trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
+  setTimeout(() => [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].find(b => want[id]!(b.textContent?.trim() ?? ''))?.click(), 0);
+}
 import './pwa';
 
 const BASE_VALIDATORS: Validator[] = [traceCoverage];
@@ -234,11 +253,18 @@ export function WorkspaceScreen({ id, mode, viewId }: { id: string; mode: 'local
       lw.history.run(await layoutView(lw.store, registry, vid, autoLayoutDefaults(v.notationId)));
     } catch (e) { reportError(e, { title: t('No se pudo colocar la vista automáticamente') }); }
   };
+  /** Layout de una vista sobre cualquier store (el panel de texto lo aplica a las vistas nuevas sin posiciones). */
+  const layoutOf = async (store: Store, vid: string) => {
+    const { layoutView, autoLayoutDefaults } = await import('@all-draw/layout');
+    return layoutView(store, registry, vid, autoLayoutDefaults(store.get('views', vid)?.notationId ?? 'freeform'));
+  };
   return (
     <EditorProvider store={lw.store} history={lw.history} registry={registry} initialViewId={initial} readOnly={readOnly} validators={validators}
       presence={conn ? { awareness: conn.awareness, me } : undefined} docsHref={docsHref}
       onShare={mode === 'server' && info?.role === 'owner' && !offline ? () => window.dispatchEvent(new Event(SHARE_EVENT)) : undefined}>
-      <Editor toolbarLeft={<LeftTools onRename={mode === 'server' ? rename : undefined} />} toolbarRight={<RightTools lw={lw} id={id} mode={mode} info={info} conn={conn} offline={offline} lost={!!lost} onTour={() => setTour(true)} />} onRequestLayout={readOnly ? undefined : onLayout} />
+      <Editor toolbarLeft={<LeftTools onRename={mode === 'server' ? rename : undefined} />} toolbarRight={<RightTools lw={lw} id={id} mode={mode} info={info} conn={conn} offline={offline} lost={!!lost} onTour={() => setTour(true)} />} onRequestLayout={readOnly ? undefined : onLayout} layout={readOnly ? undefined : layoutOf}
+        onCommand={cmd => runAppCommand(cmd, t)} commands={['export:svg', 'export:png', 'export:pdf', 'export:mermaid', 'export:drawio', 'export:json', 'import', 'codegen',
+          ...(mode === 'server' && info?.role === 'owner' && !offline && !lost ? ['share' as const] : []), ...(mode === 'server' && info && !offline && !lost ? ['history' as const] : [])]} />
       <CollabBridge lw={lw} conn={conn} registry={registry} />
       {tour && !lost && <Tour steps={editorTourSteps(mode)} onClose={() => setTour(false)} />}
       {lost && <LostAccessDialog why={lost} onRetry={retry} />}
@@ -383,6 +409,7 @@ function RightTools({ lw, id, mode, info, conn, offline, lost, onTour }: { lw: L
   const [share, setShare] = useState(false);
   useEffect(() => { const open = () => setShare(true); window.addEventListener(SHARE_EVENT, open); return () => window.removeEventListener(SHARE_EVENT, open); }, []);
   const [history, setHistory] = useState(false);
+  useEffect(() => { const open = () => setHistory(true); window.addEventListener(HISTORY_EVENT, open); return () => window.removeEventListener(HISTORY_EVENT, open); }, []);
   const [uploading, setUploading] = useState(false);
   /** «Subir al servidor» sin sesión: se entra aquí mismo y la subida sigue sola (fallo 67). */
   const [authForUpload, setAuthForUpload] = useState(false);
@@ -445,10 +472,17 @@ function ShareDialog({ id, onClose }: { id: string; onClose: () => void }) {
     try { await api.deleteLink(id, l.token); toast.success(t('Enlace revocado')); await refresh(); } catch (e) { reportError(e, { title: t('No se pudo revocar el enlace') }); }
   };
   const label = (l: ShareLink) => t('{kind} del {date}', { kind: l.role === 'editor' ? t('edición') : t('lectura'), date: new Date(l.createdAt).toLocaleString() });
+  // Pestañas: enlaces, insertar (iframe, imagen, oEmbed) y webhooks (`Integrations.tsx`).
+  const [tab, setTab] = useState<ShareTab>('links');
   return (
     <div className="modal" onClick={onClose}>
       <div ref={box} className="modal__box" role="dialog" aria-modal="true" aria-labelledby="share-title" tabIndex={-1} onClick={e => e.stopPropagation()}>
         <h2 id="share-title">{t('Compartir')}</h2>
+        <ShareTabList value={tab} onChange={setTab} base="share" />
+        <div role="tabpanel" id="share-panel" aria-labelledby={`share-tab-${tab}`}>
+        {tab === 'embed' && <EmbedPanel id={id} />}
+        {tab === 'webhooks' && <WebhooksPanel id={id} />}
+        {tab === 'links' && <>
         <p className="modal__lead">{t('Quien tenga un enlace de edición edita a la vez contigo; el de lectura solo ve. Puedes revocarlos cuando quieras.')}</p>
         <div className="row"><button className="btn btn--primary" disabled={busy} onClick={() => void create('editor')}><Icon name="edit" size={14} />{t('Nuevo enlace de edición')}</button><button className="btn" disabled={busy} onClick={() => void create('viewer')}><Icon name="eye" size={14} />{t('Nuevo enlace de lectura')}</button></div>
         <ul className="share__list" aria-label={t('Enlaces compartidos')} aria-busy={links === null}>
@@ -460,7 +494,9 @@ function ShareDialog({ id, onClose }: { id: string; onClose: () => void }) {
             <button className="btn btn--ghost btn--sm" aria-label={t('Revocar enlace de {label}', { label: label(l) })} onClick={() => void revoke(l)}>{t('Revocar')}</button>
           </li>)}
         </ul>
-        <div className="modal__foot"><HelpLink slug="compartir-y-colaborar" /><span className="spacer" /><button className="btn" onClick={onClose}>{t('Cerrar')}</button></div>
+        </>}
+        </div>
+        <div className="modal__foot"><HelpLink slug={tab === 'webhooks' ? 'agentes-y-api' : 'compartir-y-colaborar'} anchor={tab === 'embed' ? 'insertar' : tab === 'webhooks' ? 'webhooks' : undefined} /><span className="spacer" /><button className="btn" onClick={onClose}>{t('Cerrar')}</button></div>
       </div>
     </div>
   );

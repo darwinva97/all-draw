@@ -67,14 +67,14 @@ const ASSOCIATION_DIRECTION_LABELS = { None: 'Sin dirección', One: 'En un senti
 
 /** Marcadores comunes a toda actividad (bucle, multi-instancia, compensación). */
 const activityFields: FieldDef[] = [
-  { key: 'loop', label: 'Bucle', kind: 'select', options: 'none,standard,parallelMulti,sequentialMulti', optionLabels: LOOP_LABELS },
+  { key: 'loop', label: 'Bucle', kind: 'select', options: 'none,standard,parallelMulti,sequentialMulti', optionLabels: LOOP_LABELS, doc: 'Estándar: se repite mientras se cumpla una condición. Multiinstancia: una ejecución por elemento de una colección, en paralelo (|||) o en secuencia (≡).' },
   { key: 'isForCompensation', label: 'Actividad de compensación', kind: 'checkbox', doc: 'Se ejecuta solo al compensar; se une a su evento de borde por una Association dirigida.' },
 ];
 const subProcessFields: FieldDef[] = [
-  { key: 'collapsed', label: 'Colapsado', kind: 'checkbox' },
+  { key: 'collapsed', label: 'Colapsado', kind: 'checkbox', doc: 'Se dibuja plegado, con un «+»; el detalle va en su propia vista.' },
   ...activityFields,
 ];
-const eventDef = (options: string): FieldDef => ({ key: 'eventDefinition', label: 'Definición de evento', kind: 'select', options, optionLabels: EVENT_DEF_LABELS });
+const eventDef = (options: string): FieldDef => ({ key: 'eventDefinition', label: 'Definición de evento', kind: 'select', options, optionLabels: EVENT_DEF_LABELS, doc: 'Qué dispara o lanza el evento: mensaje, temporizador, señal, error, condición… (el icono dentro del círculo).' });
 const EVENT_REF: FieldDef = { key: 'eventRef', label: 'Mensaje / señal / error / escalado', kind: 'ref', doc: 'Elemento de definición (Message, Signal, Error, Escalation) al que se refiere el evento.' };
 
 /** Definiciones de evento admitidas por cada clase de evento (según el replace menu de bpmn-js). */
@@ -88,24 +88,24 @@ export const BPMN_EVENT_DEFINITIONS = {
 
 export const BPMN_ELEMENT_TYPES: ElementType[] = [
   // Participantes
-  el('Pool', 'Pool', 'participants', { shape: 'pool', container: true, color: COLORS.participant, icon: '', doc: 'Participante de una colaboración con proceso propio. Contiene lanes y nodos de flujo.', fields: [{ key: 'multiplicity', label: 'Multiplicidad', kind: 'checkbox' }] }),
+  el('Pool', 'Pool', 'participants', { shape: 'pool', container: true, color: COLORS.participant, icon: '', doc: 'Participante de una colaboración con proceso propio. Contiene lanes y nodos de flujo.', fields: [{ key: 'multiplicity', label: 'Multiplicidad', kind: 'checkbox', doc: 'Hay varias instancias del participante (tres rayas al pie), p. ej. varios proveedores.' }] }),
   el('Participant', 'Participante (pool colapsada)', 'participants', {
     shape: 'pool', color: COLORS.participant, icon: '▭',
     doc: 'Pool vacía o colapsada ("caja negra"): participante sin proceso modelado. Origen y destino de flujos de mensaje.',
-    fields: [{ key: 'collapsed', label: 'Colapsada', kind: 'checkbox' }, { key: 'multiplicity', label: 'Multiplicidad', kind: 'checkbox' }],
+    fields: [{ key: 'collapsed', label: 'Colapsada', kind: 'checkbox', doc: 'Pool sin proceso visible: solo una franja con el nombre (caja negra).' }, { key: 'multiplicity', label: 'Multiplicidad', kind: 'checkbox', doc: 'Hay varias instancias del participante (tres rayas al pie), p. ej. varios proveedores.' }],
   }),
   el('Lane', 'Lane', 'participants', { shape: 'lane', container: true, color: COLORS.participant, icon: '', doc: 'Carril dentro de una pool (rol, sistema). Puede anidar lanes.' }),
   el('Process', 'Proceso', 'participants', {
     shape: 'rect', color: COLORS.participant, icon: '⚙', doc: 'Proceso raíz de una vista sin pool (`View.rootElementId`). No se dibuja como nodo.',
-    fields: [{ key: 'isExecutable', label: 'Ejecutable', kind: 'checkbox' }, { key: 'processType', label: 'Tipo', kind: 'select', options: 'None,Public,Private', optionLabels: PROCESS_TYPE_LABELS }],
+    fields: [{ key: 'isExecutable', label: 'Ejecutable', kind: 'checkbox', doc: 'El proceso está pensado para ejecutarse en un motor (Camunda, Flowable…), no solo para documentar.' }, { key: 'processType', label: 'Tipo', kind: 'select', options: 'None,Public,Private', optionLabels: PROCESS_TYPE_LABELS, doc: 'Público: solo lo que se ve desde fuera (para colaboraciones). Privado: el proceso interno completo.' }],
   }),
   // Actividades
   el('Task', 'Tarea', 'activities', {
     shape: 'rounded', color: COLORS.activity, icon: '',
     fields: [
-      { key: 'taskType', label: 'Tipo de tarea', kind: 'select', options: 'none,user,service,script,manual,businessRule,send,receive', optionLabels: TASK_TYPE_LABELS },
+      { key: 'taskType', label: 'Tipo de tarea', kind: 'select', options: 'none,user,service,script,manual,businessRule,send,receive', optionLabels: TASK_TYPE_LABELS, doc: 'Usuario (una persona con un sistema), servicio (automática), script, manual (sin sistema), regla de negocio, envío o recepción de mensajes.' },
       ...activityFields,
-      { key: 'instantiate', label: 'Instancia el proceso (receive)', kind: 'checkbox' },
+      { key: 'instantiate', label: 'Instancia el proceso (receive)', kind: 'checkbox', doc: 'Tarea de recepción que arranca una instancia nueva del proceso al llegar el mensaje.' },
     ],
   }),
   el('SubProcess', 'Subproceso', 'activities', {
@@ -123,20 +123,20 @@ export const BPMN_ELEMENT_TYPES: ElementType[] = [
     doc: 'Las actividades internas se ejecutan en cualquier orden hasta la condición de fin.',
     fields: [
       ...subProcessFields,
-      { key: 'ordering', label: 'Orden', kind: 'select', options: 'Parallel,Sequential', optionLabels: ORDERING_LABELS },
-      { key: 'completionCondition', label: 'Condición de fin', kind: 'text' },
-      { key: 'cancelRemainingInstances', label: 'Cancelar instancias restantes', kind: 'checkbox' },
+      { key: 'ordering', label: 'Orden', kind: 'select', options: 'Parallel,Sequential', optionLabels: ORDERING_LABELS, doc: 'Paralelo: las actividades del subproceso ad hoc pueden hacerse a la vez. Secuencial: de una en una, en cualquier orden.' },
+      { key: 'completionCondition', label: 'Condición de fin', kind: 'text', doc: 'Expresión que, al cumplirse, da por terminado el subproceso ad hoc.' },
+      { key: 'cancelRemainingInstances', label: 'Cancelar instancias restantes', kind: 'checkbox', doc: 'Al cumplirse la condición de fin, cancela las actividades que sigan en marcha.' },
     ],
   }),
   el('Transaction', 'Transacción', 'activities', {
     shape: 'rounded', container: true, color: COLORS.activity, icon: '⧈', meta: { doubleBorder: true },
     doc: 'Subproceso transaccional: doble borde; se cancela con eventos `cancel`.',
-    fields: [...subProcessFields, { key: 'method', label: 'Método', kind: 'select', options: 'Compensate,Image,Store', optionLabels: TRANSACTION_METHOD_LABELS }],
+    fields: [...subProcessFields, { key: 'method', label: 'Método', kind: 'select', options: 'Compensate,Image,Store', optionLabels: TRANSACTION_METHOD_LABELS, doc: 'Protocolo de la transacción: compensar, imagen o almacenar (casi siempre «Compensar»).' }],
   }),
   el('CallActivity', 'Actividad de llamada', 'activities', {
     shape: 'rounded', color: COLORS.activity, icon: '⊡', meta: { borderWidth: 3 },
     doc: 'Invoca un proceso global reutilizable.',
-    fields: [{ key: 'calledElement', label: 'Proceso llamado', kind: 'ref' }, ...activityFields],
+    fields: [{ key: 'calledElement', label: 'Proceso llamado', kind: 'ref', doc: 'Proceso global (o tarea global) que se ejecuta aquí; se dibuja con borde grueso.' }, ...activityFields],
   }),
   // Eventos
   el('StartEvent', 'Evento de inicio', 'events', {
@@ -146,7 +146,7 @@ export const BPMN_ELEMENT_TYPES: ElementType[] = [
       { key: 'interrupting', label: 'Interruptor', kind: 'checkbox', doc: 'Solo en subprocesos de evento: no interruptor = borde discontinuo.' },
       EVENT_REF,
       { key: 'timer', label: 'Temporizador', kind: 'text', doc: 'timeDate | timeCycle | timeDuration.' },
-      { key: 'condition', label: 'Condición', kind: 'text' },
+      { key: 'condition', label: 'Condición', kind: 'text', doc: 'Expresión del evento condicional: se dispara cuando pasa a ser cierta.' },
     ],
   }),
   el('EndEvent', 'Evento de fin', 'events', {
@@ -155,22 +155,22 @@ export const BPMN_ELEMENT_TYPES: ElementType[] = [
   }),
   el('IntermediateCatchEvent', 'Evento intermedio de captura', 'events', {
     shape: 'double-circle', color: COLORS.event, icon: '◎',
-    fields: [eventDef(BPMN_EVENT_DEFINITIONS.IntermediateCatchEvent), EVENT_REF, { key: 'timer', label: 'Temporizador', kind: 'text' }, { key: 'condition', label: 'Condición', kind: 'text' }, { key: 'link', label: 'Nombre del enlace', kind: 'text' }],
+    fields: [eventDef(BPMN_EVENT_DEFINITIONS.IntermediateCatchEvent), EVENT_REF, { key: 'timer', label: 'Temporizador', kind: 'text', doc: 'timeDate, timeCycle o timeDuration (p. ej. PT2H, R3/PT10M).' }, { key: 'condition', label: 'Condición', kind: 'text', doc: 'Expresión del evento condicional: se dispara cuando pasa a ser cierta.' }, { key: 'link', label: 'Nombre del enlace', kind: 'text', doc: 'Los eventos de enlace con el mismo nombre se continúan: el que lanza salta al que captura.' }],
   }),
   el('IntermediateThrowEvent', 'Evento intermedio de lanzamiento', 'events', {
     shape: 'double-circle', color: COLORS.event, icon: '◉',
-    fields: [eventDef(BPMN_EVENT_DEFINITIONS.IntermediateThrowEvent), EVENT_REF, { key: 'link', label: 'Nombre del enlace', kind: 'text' }],
+    fields: [eventDef(BPMN_EVENT_DEFINITIONS.IntermediateThrowEvent), EVENT_REF, { key: 'link', label: 'Nombre del enlace', kind: 'text', doc: 'Los eventos de enlace con el mismo nombre se continúan: el que lanza salta al que captura.' }],
   }),
   el('BoundaryEvent', 'Evento de borde', 'events', {
     shape: 'double-circle', color: COLORS.event, icon: '◌',
     doc: 'Se adhiere al borde de una actividad (`attachedTo`). No interruptor = borde discontinuo. Con `compensation` se une por Association a la actividad compensadora.',
     fields: [
       eventDef(BPMN_EVENT_DEFINITIONS.BoundaryEvent),
-      { key: 'interrupting', label: 'Interruptor', kind: 'checkbox' },
-      { key: 'attachedTo', label: 'Adherido a', kind: 'ref', required: true },
+      { key: 'interrupting', label: 'Interruptor', kind: 'checkbox', doc: 'Interruptor: cancela la actividad (borde continuo). No interruptor: la actividad sigue (borde discontinuo).' },
+      { key: 'attachedTo', label: 'Adherido a', kind: 'ref', required: true, doc: 'Actividad a cuyo borde va pegado el evento.' },
       EVENT_REF,
-      { key: 'timer', label: 'Temporizador', kind: 'text' },
-      { key: 'condition', label: 'Condición', kind: 'text' },
+      { key: 'timer', label: 'Temporizador', kind: 'text', doc: 'timeDate, timeCycle o timeDuration (p. ej. PT2H, R3/PT10M).' },
+      { key: 'condition', label: 'Condición', kind: 'text', doc: 'Expresión del evento condicional: se dispara cuando pasa a ser cierta.' },
     ],
   }),
   // Compuertas
@@ -179,46 +179,46 @@ export const BPMN_ELEMENT_TYPES: ElementType[] = [
   el('InclusiveGateway', 'Compuerta inclusiva', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: '○', doc: 'OR: uno o varios caminos.' }),
   el('EventBasedGateway', 'Compuerta basada en eventos', 'gateways', {
     shape: 'diamond', color: COLORS.gateway, icon: '⬠', doc: 'El primer evento intermedio que ocurra decide el camino.',
-    fields: [{ key: 'instantiate', label: 'Instancia el proceso', kind: 'checkbox' }, { key: 'eventGatewayType', label: 'Tipo', kind: 'select', options: 'Exclusive,Parallel', optionLabels: EVENT_GATEWAY_TYPE_LABELS }],
+    fields: [{ key: 'instantiate', label: 'Instancia el proceso', kind: 'checkbox', doc: 'La compuerta arranca el proceso con el primer evento que llegue (sin evento de inicio delante).' }, { key: 'eventGatewayType', label: 'Tipo', kind: 'select', options: 'Exclusive,Parallel', optionLabels: EVENT_GATEWAY_TYPE_LABELS, doc: 'Exclusiva: gana el primer evento que llega. Paralela: hacen falta todos para instanciar el proceso.' }],
   }),
-  el('ComplexGateway', 'Compuerta compleja', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: '✱', fields: [{ key: 'activationCondition', label: 'Condición de activación', kind: 'text' }] }),
+  el('ComplexGateway', 'Compuerta compleja', 'gateways', { shape: 'diamond', color: COLORS.gateway, icon: '✱', fields: [{ key: 'activationCondition', label: 'Condición de activación', kind: 'text', doc: 'Cuántas entradas tienen que llegar para seguir (p. ej. 2 de 3).' }] }),
   // Datos
   el('DataObject', 'Objeto de datos', 'data', {
     shape: 'note', color: COLORS.data, icon: '❏',
-    fields: [{ key: 'isCollection', label: 'Colección', kind: 'checkbox' }, { key: 'state', label: 'Estado', kind: 'text' }],
+    fields: [{ key: 'isCollection', label: 'Colección', kind: 'checkbox', doc: 'Es una colección de objetos (tres rayas al pie).' }, { key: 'state', label: 'Estado', kind: 'text', doc: 'Estado del dato en este punto del proceso; se muestra entre corchetes («[aprobado]»).' }],
   }),
   el('DataStore', 'Almacén de datos', 'data', { shape: 'cylinder', color: COLORS.data, icon: '⛁' }),
-  el('DataInput', 'Entrada de datos', 'data', { shape: 'note', color: COLORS.data, icon: '❏→', doc: 'Dato de entrada del proceso (flecha vacía en la esquina).', fields: [{ key: 'isCollection', label: 'Colección', kind: 'checkbox' }] }),
-  el('DataOutput', 'Salida de datos', 'data', { shape: 'note', color: COLORS.data, icon: '❏⇒', doc: 'Dato de salida del proceso (flecha rellena en la esquina).', fields: [{ key: 'isCollection', label: 'Colección', kind: 'checkbox' }] }),
-  el('Message', 'Mensaje', 'data', { shape: 'label', color: COLORS.data, icon: '✉', doc: 'Sobre que se dibuja sobre un flujo de mensaje o junto a una tarea de coreografía. Se asocia con Association.', fields: [{ key: 'initiating', label: 'Iniciador', kind: 'checkbox' }] }),
+  el('DataInput', 'Entrada de datos', 'data', { shape: 'note', color: COLORS.data, icon: '❏→', doc: 'Dato de entrada del proceso (flecha vacía en la esquina).', fields: [{ key: 'isCollection', label: 'Colección', kind: 'checkbox', doc: 'Es una colección de objetos (tres rayas al pie).' }] }),
+  el('DataOutput', 'Salida de datos', 'data', { shape: 'note', color: COLORS.data, icon: '❏⇒', doc: 'Dato de salida del proceso (flecha rellena en la esquina).', fields: [{ key: 'isCollection', label: 'Colección', kind: 'checkbox', doc: 'Es una colección de objetos (tres rayas al pie).' }] }),
+  el('Message', 'Mensaje', 'data', { shape: 'label', color: COLORS.data, icon: '✉', doc: 'Sobre que se dibuja sobre un flujo de mensaje o junto a una tarea de coreografía. Se asocia con Association.', fields: [{ key: 'initiating', label: 'Iniciador', kind: 'checkbox', doc: 'Mensaje que inicia la interacción (sobre blanco); el de respuesta va sombreado.' }] }),
   // Artefactos
-  el('Group', 'Grupo', 'artifacts', { shape: 'group', container: true, color: COLORS.artifact, icon: '▢', doc: 'Agrupación visual sin semántica de flujo.', fields: [{ key: 'categoryValue', label: 'Categoría', kind: 'text' }] }),
-  el('TextAnnotation', 'Anotación', 'artifacts', { shape: 'note', color: COLORS.artifact, icon: '✎', fields: [{ key: 'text', label: 'Texto', kind: 'textarea' }] }),
+  el('Group', 'Grupo', 'artifacts', { shape: 'group', container: true, color: COLORS.artifact, icon: '▢', doc: 'Agrupación visual sin semántica de flujo.', fields: [{ key: 'categoryValue', label: 'Categoría', kind: 'text', doc: 'Valor de categoría que da nombre al grupo.' }] }),
+  el('TextAnnotation', 'Anotación', 'artifacts', { shape: 'note', color: COLORS.artifact, icon: '✎', fields: [{ key: 'text', label: 'Texto', kind: 'textarea', doc: 'Texto del comentario; se une al elemento que explica con una Association.' }] }),
   // Coreografía
   el('ChoreographyTask', 'Tarea de coreografía', 'choreography', {
     shape: 'rounded', color: COLORS.choreography, icon: '⇄', doc: 'Intercambio de mensajes entre dos participantes (bandas superior e inferior).',
     fields: [
-      { key: 'initiatingParticipant', label: 'Participante iniciador', kind: 'ref' },
-      { key: 'participants', label: 'Participantes', kind: 'list', port: false },
-      { key: 'loopType', label: 'Bucle', kind: 'select', options: 'None,Standard,MultiInstanceSequential,MultiInstanceParallel', optionLabels: CHOREO_LOOP_LABELS },
+      { key: 'initiatingParticipant', label: 'Participante iniciador', kind: 'ref', doc: 'Participante que envía el primer mensaje (su banda va en blanco; la de los demás, sombreada).' },
+      { key: 'participants', label: 'Participantes', kind: 'list', port: false, doc: 'Uno por línea: los participantes que aparecen como bandas.' },
+      { key: 'loopType', label: 'Bucle', kind: 'select', options: 'None,Standard,MultiInstanceSequential,MultiInstanceParallel', optionLabels: CHOREO_LOOP_LABELS, doc: 'Estándar o multiinstancia (secuencial o paralela), igual que en las actividades.' },
     ],
   }),
   el('SubChoreography', 'Subcoreografía', 'choreography', {
     shape: 'rounded', container: true, color: COLORS.choreography, icon: '⊞⇄',
-    fields: [{ key: 'collapsed', label: 'Colapsada', kind: 'checkbox' }, { key: 'initiatingParticipant', label: 'Participante iniciador', kind: 'ref' }, { key: 'participants', label: 'Participantes', kind: 'list', port: false }, { key: 'loopType', label: 'Bucle', kind: 'select', options: 'None,Standard,MultiInstanceSequential,MultiInstanceParallel', optionLabels: CHOREO_LOOP_LABELS }],
+    fields: [{ key: 'collapsed', label: 'Colapsada', kind: 'checkbox', doc: 'Se dibuja plegada, con un «+»; el detalle va en su propia vista.' }, { key: 'initiatingParticipant', label: 'Participante iniciador', kind: 'ref', doc: 'Participante que envía el primer mensaje (su banda va en blanco; la de los demás, sombreada).' }, { key: 'participants', label: 'Participantes', kind: 'list', port: false, doc: 'Uno por línea: los participantes que aparecen como bandas.' }, { key: 'loopType', label: 'Bucle', kind: 'select', options: 'None,Standard,MultiInstanceSequential,MultiInstanceParallel', optionLabels: CHOREO_LOOP_LABELS, doc: 'Estándar o multiinstancia (secuencial o paralela), igual que en las actividades.' }],
   }),
   el('CallChoreography', 'Llamada a coreografía', 'choreography', {
     shape: 'rounded', color: COLORS.choreography, icon: '⊡⇄', meta: { borderWidth: 3 },
-    fields: [{ key: 'calledChoreography', label: 'Coreografía llamada', kind: 'ref' }, { key: 'initiatingParticipant', label: 'Participante iniciador', kind: 'ref' }, { key: 'participants', label: 'Participantes', kind: 'list', port: false }, { key: 'loopType', label: 'Bucle', kind: 'select', options: 'None,Standard,MultiInstanceSequential,MultiInstanceParallel', optionLabels: CHOREO_LOOP_LABELS }],
+    fields: [{ key: 'calledChoreography', label: 'Coreografía llamada', kind: 'ref', doc: 'Coreografía global que se ejecuta aquí.' }, { key: 'initiatingParticipant', label: 'Participante iniciador', kind: 'ref', doc: 'Participante que envía el primer mensaje (su banda va en blanco; la de los demás, sombreada).' }, { key: 'participants', label: 'Participantes', kind: 'list', port: false, doc: 'Uno por línea: los participantes que aparecen como bandas.' }, { key: 'loopType', label: 'Bucle', kind: 'select', options: 'None,Standard,MultiInstanceSequential,MultiInstanceParallel', optionLabels: CHOREO_LOOP_LABELS, doc: 'Estándar o multiinstancia (secuencial o paralela), igual que en las actividades.' }],
   }),
   // Conversaciones
   el('Conversation', 'Conversación', 'conversations', { shape: 'hexagon', color: COLORS.choreography, icon: '⬡', doc: 'Conjunto de intercambios de mensajes entre participantes; se une a ellos con ConversationLink.' }),
-  el('SubConversation', 'Subconversación', 'conversations', { shape: 'hexagon', container: true, color: COLORS.choreography, icon: '⬡⊞', fields: [{ key: 'collapsed', label: 'Colapsada', kind: 'checkbox' }] }),
-  el('CallConversation', 'Llamada a conversación', 'conversations', { shape: 'hexagon', color: COLORS.choreography, icon: '⬡⊡', meta: { borderWidth: 3 }, fields: [{ key: 'calledCollaboration', label: 'Colaboración llamada', kind: 'ref' }] }),
+  el('SubConversation', 'Subconversación', 'conversations', { shape: 'hexagon', container: true, color: COLORS.choreography, icon: '⬡⊞', fields: [{ key: 'collapsed', label: 'Colapsada', kind: 'checkbox', doc: 'Se dibuja plegada, con un «+»; el detalle va en su propia vista.' }] }),
+  el('CallConversation', 'Llamada a conversación', 'conversations', { shape: 'hexagon', color: COLORS.choreography, icon: '⬡⊡', meta: { borderWidth: 3 }, fields: [{ key: 'calledCollaboration', label: 'Colaboración llamada', kind: 'ref', doc: 'Colaboración o conversación global que se reutiliza aquí.' }] }),
   // Definiciones (elementos raíz referenciados por eventos; no se dibujan)
   el('Signal', 'Señal', 'definitions', { shape: 'label', color: COLORS.definition, icon: '△', doc: 'Definición de señal referenciada por eventos `signal`.' }),
-  el('Error', 'Error', 'definitions', { shape: 'label', color: COLORS.definition, icon: '⚡', doc: 'Definición de error referenciada por eventos `error`.', fields: [{ key: 'errorCode', label: 'Código', kind: 'text' }] }),
-  el('Escalation', 'Escalado', 'definitions', { shape: 'label', color: COLORS.definition, icon: '⇑', doc: 'Definición de escalado referenciada por eventos `escalation`.', fields: [{ key: 'escalationCode', label: 'Código', kind: 'text' }] }),
+  el('Error', 'Error', 'definitions', { shape: 'label', color: COLORS.definition, icon: '⚡', doc: 'Definición de error referenciada por eventos `error`.', fields: [{ key: 'errorCode', label: 'Código', kind: 'text', doc: 'Código que identifica el error: lo capturan los eventos de error con el mismo código.' }] }),
+  el('Escalation', 'Escalado', 'definitions', { shape: 'label', color: COLORS.definition, icon: '⇑', doc: 'Definición de escalado referenciada por eventos `escalation`.', fields: [{ key: 'escalationCode', label: 'Código', kind: 'text', doc: 'Código del escalado: lo capturan los eventos de escalado con el mismo código.' }] }),
 ];
 
 export const BPMN_RELATION_TYPES: RelationType[] = [
@@ -226,20 +226,20 @@ export const BPMN_RELATION_TYPES: RelationType[] = [
     id: SEQ, name: 'Flujo de secuencia', category: 'activities', line: 'solid', targetHead: 'arrow',
     doc: 'Orden de ejecución entre nodos de flujo de la misma pool. `default` marca la salida por defecto de una compuerta (barra oblicua en el origen); `condition` dibuja un rombo en el origen si sale de una actividad.',
     fields: [
-      { key: 'condition', label: 'Condición', kind: 'text' },
-      { key: 'default', label: 'Por defecto', kind: 'checkbox' },
-      { key: 'immediate', label: 'Inmediato', kind: 'checkbox' },
+      { key: 'condition', label: 'Condición', kind: 'text', doc: 'Expresión que decide si se toma este flujo al salir de una compuerta o actividad (rombo en el origen).' },
+      { key: 'default', label: 'Por defecto', kind: 'checkbox', doc: 'Se toma cuando no se cumple ninguna otra condición (raya en el origen).' },
+      { key: 'immediate', label: 'Inmediato', kind: 'checkbox', doc: 'Solo en procesos no ejecutables: entre los dos nodos no puede haber actividades sin modelar.' },
     ],
   },
   {
     id: MSG, name: 'Flujo de mensaje', category: 'participants', line: 'dashed', sourceHead: 'circle', targetHead: 'open',
     doc: 'Intercambio de mensajes entre participantes de pools distintas.',
-    fields: [{ key: 'message', label: 'Mensaje', kind: 'text' }, { key: 'messageRef', label: 'Elemento Message', kind: 'ref' }],
+    fields: [{ key: 'message', label: 'Mensaje', kind: 'text', doc: 'Nombre del mensaje que viaja; se rotula sobre el flujo.' }, { key: 'messageRef', label: 'Elemento Message', kind: 'ref', doc: 'Elemento Message al que corresponde (para dibujar el sobre).' }],
   },
   {
     id: ASSOC, name: 'Asociación', category: 'artifacts', line: 'dotted', targetHead: 'none',
     doc: 'Une artefactos (anotaciones, grupos, mensajes) con cualquier elemento. Con `direction: One` es la asociación de compensación (evento de borde → actividad compensadora).',
-    fields: [{ key: 'direction', label: 'Dirección', kind: 'select', options: 'None,One,Both', optionLabels: ASSOCIATION_DIRECTION_LABELS }],
+    fields: [{ key: 'direction', label: 'Dirección', kind: 'select', options: 'None,One,Both', optionLabels: ASSOCIATION_DIRECTION_LABELS, doc: 'Sin flecha, con flecha hacia el destino o en ambos sentidos.' }],
   },
   { id: DIN, name: 'Entrada de datos', category: 'data', line: 'dotted', targetHead: 'open', fields: [], doc: 'De un objeto/almacén/entrada de datos a una actividad o evento de lanzamiento.' },
   { id: DOUT, name: 'Salida de datos', category: 'data', line: 'dotted', targetHead: 'open', fields: [], doc: 'De una actividad o evento de captura a un objeto/almacén/salida de datos.' },

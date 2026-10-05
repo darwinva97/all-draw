@@ -9,7 +9,7 @@ import { defineConfig } from 'vitest/config';
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
 
 const test = { include: ['test/**/*.test.ts'], exclude: ['test/standby/**'], setupFiles: ['./test/apply-migrations.ts'], testTimeout: 20_000 };
-const bindings = async () => ({ TEST_MIGRATIONS: await readD1Migrations('./migrations'), IMPORT_SECRET: 'secreto-de-prueba', ALLOW_REGISTRATION: 'true', REGISTRY_NAME: 'registry', REGISTER_MIN_MS: '0', LOG_LEVEL: 'warn', ALLDRAW_COMMIT: 'abc1234', STANDBY: 'false' });
+const bindings = async () => ({ TEST_MIGRATIONS: await readD1Migrations('./migrations'), IMPORT_SECRET: 'secreto-de-prueba', ALLOW_REGISTRATION: 'true', REGISTRY_NAME: 'registry', REGISTER_MIN_MS: '0', LOG_LEVEL: 'warn', ALLDRAW_COMMIT: 'abc1234', STANDBY: 'false', WEBHOOKS_DEBOUNCE_MS: '100' });
 
 export default defineConfig({
   test: {

@@ -12,7 +12,7 @@ compatibility_flags = ["nodejs_compat"]
 directory = "../web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/", "/index.html", "/api", "/api/*", "/healthz", "/ws/*", "/.well-known/security.txt"]
+run_worker_first = ["/", "/index.html", "/api", "/api/*", "/healthz", "/ws/*", "/embed/*", "/.well-known/security.txt"]
 
 # D1 (opcional). Sin este bloque, el registro vive en el SQLite del Durable Object `RegistryDO` y no hace
 # falta crear ninguna base D1. Para usar D1 en su lugar:

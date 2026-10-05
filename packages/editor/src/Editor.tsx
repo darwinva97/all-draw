@@ -1,13 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent, type MouseEvent as ReactMouseEvent } from 'react';
-import { makeView, newId } from '@all-draw/core';
-import { Canvas } from './Canvas';
+import { makeView, newId, type Command, type Store } from '@all-draw/core';
+import { Canvas, DND_TYPE, defaultSize } from './Canvas';
 import { Palette } from './panels/Palette';
 import { Inspector } from './panels/Inspector';
 import { ViewsPanel } from './panels/ViewsPanel';
 import { Problems } from './panels/Problems';
 import { Toolbar, Crumbs, ToolbarTools } from './panels/Toolbar';
 import { WorkspacePanel } from './panels/WorkspacePanel';
-import { CommandPalette } from './panels/CommandPalette';
+import { CommandPalette, GO_VIEW_ACTION, NEW_VIEW_ACTION } from './panels/CommandPalette';
+import { addPayloadToCanvas } from './panels/palette-helpers';
 import { ShortcutsPanel } from './panels/ShortcutsPanel';
 import { CommentsPanel } from './panels/Comments';
 import { useEditor, type Theme } from './context';
@@ -17,13 +18,15 @@ import { Icon } from './icons';
 import { inLayer } from './ui/layer';
 import { isContextMenuKey, openContextMenuFor } from './ui/menu';
 import { mountUiLayer } from './ui/toast';
-import { useRecord } from './hooks';
+import { useRecord, useCollection } from './hooks';
 import { SimMarksContext, createSimMarks, NO_SIM_MARKS } from './nodes/env';
 import './ui/dialog';
 import './editor.css';
 
 /** Panel de simulación (BPMN / estados): se carga al abrirlo, con el motor `@all-draw/sim`. */
 const SimulationPanel = lazy(() => import('./panels/Simulation'));
+/** Panel de texto en vivo (lenguaje textual de all-draw): se carga al abrirlo, con `@all-draw/io`. */
+const TextPanel = lazy(() => import('./panels/TextPanel'));
 /** Notaciones que se pueden simular. */
 const SIMULABLE = new Set(['bpmn', 'statechart']);
 
@@ -34,7 +37,33 @@ export interface EditorProps {
   theme?: Theme;
   /** Layout automático de la vista actual: la app lo conecta (p. ej. a `@all-draw/layout`). Sin él, la opción no aparece. */
   onRequestLayout?: () => void;
+  /** Layout automático de una vista sobre un store cualquiera (el panel de texto lo usa con las vistas nuevas sin posiciones). */
+  layout?: (store: Store, viewId: string) => Promise<Command>;
+  /**
+   * Órdenes de la app desde la paleta de comandos (Ctrl+K): exportar, importar, compartir, historial, generar código
+   * (`APP_COMMANDS`). Sin ella esas acciones no aparecen.
+   */
+  onCommand?: (id: AppCommand) => void;
+  /** Cuáles de `APP_COMMANDS` ofrece la app ahora (p. ej. «Compartir» solo para quien puede). Por defecto, todas. */
+  commands?: readonly AppCommand[];
 }
+
+/** Órdenes que el editor ofrece en Ctrl+K y que ejecuta la app (`onCommand`). */
+export const APP_COMMANDS = ['export:svg', 'export:png', 'export:pdf', 'export:mermaid', 'export:drawio', 'export:json', 'import', 'codegen', 'share', 'history'] as const;
+export type AppCommand = (typeof APP_COMMANDS)[number];
+/** Etiqueta (clave en español) y palabras clave de cada orden de la app. */
+const APP_COMMAND_TEXT: Record<AppCommand, { label: string; keywords: string; view?: boolean; edit?: boolean }> = {
+  'export:svg': { label: 'Exportar la vista como SVG', keywords: 'exportar descargar imagen vectorial svg', view: true },
+  'export:png': { label: 'Exportar la vista como PNG', keywords: 'exportar descargar imagen png', view: true },
+  'export:pdf': { label: 'Exportar la vista como PDF', keywords: 'exportar descargar imprimir pdf', view: true },
+  'export:mermaid': { label: 'Exportar la vista como Mermaid', keywords: 'exportar descargar texto mermaid', view: true },
+  'export:drawio': { label: 'Exportar la vista como draw.io', keywords: 'exportar descargar drawio diagrams.net', view: true },
+  'export:json': { label: 'Exportar el espacio (JSON de all-draw)', keywords: 'exportar descargar copia json espacio' },
+  'import': { label: 'Importar un fichero…', keywords: 'importar abrir fichero archivo drawer bpmn archimate mermaid', edit: true },
+  'codegen': { label: 'Generar código…', keywords: 'generar codigo sql typescript openapi' },
+  'share': { label: 'Compartir…', keywords: 'compartir enlace invitar' },
+  'history': { label: 'Historial de versiones…', keywords: 'historial versiones instantaneas restaurar' },
+};
 
 /** Rangos de pantalla: escritorio (≥ 1100 px), tableta (700–1099 px, paneles colapsables) y móvil (< 700 px, lienzo completo con hojas). */
 export type LayoutMode = 'desktop' | 'tablet' | 'mobile';
@@ -79,12 +108,13 @@ type Sheet = 'views' | 'add' | 'inspector' | 'more';
 const THEME_COLOR: Record<'light' | 'dark', string> = { light: '#ffffff', dark: '#161a22' };
 
 /** Disposición completa del editor. La app envuelve esto en `EditorProvider`. */
-export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: EditorProps) {
+export function Editor({ layout, toolbarLeft, toolbarRight, theme, onRequestLayout, onCommand, commands }: EditorProps) {
   const ed = useEditor();
   const t = useT();
   const [lang] = useLang(); // las acciones memorizadas se rehacen al cambiar de idioma
   const { readOnly, effectiveTheme, setTheme, registry, run, openView, canvas, selection, setRenaming, workspaceTab, openWorkspacePanel, closeWorkspacePanel, comments } = ed;
   const [searchOpen, setSearchOpen] = useState(false);
+  const [textOpen, setTextOpen] = useState(false);
   const keysOpen = ed.shortcutsOpen;
   const setKeysOpen = useCallback((v: boolean | ((o: boolean) => boolean)) => ed.setShortcutsOpen(typeof v === 'function' ? v(keysOpen) : v), [ed, keysOpen]);
   const mode = useLayoutMode();
@@ -126,6 +156,7 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
       if (inLayer(e)) return; // diálogos y avisos propios
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
+      if (mod && e.shiftKey && !e.altKey && key === 'e') { e.preventDefault(); setTextOpen(o => !o); return; }
       if (mod && (key === 'k' || key === 'f') && !e.shiftKey && !e.altKey) { e.preventDefault(); setSearchOpen(o => !o); setKeysOpen(false); return; }
       const tg = e.target as HTMLElement | null;
       const typing = !!tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.tagName === 'SELECT' || tg.isContentEditable);
@@ -142,19 +173,46 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
     return () => window.removeEventListener('keydown', h);
   }, [readOnly, selection, setRenaming, setKeysOpen]);
 
+  const curView = useRecord('views', ed.viewId);
+  const libraries = useCollection('libraries');
   const actions = useMemo<SearchAction[]>(() => {
     const packs = registry.allPacks().filter(p => p.id !== 'core');
     const out: SearchAction[] = [];
+    const pack = curView ? registry.pack(curView.notationId) : undefined;
     if (!readOnly) {
-      for (const p of packs) out.push({ id: `new-view:${p.id}`, label: t('Crear vista {name}', { name: p.name }), hint: t('Acción'), keywords: t('nueva vista crear') });
+      out.push({ id: NEW_VIEW_ACTION, label: t('Nueva vista…'), hint: t('Elegir notación'), keywords: t('nueva vista crear notacion') });
+      // Una por notación: solo al buscar (o dentro de «Nueva vista…»).
+      for (const p of packs) out.push({ id: `new-view:${p.id}`, label: t('Crear vista {name}', { name: p.name }), hint: t('Acción'), keywords: t('nueva vista crear'), searchOnly: true });
       out.push({ id: 'workspace', label: t('Abrir Espacio (librerías, reglas, personas)'), hint: t('Acción'), keywords: t('librerias reglas personas espacio') });
       if (onRequestLayout) out.push({ id: 'layout', label: t('Layout automático de la vista'), hint: t('Acción'), keywords: t('ordenar colocar layout automatico') });
+      // «Añadir <tipo>» para cada tipo de la notación de la vista y de las librerías (solo al buscar).
+      if (curView) {
+        const seen = new Set<string>();
+        const add = (id: string, name: string, where: string, category?: string) => {
+          if (seen.has(id)) return; seen.add(id);
+          out.push({ id: `add:${id}`, label: t('Añadir {type}', { type: name }), hint: where, keywords: `${t('añadir crear nuevo elemento')} ${category ?? ''}`, searchOnly: true });
+        };
+        for (const ty of pack?.elementTypes ?? []) if (!ty.abstract) add(ty.id, ty.name, pack!.name, ty.category ? pack!.categories.find(c => c.id === ty.category)?.name ?? ty.category : undefined);
+        for (const lib of libraries) for (const ty of lib.elementTypes) add(ty.id, registry.elementType(ty.id)?.name ?? ty.name, lib.name || t('Librería'), ty.category);
+      }
     }
+    out.push({ id: GO_VIEW_ACTION, label: t('Ir a la vista…'), hint: t('Elegir vista'), keywords: t('ir vista abrir cambiar saltar') });
+    if (curView && SIMULABLE.has(curView.notationId)) out.push({ id: 'simulate', label: t('Simular esta vista'), hint: t('Acción'), keywords: t('simular ejecutar probar tokens') });
+    if (onCommand) {
+      const on = new Set<AppCommand>(commands ?? APP_COMMANDS);
+      for (const id of APP_COMMANDS) {
+        const c = APP_COMMAND_TEXT[id];
+        if (!on.has(id) || (c.view && !curView) || (c.edit && readOnly)) continue;
+        out.push({ id: `app:${id}`, label: t(c.label), hint: t('Acción'), keywords: t(c.keywords) });
+      }
+    }
+    if (ed.docsHref && pack) out.push({ id: 'docs:notation', label: t('Abrir la documentación de {name}', { name: pack.name }), hint: t('Ayuda'), keywords: t('ayuda documentacion manual notacion') });
+    out.push({ id: 'text', label: t('Editar como texto'), hint: 'Ctrl+Shift+E', keywords: t('texto lenguaje dsl codigo editar') });
     out.push({ id: 'fit', label: t('Ajustar a la vista'), hint: 'Ctrl+Shift+F', keywords: t('encuadrar zoom') });
     out.push({ id: 'theme', label: t('Cambiar tema (claro / oscuro)'), hint: t('Acción'), keywords: t('tema oscuro claro') });
     out.push({ id: 'shortcuts', label: t('Atajos de teclado'), hint: '?', keywords: t('ayuda teclas') });
     return out;
-  }, [registry, readOnly, onRequestLayout, t, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [registry, readOnly, onRequestLayout, t, lang, curView?.notationId, !!curView, libraries, onCommand, commands, ed.docsHref]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onAction = useCallback((id: string) => {
     if (id.startsWith('new-view:')) {
@@ -165,12 +223,24 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
       run({ type: 'set', collection: 'views', id: v.id, value: v });
       openView(v.id);
     }
+    else if (id.startsWith('add:')) {
+      const typeId = id.slice('add:'.length);
+      const vid = ed.viewId;
+      if (vid) addPayloadToCanvas({ kind: DND_TYPE, data: typeId }, ed.store, registry, vid, ed.store.get('views', vid)?.kind !== 'sequence');
+    }
+    else if (id.startsWith('app:')) onCommand?.(id.slice('app:'.length) as AppCommand);
+    else if (id === 'simulate') { ed.closeComments(); setSimOpen(true); }
+    else if (id === 'docs:notation') {
+      const v = ed.viewId ? ed.store.get('views', ed.viewId) : undefined;
+      if (v && ed.docsHref) window.open(ed.docsHref(`notaciones/${v.notationId}`), '_blank', 'noopener');
+    }
     else if (id === 'workspace') openWorkspacePanel();
     else if (id === 'layout') onRequestLayout?.();
+    else if (id === 'text') setTextOpen(true);
     else if (id === 'fit') canvas.current?.fitView();
     else if (id === 'theme') setTheme(effectiveTheme === 'dark' ? 'light' : 'dark');
     else if (id === 'shortcuts') setKeysOpen(true);
-  }, [registry, run, openView, onRequestLayout, canvas, setTheme, effectiveTheme, openWorkspacePanel, t, setKeysOpen]);
+  }, [registry, run, openView, onRequestLayout, canvas, setTheme, effectiveTheme, openWorkspacePanel, t, setKeysOpen, ed, onCommand]); // eslint-disable-line react-hooks/exhaustive-deps -- setSimOpen es estable
 
   // En la hoja "Añadir" del móvil, tocar un elemento de la paleta lo añade (lo hace la propia paleta, igual que un
   // clic en escritorio) y la hoja se cierra para ver el resultado.
@@ -187,10 +257,12 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
   const canSim = !!simView && SIMULABLE.has(simView.notationId);
   useEffect(() => { if (!canSim) setSimOpen(false); }, [canSim]);
   const simButton = canSim && <button className={`ad-btn ${simOpen ? 'is-on' : ''}`} aria-pressed={simOpen} onClick={() => { if (!simOpen) ed.closeComments(); setSimOpen(o => !o); }} title={t('Simular el proceso o la máquina de estados de esta vista')}><svg className="ad-icon" width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" aria-hidden="true"><path d="M5 3l8 5-8 5Z" /></svg><span className="ad-btn__label">{t('Simular')}</span></button>;
-  const left = readOnly ? <>{toolbarLeft}{simButton}</> : <>
+  const textButton = <button className={`ad-btn ${textOpen ? 'is-on' : ''}`} aria-pressed={textOpen} aria-label={t('Texto')} onClick={() => setTextOpen(o => !o)} title={t('Editar como texto (Ctrl+Shift+E)')}><svg className="ad-icon" width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5.5 4 2 8l3.5 4M10.5 4 14 8l-3.5 4" /></svg><span className="ad-btn__label">{t('Texto')}</span></button>;
+  const left = readOnly ? <>{toolbarLeft}{simButton}{textButton}</> : <>
     {mode !== 'mobile' && <button className="ad-btn" onClick={() => openWorkspacePanel()} title={t('Librerías, reglas de estilo, personas y trazabilidad')}>{t('Espacio')}</button>}
     {toolbarLeft}
     {simButton}
+    {textButton}
   </>;
   const mobile = mode === 'mobile', tablet = mode === 'tablet';
   const showLeft = !mobile && (!tablet || panels.left);
@@ -204,6 +276,7 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
         {showLeft && <div className="ad-editor__left"><ViewsPanel />{!readOnly && <Palette />}</div>}
         <main className={`ad-editor__main${simOpen ? ' ad-sim-on' : ''}`}><SimMarksContext.Provider value={simOpen ? simMarks : NO_SIM_MARKS}><Canvas onRequestLayout={onRequestLayout} /></SimMarksContext.Provider><Problems />
           {simOpen && ed.viewId && <Suspense fallback={null}><SimulationPanel key={ed.viewId} viewId={ed.viewId} marks={simMarks} onClose={() => setSimOpen(false)} /></Suspense>}
+          {textOpen && <Suspense fallback={null}><TextPanel onClose={() => setTextOpen(false)} layout={layout} defaultSize={defaultSize} /></Suspense>}
           {comments.open && <CommentsPanel />}</main>
         {showRight && <Inspector />}
       </div>

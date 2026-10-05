@@ -8,7 +8,8 @@ import { resolve } from 'node:path';
 import { missing, setLang } from '@all-draw/i18n';
 import { SERVER_ERRORS, serverErrorMessage } from '../src/api';
 
-const SRC = readFileSync(resolve(__dirname, '../../../packages/server-core/src/api.ts'), 'utf8');
+// Rutas de `api.ts` y de las integraciones (`api-integrations.ts`).
+const SRC = ['api.ts', 'api-integrations.ts'].map(f => readFileSync(resolve(__dirname, `../../../packages/server-core/src/${f}`), 'utf8')).join('\n');
 const all = (re: RegExp) => [...SRC.matchAll(re)].map(m => m[1]!.replace(/\\'/g, "'"));
 
 afterEach(() => setLang('es'));

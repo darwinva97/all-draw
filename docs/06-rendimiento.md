@@ -93,7 +93,8 @@ está en el modelo sino en montar 60 nodos con figura SVG, sombras y manejadores
 
 ## Qué queda
 
-- Cambio de vista: ver la sección "Cambio de vista (30 de septiembre de 2026)" más abajo.
+- Cambio de vista: ver las secciones "Cambio de vista (30 de septiembre de 2026)" y "Vistas grandes (5 de octubre de
+  2026)" más abajo.
 - `snapshot()` sigue costando ~50–80 ms por el parseo Zod de 9.000 registros; si hace falta más,
   cabe un `parse` perezoso por colección.
 - Las medidas en navegador con `pnpm dev` no son representativas del producto: para comparar
@@ -217,6 +218,93 @@ Probado y descartado:
 - El panel de problemas valida 300 ms después de cada cambio (en reposo): con 300 nodos son ~70 ms que
   pueden caer dentro de la interacción siguiente.
 - Con 600 nodos el cambio sigue en ~1 s.
+
+(Atendido en parte en "Vistas grandes (5 de octubre de 2026)": primer pintado por tandas, aristas simplificadas y
+validación troceada.)
+
+## Vistas grandes (5 de octubre de 2026)
+
+Objetivo: en producción, abrir una vista de 600 nodos en < 500 ms y una de 300 en < 250 ms, sin que el panel de
+problemas bloquee las interacciones.
+
+### Cómo se mide
+
+Igual que en "Cambio de vista" (build de `vite build` en `/tmp`, `vite preview`, `e2e/bench.mjs`, 1440×900), con
+pasadas intercaladas antes/después del mismo árbol de trabajo. `e2e/bench.mjs` mide ahora dos cosas en cada cambio:
+
+- **Primer pintado**: el primer frame con nodos y aristas de la vista nueva (con el montaje por tandas, la primera
+  tanda —lo que se ve en el centro— y las siluetas del resto).
+- **Completo**: el frame en que ya está todo montado (`.ad-canvas` sin `data-mounting` y, sin virtualizar, los `n`
+  nodos). Antes de este cambio las dos medidas coinciden.
+
+Además da la **tarea más larga** (`PerformanceObserver` de `longtask`) mientras el panel de problemas revalida tras un
+cambio (mover un nodo con la flecha), y el selector del panel de vistas se ha puesto al día (`.ad-views__open`; el
+anterior ya no encontraba las vistas). `TRACE=` incluye las marcas de `performance` (`blink.user_timing`) para poder
+cortar el perfil por cambio.
+
+### Resultados
+
+Build de producción, servidor compartido de 8 núcleos con **carga 6–10** de otros procesos durante las medidas (más
+que en las anteriores: los absolutos bailan ±25 %, por eso cuentan las pasadas intercaladas). Antes = árbol de trabajo
+al empezar (HEAD `279cfcd` más los cambios en curso de otros agentes); después = lo mismo más este cambio. Mediana
+(p25–p75) de 8 cambios con 300 nodos, 6 con 600 y 12 con 60; última de tres rondas.
+
+| Vista | Antes: primer pintado = completo | Después: primer pintado | Después: completo |
+|---|---|---|---|
+| 60 nodos (1.000 × 50 vistas) | 152 ms (121–179) | 145 ms (130–213) | 145 ms (sin tandas: < 150 nodos) |
+| 300 nodos, ~330 aristas (1.000 × 12) | 565 ms (516–601) | **201 ms** (146–235) | 550 ms (501–599) |
+| 600 nodos, ~600 aristas (1.000 × 8, virtualizado) | 1.172 ms (955–1.355) | **229 ms** (203–240) | 1.059 ms (993–1.141) |
+
+Las otras dos rondas (con la misma carga o más) dieron 176 y 281 ms de primer pintado con 300 nodos (antes 540 y
+578) y 222 y 257 ms con 600 (antes 1.419 y 1.587).
+
+Panel de problemas (espacio de 600 nodos por vista: 35.140 notas; de 300: 5.416):
+
+| Medida | Antes | Después |
+|---|---|---|
+| Abrir el panel hasta tener la lista (600 / 300) | 6.338 / 889 ms | 1.413 / 752 ms |
+| Tarea más larga al revalidar tras mover un nodo (600 / 300) | 649 / 159 ms | 484 / 115 ms |
+
+### Qué se cambió
+
+- **Montaje por tandas** (`Canvas.tsx`: `planBatches`, `mountSet`, `BATCH_FROM` = 150, `BATCH_FIRST` = 60,
+  `BATCH_STEP` = 150). Al abrir una vista de más de 150 nodos (salvo rejilla, secuencia y Gantt) se calcula una vez,
+  con el encuadre inicial, el orden de montaje: por distancia al centro de lo que se ve (lo de fuera, al final), y cada
+  hijo con su padre. El primer frame lleva 60 nodos y sus aristas; después, 150 más por frame (tras pintar: `rAF` +
+  tarea), hasta completar. Lo que falta se pinta como **siluetas** (un solo `<svg>` con un rectángulo del color del tipo
+  por nodo, en `ViewportPortal`), así el primer frame ya enseña la forma entera del diagrama. Mientras monta,
+  `.ad-canvas` lleva `data-mounting` (los que faltan); los nodos nuevos que se creen entretanto salen al momento, y
+  «Ajustar a la vista» o saltar a un elemento terminan de montar antes de encuadrar.
+- **Aristas simplificadas con zoom bajo** (`edges/LiteEdge.tsx`): por debajo de `LOW_DETAIL_ZOOM` (0,3; una vista de
+  300 nodos se abre a ~0,18) las aristas son una polilínea recta del color del tipo, sin puntas, rótulos ni
+  cardinalidades (medirían 2–3 px). No leen el contexto del editor ni el store (la arista completa se suscribe a la
+  relación y a las reglas, y se repinta con cada selección): `Canvas` les pasa el color y el trazo. Siguen siendo
+  seleccionables; al acercarse vuelve `RelationEdge`.
+- **Paleta**: las categorías plegadas no montan sus tipos (las «otras notaciones», plegadas por defecto, eran cientos
+  de tipos en el DOM, repintados con cada cambio del modelo), y la navegación con flechas (`ui/roving.ts`) ya no mide todos los
+  elementos con `getClientRects` tras cada render (forzaba un layout síncrono en mitad del cambio de vista): mide solo
+  el activo, y en el siguiente frame.
+- **Panel de problemas** (`panels/Problems.tsx`): la validación va **troceada en huecos de inactividad**
+  (`validateInSlices`: un validador por `requestIdleCallback` y más en el mismo hueco mientras quede tiempo); los
+  validadores que tardaron más de 80 ms la última vez (la geometría de las vistas grandes) esperan a 1 s de calma, y
+  mientras cuenta su último resultado; la lista se pinta de 200 en 200 («Mostrar más») con errores y avisos arriba (con
+  35.140 notas, pintarlas todas era la mayor parte de los 6 s).
+
+Se descartó un Web Worker para la validación: los validadores llegan como funciones (`validators` de la app: geometría
+de `@all-draw/layout`, bpmnlint de `@all-draw/io`) y el worker necesitaría su propio registro y una copia del store
+(`snapshot()` cuesta 50–80 ms en el hilo principal, más que lo que se ahorra con 300 nodos).
+
+### Qué queda
+
+- **Completo** apenas cambia (−3 % con 300, −10 % con 600): el coste por nodo es de React Flow (`NodeWrapper`,
+  manejadores, `ResizeObserver`) y las tandas añaden un poco de trabajo por frame (React Flow recorre los nodos en cada
+  tanda). Lo que mejora es cuándo se ve la vista y que entre tandas el navegador atiende la entrada.
+- La **geometría** (`geometryLint`, en `@all-draw/layout`) es una sola tarea: ~150 ms en Node con 600 nodos (9.237
+  diagnósticos del banco, con nodos solapados), 300–550 ms en este navegador cargado. Ahora corre menos (tras 1 s de
+  calma), pero cuando corre bloquea. Para bajarla hay que trocearla por dentro (por nodo o por arista) o llevarla a un
+  worker con su copia de la vista; las dos cosas son de `@all-draw/layout`.
+- El primer pintado con 300 nodos ronda el objetivo con esta carga (146–235 ms, alguna pasada a 280): la mayor parte
+  es desmontar la vista anterior (otros 300 nodos) en el mismo frame.
 
 ## Formato de registros 2: `Y.Map` por registro (5 de octubre de 2026)
 

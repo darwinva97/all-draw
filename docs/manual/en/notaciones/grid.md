@@ -11,7 +11,7 @@ Use it for boards and maps: a customer journey with what happens in each layer, 
 application portfolio by area, a quarterly roadmap. It is also the format diagrams imported from Drawer
 arrive in.
 
-![The demo's layers × stages grid, with visible pins on two microservices (Spanish interface)](../../img/07-rejilla-pines.png)
+![The demo's layers × stages grid, with visible pins on two microservices](../../img/07-rejilla-pines-en.png)
 
 ## Key elements {#elementos-clave}
 

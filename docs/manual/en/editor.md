@@ -4,7 +4,7 @@ The editor is where you draw: you add elements, connect them, arrange them and f
 walks through every part of the screen and the everyday tasks. If you are not yet sure what an *element*, a *view* or
 a *notation* is, take a look at [Concepts](conceptos.md) first.
 
-![Editor: bar at the top, views and palette on the left, canvas in the center, inspector on the right (Spanish interface)](../img/03-editor-archimate.png)
+![Editor: bar at the top, views and palette on the left, canvas in the center, inspector on the right](../img/03-editor-archimate-en.png)
 
 ## The areas of the screen {#zonas}
 
@@ -70,6 +70,15 @@ The palette is the drawer you take things from. It has a **Search…** field tha
 | **Model** | Elements that **already exist** in the workspace. Those that appear in no view are marked as orphans. | To draw in this view something that is already in another one. |
 | **Visual** | **Note**, **Group** (a frame that drags what it contains), **Label** (text with no border) and **Images** (by URL or from a file, which is stored inside the workspace). | To annotate and decorate: these nodes are not part of the model and only exist in this view. |
 
+Above the **Notation** categories there are two sections that only exist in your browser:
+
+- **Favorites**: hover over a type and press the **star** (from the keyboard, **F** on the type). Press it again to
+  remove it.
+- **Recent**: the last 8 types you added (from the palette, with Ctrl+K or with *Create and connect*).
+
+Categories fold and unfold with a click on their title, and the palette **remembers it per notation**: if you fold
+*Choreography* in BPMN, it stays folded the next time you open a BPMN view.
+
 > [!TIP]
 > Dragging from **Model** does not create a new element: it creates another *occurrence* of the same one. If you then
 > rename it, the name changes in every view. This is the right way to reuse; see [Model and views](modelo-y-vistas.md).
@@ -89,12 +98,23 @@ If you drop it on top of a container (a pool, a group, a C4 system…), it goes 
 
 1. Hover over the source node: small dots appear on its border.
 2. Drag from the **dot on the bottom edge** to the other node and release over it (while you drag, the connection dots
-   of every node light up).
+   of every node light up). While you drag, the node under the pointer turns **green** if the connection is valid,
+   with a label saying which relationship will be created (or how many there are to choose from), and **red** if it is
+   not, with the reason (for example, that in BPMN a sequence flow does not leave its pool).
 3. What happens depends on the notation:
    - if there is only **one** possible relationship between those two types, it is created straight away;
    - if there are **several**, the **Relationship type** menu appears so you can choose (the notation's default
      relationship comes first);
    - if **none** is allowed, the line does not snap and nothing is created.
+
+### Create and connect {#crear-y-conectar}
+
+If you release the connection on an **empty spot** of the canvas, the **Create and connect** menu appears with the
+notation's types that accept a relationship from the source: first those that take the usual relationship (in BPMN,
+the sequence flow), and among them the ones you used recently and the most common in the workspace; the rest under
+**More types**. Picking one creates the element at that point, already connected with the default relationship. It is
+**a single undo step**: **Ctrl+Z** removes the element and the relationship together. From a BPMN task you can draw a
+whole process this way without going back to the palette.
 
 ### Why a connection is refused {#conexion-rechazada}
 
@@ -127,7 +147,7 @@ an edge with bend points is selected, the **Remove bend points** button appears 
 per field of its response (`response.customer.email`). They let you say *which data* travels from one place to
 another, not just that two things are related. The full idea is in [Pins](conceptos.md#pines).
 
-![Inspector, Pins tab, on a microservice in the demo (Spanish interface)](../img/07-rejilla-pines.png)
+![Inspector, Pins tab, on a microservice in the demo](../img/07-rejilla-pines-en.png)
 
 To use them:
 
@@ -214,6 +234,10 @@ If you make a mistake, **Ctrl+Z** brings it back.
 
 The inspector changes depending on what you select.
 
+Type fields show some **help** underneath (and an ⓘ icon next to the name) when the notation defines it: what the
+field means and which values it expects. For example, in BPMN *Task type* explains each type, and in ER *On delete*
+what happens to the child rows.
+
 **An element** has four tabs:
 
 | Tab | Contents |
@@ -230,7 +254,7 @@ and, in a grid, its layers and stages.
 
 ## Right-click menus {#menus}
 
-![Node menu with "Open in another dimension" (Spanish interface)](../img/05-menu-dimension.png)
+![Node menu with "Open in another dimension"](../img/05-menu-dimension-en.png)
 
 **On a node** (or press and hold on touch screens):
 
@@ -267,18 +291,37 @@ This is the view the `.drawer` importer creates. More in [Grid](notaciones/grid.
 
 - **Elements**: takes you to one and frames it. If it is in several views but not in the current one, it asks which
   one to go to.
-- **Views**: opens them.
-- **Actions**: create a view of any notation, open **Workspace**, **Auto layout of the view**, **Fit to view**, switch
-  the theme and show the shortcuts.
+- **Views**: opens them. **Go to view…** keeps only the views in the list.
+- **Add *type***: one for each type of the view's notation and of your libraries (type “add task”): it places it in a
+  free spot of the canvas, just like a click in the palette.
+- **Actions**: **New view…** (you choose the notation), open **Workspace**, **Auto layout of the view**, **Simulate
+  this view** (BPMN and state machines), **Export the view as SVG / PNG / PDF / Mermaid / draw.io**, export the
+  workspace as JSON, **Import a file…**, **Generate code…**, **Share…** and **Version history…** (in server workspaces,
+  if you can use them), **Open the documentation** of the view's notation, **Fit to view**, switch the theme and show
+  the shortcuts.
 
-**Esc** closes search. Together with the inspector, it is the way to move through the model without a mouse.
+Search ignores accents and case and forgives **one typo per word** (“conect”, “exprt svg”). When you open it without
+typing, your **recent** choices come first.
+
+**Esc** closes search (or goes back to the list if you were in *Go to view…* or *New view…*). Together with the
+inspector, it is the way to move through the model without a mouse.
+
+## Editing as text (Ctrl+Shift+E) {#texto}
+
+The **Text** button in the bar (or **Ctrl+Shift+E**) opens the **text panel** to the left of the canvas: the current
+view —or the whole space— written in all-draw's [text language](dsl.md). Type and, when you stop, the canvas catches
+up (a single undo step); change something on the canvas and the text is rebuilt. It has line numbers, colors, type and
+id suggestions (**Ctrl+Space**), search (**Ctrl+F**) and the list of errors with line and column. Putting the cursor on
+a declaration selects it on the canvas, and the other way round. Drag the panel's right edge to change its width. All
+the details in [Editing as text](dsl.md#editar-como-texto).
 
 ## Problems panel {#problemas}
 
-![Problems panel expanded (Spanish interface)](../img/08-problemas.png)
+![Problems panel expanded](../img/08-problemas-en.png)
 
 The bar below the canvas sums up how many **errors**, **warnings** and **notes** there are. It is recalculated a
-moment after each change (you will see `computing…`). Click it to expand the list:
+moment after each change (you will see `computing…`), in parts and while the browser is idle, so that in large views
+it does not slow down what you are doing. Click it to expand the list:
 
 1. Click the text of a problem to go to it: it opens the view and selects the node or edge.
 2. If there is a button next to it, it is an automatic **fix**: change the relationship to a valid one, delete a
@@ -286,8 +329,6 @@ moment after each change (you will see `computing…`). Click it to expand the l
    create the suggested trace…
 3. If there is no button, fix it by hand and the problem disappears on its own.
 
-> [!NOTE]
-> Problem messages and fix buttons are currently shown in Spanish even when the interface is in English.
 
 What is checked:
 

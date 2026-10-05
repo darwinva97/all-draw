@@ -29,7 +29,10 @@ import { noneMailer, type Mailer } from './mail';
 import { mailLang } from './mail-templates';
 import { Notifier } from './notifications';
 import { describeUserAgent } from './devices';
-import { DEFAULT_FORGOT_MIN_MS, registerAccountRoutes } from './api-accounts';
+import { DEFAULT_FORGOT_MIN_MS, background, registerAccountRoutes } from './api-accounts';
+import { registerIntegrationRoutes } from './api-integrations';
+import type { WebhookService } from './webhooks';
+import type { WebhookEvent } from './store/types';
 
 /** Tamaños máximos de cuerpo: 5 MB para Workspace JSON completos, 1 MB para el resto (comandos incluidos). */
 export const MAX_BODY_SNAPSHOT = 5 * 1024 * 1024;
@@ -129,6 +132,12 @@ export interface ApiDeps {
   mailer?: Mailer;
   /** Centro de notificaciones (por defecto uno sobre `store` y `mailer`; Node lo comparte con las menciones del `DocManager`). */
   notifier?: Notifier;
+  /**
+   * Webhooks (`webhooks.ts`): la API emite `member.added`, `snapshot.created` y `snapshot.restored`, prueba los webhooks y
+   * comprueba sus URLs. Sin él, las rutas de webhooks responden 501. En Node es el `WebhookDispatcher`; en el worker, uno que
+   * reenvía los eventos al Durable Object del espacio.
+   */
+  webhooks?: WebhookService;
 }
 type Env = { Variables: { principal: Principal | null } };
 /** Cada cuánto, como mucho, se apunta el último uso de una sesión (lista de sesiones activas). */
@@ -146,7 +155,7 @@ const AuthOut = z.object({ user: UserOut, token: z.string().describe('Token de s
 const KeyOut = z.object({ id: z.string(), name: z.string(), prefix: z.string(), createdAt: z.string(), lastUsedAt: z.string().nullable() });
 const WorkspaceOut = z.object({ id: z.string(), name: z.string(), ownerId: z.string(), createdAt: z.string(), updatedAt: z.string(), role: RoleSchema }).meta({ id: 'WorkspaceInfo' });
 const MemberOut = z.object({ userId: z.string(), role: MemberRoleSchema, createdAt: z.string(), user: z.object({ id: z.string(), email: z.string().optional().describe('Solo para cuentas con acceso; con un enlace compartido no se envía'), name: z.string() }).nullable() });
-const LinkOut = z.object({ token: z.string(), url: z.string(), workspaceId: z.string(), role: MemberRoleSchema, createdAt: z.string(), expiresAt: z.string().nullable() });
+const LinkOut = z.object({ token: z.string(), url: z.string(), workspaceId: z.string(), role: MemberRoleSchema, createdAt: z.string(), expiresAt: z.string().nullable(), viewId: z.string().nullable().optional().describe('Siempre `null` aquí: los enlaces de inserción van en `/embeds`') });
 const ErrorOut = z.object({ error: z.string(), issues: z.array(z.unknown()).optional() }).meta({ id: 'Error' });
 const SnapshotOut = z.object({ id: z.string(), workspaceId: z.string(), createdAt: z.string(), authorId: z.string().nullable(), author: z.object({ id: z.string(), name: z.string() }).nullable(), label: z.string().nullable().describe('`null` = automática (se poda); `""` = manual sin etiqueta'), size: z.number() }).meta({ id: 'Snapshot' });
 const SafeId = z.string().regex(SAFE_ID, 'id no válido');
@@ -202,6 +211,8 @@ const ERROR_CODES: Record<string, string> = {
   'No existe ese enlace': 'link_not_found',
   'La vista no existe': 'view_not_found',
   'No existe esa instantánea': 'snapshot_not_found',
+  'No existe ese webhook': 'webhook_not_found',
+  'Los webhooks no están disponibles en esta instalación': 'webhooks_unavailable',
   // Mismo código que `requireSession`: el texto dice qué operación (el cliente lo traduce por el texto).
   'Cambia el email desde una sesión, no con una API key': 'session_required',
   'Borra la cuenta desde una sesión, no con una API key': 'session_required',
@@ -234,7 +245,7 @@ const ClientError = z.object({
   count: z.number().int().min(1).max(10_000).optional().describe('Veces que se repitió (deduplicado en el cliente)'),
 });
 
-export function createApi({ store, docs, hash, config, notations = ALL_PACKS, logger = jsonLogger(), build = {}, onIdentity, archiveWorkspace, clientIp: getClientIp, mailer = noneMailer, notifier: givenNotifier }: ApiDeps) {
+export function createApi({ store, docs, hash, config, notations = ALL_PACKS, logger = jsonLogger(), build = {}, onIdentity, archiveWorkspace, clientIp: getClientIp, mailer = noneMailer, notifier: givenNotifier, webhooks }: ApiDeps) {
   const notifier = givenNotifier ?? new Notifier({ store, mailer, logger, publicUrl: config.publicUrl });
   /** ¿Se exige el correo verificado para crear espacios? Sólo con correo: sin él nadie podría verificar. */
   const requireVerified = !!config.requireEmailVerification && mailer.enabled;
@@ -415,6 +426,17 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   });
   /** Nombre de quien hace algo (para las notificaciones): la cuenta, o `null` con un enlace compartido. */
   const actorOf = (p: Principal) => (p.kind === 'user' ? { actorId: p.user.id, actorName: p.user.name } : { actorId: null, actorName: null });
+  /** Evento de webhook (en segundo plano: no retrasa la respuesta ni la hace fallar). */
+  const emitHook = (c: Context, workspaceId: string, event: WebhookEvent, data: Record<string, unknown>) => {
+    if (!webhooks || config.standby) return;
+    background(c, webhooks.emit(workspaceId, event, data, baseUrl(c)).catch(e => logger.error('webhook: no se pudo emitir', { workspace: workspaceId, event, err: e })));
+  };
+
+  // Webhooks, enlaces de inserción y oEmbed (`api-integrations.ts`).
+  registerIntegrationRoutes(app, {
+    store, docs, logger, webhooks: webhooks ?? null, publicUrl: config.publicUrl, standby: !!config.standby,
+    fail, requireRole, baseUrl, schemas: { ErrorOut },
+  });
 
   // Anti-abuso del registro: `formToken` = `<emitido-ms>.<hash('register-form:<emitido-ms>')>` (HMAC con
   // `SESSION_SECRET` si está). Lo da `GET /api/auth/config` y el registro exige que tenga ≥ `registerMinMs`.
@@ -934,6 +956,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     if (actor.actorId !== userId && prev !== role) {
       await notifier.notify({ userId, kind: prev ? 'role' : 'shared', workspaceId: id, payload: { workspaceName: ws.name, ...actor, role, ...(prev ? { previousRole: prev } : {}) } }, baseUrl(c));
     }
+    if (!prev) emitHook(c, id, 'member.added', { member: { userId, name: u.name, role }, by: actor.actorName });
     // Si ya tenía rol y cambia, sus WebSockets se cierran con 4205: el cliente reconecta y recibe el rol nuevo
     // (un editor que pasa a viewer deja de poder escribir al momento). Un admin es dueño igualmente: no se toca.
     if (prev && prev !== role && !u.isAdmin) await kick(id, { userId }, WS_ROLE_CHANGED, 'rol cambiado');
@@ -975,7 +998,8 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   }), async c => {
     const id = c.req.valid('param').id;
     await requireRole(c, id, 'owner');
-    const links = await store.listShareLinks(id);
+    // Los enlaces de inserción (con vista) van aparte: `GET /api/workspaces/{id}/embeds`.
+    const links = (await store.listShareLinks(id)).filter(l => !l.viewId);
     return c.json({ links: links.map(l => ({ ...l, url: linkUrl(c, id, l.token) })) }, 200);
   });
 
@@ -1075,6 +1099,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     const { principal } = await requireRole(c, id, 'editor');
     // Sin etiqueta = `""` (manual), no `null` (automática): se distingue en el historial y no se poda (fallo 50).
     const meta = await docs.createSnapshot(id, principal.kind === 'user' ? principal.user.id : null, c.req.valid('json').label ?? '');
+    emitHook(c, id, 'snapshot.created', { snapshot: { id: meta.id, label: meta.label || null, createdAt: meta.createdAt }, by: actorOf(principal).actorName });
     return c.json(await authorOf(meta), 201);
   });
 
@@ -1100,6 +1125,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     const ws = await docs.restoreSnapshot(id, sid, principal.kind === 'user' ? principal.user.id : null);
     if (!ws) throw fail(404, 'No existe esa instantánea');
     if (ws.meta.name) await store.updateMeta(id, { name: ws.meta.name });
+    emitHook(c, id, 'snapshot.restored', { snapshot: { id: sid, label: meta?.label || null, createdAt: meta?.createdAt ?? null }, by: actorOf(principal).actorName });
     // Al dueño, si lo restaura otra persona (o un enlace de edición).
     const row = await store.getWorkspace(id);
     if (row && !(principal.kind === 'user' && principal.user.id === row.ownerId)) {

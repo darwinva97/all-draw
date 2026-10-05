@@ -1,0 +1,42 @@
+/* Pestañas «Insertar» y «Webhooks» del diálogo Compartir (Integrations.tsx). */
+.integr__tabs { margin: 4px 0 12px; }
+.integr { display: flex; flex-direction: column; gap: 8px; }
+.integr .field { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.integr .field > span { font-size: 12px; color: var(--ad-muted, var(--muted)); }
+.integr select, .integr input[type='number'], .integr input[type='url'] { font: inherit; padding: 6px 8px; border: 1px solid var(--ad-border, var(--line)); border-radius: 6px; background: var(--ad-panel, #fff); color: inherit; min-width: 0; }
+.integr__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+.integr__size { display: flex; gap: 8px; }
+.integr__size .field { flex: 1; }
+.integr__code { width: 100%; box-sizing: border-box; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 6px 8px; border: 1px solid var(--ad-border, var(--line)); border-radius: 6px; background: var(--ad-bg, #f6f7f9); color: inherit; resize: vertical; }
+.integr__h { font-size: 13px; margin: 8px 0 0; }
+.integr__form { display: flex; flex-direction: column; gap: 8px; }
+.integr__events { border: 1px solid var(--ad-border, var(--line)); border-radius: 6px; padding: 6px 10px; display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; }
+.integr__events legend { font-size: 12px; color: var(--ad-muted, var(--muted)); padding: 0 4px; }
+.integr__note { margin: 0; padding: 6px 10px; border-radius: 6px; background: var(--ad-bg, #f6f7f9); }
+.integr__secret { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--ad-accent, #2563eb); border-radius: 6px; }
+.integr__secret p { margin: 0; flex-basis: 100%; }
+.integr__secret code { word-break: break-all; font-size: 12px; }
+.integr__hook { flex-direction: column; align-items: stretch !important; gap: 4px !important; }
+.integr__hookhead { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.integr__url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34ch; display: inline-block; vertical-align: bottom; }
+.integr__evlist { color: var(--ad-muted, var(--muted)); }
+.integr__last.is-ok { color: #15803d; }
+.integr__last.is-ko { color: #b91c1c; }
+.integr__last.is-wait { color: #b45309; }
+.integr__log summary { cursor: pointer; font-size: 12px; }
+.integr__log table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+.integr__log th, .integr__log td { text-align: left; padding: 2px 6px 2px 0; border-top: 1px solid var(--ad-border, var(--line)); vertical-align: top; }
+.integr__log tr.is-ko td:nth-child(3) { color: #b91c1c; }
+.integr__log tr.is-ok td:nth-child(3) { color: #15803d; }
+:root[data-theme="dark"] .integr__last.is-ok, :root[data-theme="dark"] .integr__log tr.is-ok td:nth-child(3) { color: #4ade80; }
+:root[data-theme="dark"] .integr__last.is-ko, :root[data-theme="dark"] .integr__log tr.is-ko td:nth-child(3) { color: #f87171; }
+:root[data-theme="dark"] .integr__last.is-wait { color: #fbbf24; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .integr__last.is-ok, :root:not([data-theme="light"]) .integr__log tr.is-ok td:nth-child(3) { color: #4ade80; }
+  :root:not([data-theme="light"]) .integr__last.is-ko, :root:not([data-theme="light"]) .integr__log tr.is-ko td:nth-child(3) { color: #f87171; }
+  :root:not([data-theme="light"]) .integr__last.is-wait { color: #fbbf24; }
+}
+/* Cuenta → MCP remoto (Keys.tsx) */
+.account__mcp { margin: 8px 0 16px; }
+.account__mcp summary { cursor: pointer; font-weight: 600; }
+.account__mcp pre.code { font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--ad-bg, #f6f7f9); border: 1px solid var(--ad-border, var(--line)); border-radius: 6px; padding: 8px 10px; overflow: auto; white-space: pre; margin: 4px 0; }

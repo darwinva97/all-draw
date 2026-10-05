@@ -21,7 +21,7 @@ If you are signed in, **New workspace on the server** and **Import…** create s
 
 ## Creating an account and signing in {#cuenta}
 
-![Dialog to sign in or create an account (Spanish interface)](../img/02-entrar.png)
+![Dialog to sign in or create an account](../img/02-entrar-en.png)
 
 1. On the home screen, press **Sign in / register** (top right). If you do not have any workspace yet, you will see
    the all-draw landing page instead of the home screen: there the button is called **Sign in**.
@@ -97,7 +97,7 @@ done through the API for now (`PUT /api/workspaces/:id/members/:userId` with `{ 
 
 Only the owner sees the **Share** button.
 
-![Share dialog with an edit link and a read-only link (Spanish interface)](../img/10-compartir.png)
+![Share dialog with an edit link and a read-only link](../img/10-compartir-en.png)
 
 1. Open the workspace (it must be on the server) and press **Share**.
 2. Choose what you want the other person to be able to do:
@@ -136,6 +136,50 @@ The same happens when you **remove a member**, when that person's **account is d
 deleted** (then the notice is "This workspace has been deleted"). If a member's **role changes** (for example from
 **can edit** to **read-only**), their connection is re-established on its own with the new role: they see "Your
 permissions in this workspace have changed" and, if they become read-only, they stop being able to edit right away.
+
+## Embedding diagrams in other sites {#insertar}
+
+You can show a view in **Confluence, Notion, Jira, GitHub** or any website. It is **read-only**, with zoom and
+panning, and **updates by itself** (it checks every 30 s whether the diagram has changed). Only the owner sets it up.
+
+1. Click **Share** and open the **Embed** tab.
+2. Choose the **View**, the **Theme** (automatic —follows the system theme of whoever is looking—, light or dark) and
+   the **Size** (or type the width and height).
+3. Click **Create embed link**. You get:
+   - the **embed code**: an `<iframe>` ready to paste (**Copy code**);
+   - the page **link** (**Copy link**), for sites that turn it into a box by themselves;
+   - the **SVG image** (**Copy image URL** or **Copy Markdown**), for places that don't allow iframes.
+
+The embed link (`…/embed/<workspace>/<view>?token=emb_…`) only lets people **see that view**: it doesn't open the
+workspace, doesn't show the other views and doesn't work for the API. Anyone who has it can see the view, so treat it
+like a read-only link. To stop showing it, click **Revoke** in the **Embed links** list: pages that embed it show
+"This diagram is no longer available" within a minute. A regular read-only link (`lnk_…`) also works on the `/embed/…`
+address, but it gives access to the whole workspace: an embed link is better.
+
+On the embedded page: **drag** to move around, **Ctrl + wheel** (or the **+** and **−** buttons) to zoom, double-click
+or **⤢** to fit, and **Open in all-draw ↗** to go to the workspace (it will ask you to sign in if you don't have access).
+
+**Confluence.** Edit the page, type `/iframe` (the **Iframe** macro, or **HTML** if your administrator allows it) and
+paste the address of the embed page (without the `<iframe>`), with the width and height you want. In Confluence Cloud
+without an iframe macro, paste the link on its own line and choose the **Embed** view if offered.
+
+**Notion.** Type `/embed`, choose **Embed** and paste the **link** (**Copy link**). Notion recognizes the page through
+oEmbed and shows the diagram in a box you can resize.
+
+**Jira.** In the description or a comment, paste the link and choose the **Embed** view if it appears (Jira Cloud);
+otherwise insert the **SVG image** as an external image.
+
+**GitHub** (README, issues, wikis). GitHub doesn't allow iframes: use **Copy Markdown**, which pastes the image:
+`![Payment process](https://alldraw.bezenti.com/embed/<workspace>/<view>.svg?token=emb_…)`. With the automatic theme the
+image follows the light or dark mode of whoever views it. GitHub caches the image for a while: changes may take a few
+minutes to show.
+
+**WordPress and other sites.** Paste the `<iframe>` code into a custom HTML block. Sites that read oEmbed (WordPress with
+the link on its own line, for example) convert it by themselves.
+
+> [!NOTE]
+> To get notified of changes in Slack, Teams or Discord (instead of embedding the diagram), use the **Webhooks** tab:
+> see [Webhooks](agentes-y-api.md#webhooks).
 
 ## Presence {#presencia}
 
@@ -235,7 +279,7 @@ and two options:
 - **Sign out**: ends the session in this browser. If you had a server workspace open in another tab of this browser,
   it is disconnected right away.
 
-![Account screen with API keys (Spanish interface)](../img/12-claves-api.png)
+![Account screen with API keys](../img/12-claves-api-en.png)
 
 It has these sections:
 

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { MAX_NOTIFICATIONS_PER_USER, type WorkspaceStore } from '../src/store/types';
+import { MAX_NOTIFICATIONS_PER_USER, MAX_WEBHOOK_DELIVERIES, type WebhookDelivery, type WorkspaceStore } from '../src/store/types';
 
 export function storeContractTests(name: string, factory: () => WorkspaceStore | Promise<WorkspaceStore>) {
   describe(`WorkspaceStore ${name}`, () => {
@@ -259,6 +259,58 @@ export function storeContractTests(name: string, factory: () => WorkspaceStore |
       expect(list).toHaveLength(MAX_NOTIFICATIONS_PER_USER);
       expect(list.some(n => n.id === 'ntf_0000')).toBe(false);
       expect(list.some(n => n.id === `ntf_${String(MAX_NOTIFICATIONS_PER_USER + 2).padStart(4, '0')}`)).toBe(true);
+      await s.close();
+    });
+
+    it('enlaces de inserción (con vista) y webhooks', async () => {
+      const s = await factory();
+      const a = await s.createUser({ email: 'w@x.io', name: 'W', passwordHash: 'h' });
+      const w = await s.createWorkspace({ ownerId: a.id, name: 'W' });
+      const w2 = await s.createWorkspace({ ownerId: a.id, name: 'W2' });
+      // Enlaces: `viewId` se guarda y vuelve; los normales, `null`
+      const e = await s.createShareLink({ workspaceId: w.id, role: 'viewer', createdBy: a.id, token: 'emb_1', viewId: 'v1' });
+      expect(e.viewId).toBe('v1');
+      expect((await s.resolveShareLink('emb_1'))?.viewId).toBe('v1');
+      const n = await s.createShareLink({ workspaceId: w.id, role: 'viewer', createdBy: a.id, token: 'lnk_n' });
+      expect(n.viewId ?? null).toBeNull();
+      expect((await s.resolveShareLink('lnk_n'))?.viewId ?? null).toBeNull();
+      expect((await s.listShareLinks(w.id)).map(l => [l.token, l.viewId ?? null]).sort()).toEqual([['emb_1', 'v1'], ['lnk_n', null]]);
+
+      const h = await s.createWebhook({ workspaceId: w.id, url: 'https://example.com/h', events: ['comment.created', 'member.added'], format: 'json', lang: 'en', secret: 'whsec_abc', createdBy: a.id });
+      expect(h).toMatchObject({ workspaceId: w.id, url: 'https://example.com/h', events: ['comment.created', 'member.added'], format: 'json', lang: 'en', secret: 'whsec_abc', createdBy: a.id, deliveries: [] });
+      expect(h.id).toMatch(/^whk_/);
+      expect(await s.getWebhook(w.id, h.id)).toEqual(h);
+      expect(await s.getWebhook(w2.id, h.id)).toBeNull();
+      const h2 = await s.createWebhook({ workspaceId: w.id, url: 'https://hooks.slack.com/services/x', events: ['workspace.changed'], format: 'slack', lang: 'es', secret: 'whsec_def', createdBy: a.id });
+      await s.createWebhook({ workspaceId: w2.id, url: 'https://example.com/otro', events: ['snapshot.created'], format: 'json', lang: 'es', secret: 'whsec_ghi', createdBy: a.id });
+      expect((await s.listWebhooks(w.id)).map(x => x.id).sort()).toEqual([h.id, h2.id].sort());
+      // Registro de entregas: la más reciente primero, sustituye por id y se queda en las 20 últimas
+      const d = (i: number, extra: Partial<WebhookDelivery> = {}): WebhookDelivery => ({ id: `dlv_${i}`, event: 'comment.created', at: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(), status: 500, ok: false, ms: i, attempts: 1, pending: true, error: 'HTTP 500', ...extra });
+      for (let i = 0; i < MAX_WEBHOOK_DELIVERIES + 4; i++) await s.recordWebhookDelivery(w.id, h.id, d(i));
+      let got = (await s.getWebhook(w.id, h.id))!.deliveries;
+      expect(got).toHaveLength(MAX_WEBHOOK_DELIVERIES);
+      expect(got[0]!.id).toBe(`dlv_${MAX_WEBHOOK_DELIVERIES + 3}`);
+      expect(got.some(x => x.id === 'dlv_0')).toBe(false);
+      await s.recordWebhookDelivery(w.id, h.id, d(10, { status: 200, ok: true, attempts: 2, pending: false, error: null }));
+      got = (await s.getWebhook(w.id, h.id))!.deliveries;
+      expect(got[0]).toMatchObject({ id: 'dlv_10', status: 200, ok: true, attempts: 2, pending: false, error: null });
+      expect(got.filter(x => x.id === 'dlv_10')).toHaveLength(1);
+      expect(got).toHaveLength(MAX_WEBHOOK_DELIVERIES);
+      await s.recordWebhookDelivery(w2.id, h.id, d(99)); // de otro espacio: no hace nada
+      await s.recordWebhookDelivery(w.id, 'whk_nope', d(98));
+      expect((await s.getWebhook(w.id, h.id))!.deliveries.some(x => x.id === 'dlv_99')).toBe(false);
+      expect((await s.getWebhook(w.id, h2.id))!.deliveries).toEqual([]);
+      // Borrar
+      expect(await s.deleteWebhook(w2.id, h.id)).toBe(false);
+      expect(await s.deleteWebhook(w.id, h.id)).toBe(true);
+      expect(await s.deleteWebhook(w.id, h.id)).toBe(false);
+      expect((await s.listWebhooks(w.id)).map(x => x.id)).toEqual([h2.id]);
+      // Borrar el espacio borra sus webhooks (y sus enlaces de inserción)
+      await s.deleteWorkspace(w.id);
+      expect(await s.listWebhooks(w.id)).toEqual([]);
+      expect(await s.getWebhook(w.id, h2.id)).toBeNull();
+      expect(await s.resolveShareLink('emb_1')).toBeNull();
+      expect(await s.listWebhooks(w2.id)).toHaveLength(1);
       await s.close();
     });
   });

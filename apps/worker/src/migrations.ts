@@ -114,4 +114,21 @@ CREATE TABLE notifications (
 );
 CREATE INDEX notifications_user ON notifications(user_id, created_at);
 `,
+  // migrations/0005_integrations.sql
+  `
+ALTER TABLE share_links ADD COLUMN view_id TEXT;
+CREATE TABLE webhooks (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  events TEXT NOT NULL,
+  format TEXT NOT NULL,
+  lang TEXT NOT NULL DEFAULT 'es',
+  secret TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  deliveries TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX webhooks_ws ON webhooks(workspace_id, created_at);
+`,
 ];

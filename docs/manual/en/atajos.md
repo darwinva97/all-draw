@@ -13,7 +13,7 @@ the editor, press **?** to see a summary on screen (or use the **Keyboard shortc
 There are two kinds of shortcuts:
 
 - **Global**: they work anywhere in the editor as long as you are not typing in a field. They are **Ctrl+K**,
-  **Ctrl+F**, **?** and **F2**.
+  **Ctrl+F**, **?** and **F2** (and **Ctrl+Shift+E**, which works even while typing).
 - **Canvas**: all the others (copy, paste, move with arrows, zoom, delete…). They only work when the canvas has
   the focus. If a shortcut "does nothing", **click an empty area of the canvas** and try again.
 
@@ -26,6 +26,7 @@ do not fire. That way **Del** deletes letters, not nodes.
 |---|---|
 | **Ctrl+K** or **Ctrl+F** | Opens (or closes) search: elements, views and actions |
 | **?** | Opens (or closes) the shortcuts panel |
+| **Ctrl+Shift+E** | Opens (or closes) the [text panel](dsl.md#editar-como-texto) |
 | **Esc** | Closes menus, panels and dialogs; cancels renaming |
 | **Shift+F10** or the **Menu** key | Opens the context menu of the selection on the canvas (or the canvas menu, with nothing selected) |
 | **Ctrl+Z** | Undo |
@@ -90,10 +91,25 @@ When you rename a node on the canvas itself (with **F2** or by double-clicking i
 
 | Key | What it does |
 |---|---|
-| Type | Filters elements, views and actions |
+| Type | Filters elements, views and actions (ignoring accents, with one typo per word) |
 | **↑** / **↓** | Moves through the list |
 | **Enter** | Opens the chosen result |
-| **Esc** | If you were choosing a view for an element, goes back to the results; otherwise closes |
+| **Esc** | If you were choosing a view for an element, or in *Go to view…* / *New view…*, goes back to the results; otherwise closes |
+
+## Text panel (Ctrl+Shift+E) {#texto}
+
+With the focus in the panel's text ([Editing as text](dsl.md#editar-como-texto)):
+
+| Key | What it does |
+|---|---|
+| **Ctrl+Space** | Type and id suggestions (they also show up by themselves as you type) |
+| **↑** / **↓**, **Enter** or **Tab** | Moves through and picks the suggestion; **Esc** closes the list |
+| **Ctrl+F** | Searches in the text (it does not open the general search) |
+| **Enter** / **F3** | Next match; with **Shift**, the previous one |
+| **Ctrl+S** | Applies the text now, without waiting |
+| **Tab** / **Shift+Tab** | Indents / outdents |
+| **Esc**, then **Tab** | Leaves the text with the keyboard |
+| **Ctrl+Z** | Undoes what you typed in the text (on the canvas, it undoes the whole applied change) |
 
 ## Comments {#comentarios}
 
@@ -123,6 +139,7 @@ In dialogs (sign in, share, search, shortcuts, Workspace…):
 | **↑** / **↓**, **Home** / **End** | Context menu | Moves through the options; **Enter** picks one; **Esc** or **Tab** close it and focus returns to the canvas |
 | **Tab**, then **↑** / **↓** | Palette and view list | Enters the list (a single **Tab** stop) and moves through it |
 | **Enter** or **Space** | A palette type | Adds it in a free spot near the center of the visible canvas (same as a click) |
+| **F** or **\*** | A palette type | Marks or unmarks it as a favorite |
 | **Enter** / **Del** | A view in the list | Opens it / deletes it (asks for confirmation) |
 | **←** / **→** | Tabs (palette, inspector, Workspace) | Switches tab |
 
@@ -137,7 +154,8 @@ In dialogs (sign in, share, search, shortcuts, Workspace…):
 | Click | A palette type | Adds it in a free spot near the center of the canvas |
 | Drag | A node | Moves it; dropping it inside a container nests it |
 | Drag | Corners of a selected node | Resizes it |
-| Drag | From a node's bottom edge to another node | Creates a relation (the **Relationship type** menu appears) |
+| Drag | From a node's bottom edge to another node | Creates a relation (the **Relationship type** menu appears). While you drag, the target turns green if it is valid and red if not, with the reason |
+| Drag | From the bottom edge of a node to an empty spot | **Create and connect** menu: creates an element there, already connected (a single Ctrl+Z undoes it) |
 | Drag | From one pin to another pin | Creates a pin-to-pin relation, with its mapping |
 | Double-click | A node | Enters its detail view |
 | Double-click | A node's name | Renames it inline |

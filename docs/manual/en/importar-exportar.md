@@ -14,7 +14,7 @@ There are two places to import and one to export:
 | **Editor → Import / Export → Import (replaces the workspace)** | Loads the file **into the open workspace, replacing all of its content**. It asks for confirmation first. |
 | **Editor → Import / Export → Export…** | Downloads the whole workspace or the current view in the format you choose. |
 
-![Import / Export menu in the editor (Spanish interface)](../img/11-importar-exportar.png)
+![Import / Export menu in the editor](../img/11-importar-exportar-en.png)
 
 On a phone, **Import / Export** is in the **More** sheet. If the workspace is read-only you can export but not import.
 

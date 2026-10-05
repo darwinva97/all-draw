@@ -11,7 +11,7 @@ or **Esc**.
 Everything you define here belongs to the workspace: it is saved with it, travels in the `.alldraw.json` export and
 your collaborators see it instantly. In read-only mode the **Workspace** button does not appear.
 
-![Workspace panel, Rules tab (Spanish interface)](../img/09-espacio-reglas.png)
+![Workspace panel, Rules tab](../img/09-espacio-reglas-en.png)
 
 ## Libraries {#librerias}
 

@@ -38,7 +38,7 @@ export const UML_CLASS_ELEMENT_TYPES: ElementType[] = [
     doc: 'Clase con compartimentos de atributos y operaciones. Los atributos son puertos (para asociaciones campo a campo).',
     fields: [
       stereotype,
-      { key: 'abstract', label: 'Abstracta', kind: 'checkbox' },
+      { key: 'abstract', label: 'Abstracta', kind: 'checkbox', doc: 'No se instancia directamente; el nombre va en cursiva.' },
       { key: 'attributes', label: 'Atributos', kind: 'list', doc: 'Una por línea: "- nombre: String".' },
       operations,
     ],
@@ -53,13 +53,13 @@ export const UML_CLASS_ELEMENT_TYPES: ElementType[] = [
   el('Enum', 'Enumeración', {
     shape: 'rect', color: '#E8F5E9', icon: 'E',
     doc: 'Enumeración («enumeration») con sus literales.',
-    fields: [{ key: 'values', label: 'Valores', kind: 'list', port: false }],
+    fields: [{ key: 'values', label: 'Valores', kind: 'list', port: false, doc: 'Uno por línea: los literales de la enumeración.' }],
     meta: { stereotypeDefault: 'enumeration', compartments: { sections: ['values'] } },
   }),
   el('Package', 'Paquete', {
     shape: 'group', container: true, color: '#F5F5F5', icon: '▱',
     doc: 'Paquete / namespace. Contiene clasificadores por anidamiento.',
-    fields: [{ key: 'namespace', label: 'Namespace', kind: 'text' }],
+    fields: [{ key: 'namespace', label: 'Namespace', kind: 'text', doc: 'Espacio de nombres completo ("com.tienda.pedidos").' }],
   }),
 ];
 
@@ -68,8 +68,8 @@ const endFields: FieldDef[] = [
   { key: 'sourceCard', label: 'Multiplicidad origen', kind: 'text', doc: '"1", "0..1", "*", "1..*", "0..*" (se rotula junto al extremo origen).' },
   { key: 'sourceRole', label: 'Rol origen', kind: 'text', doc: 'Nombre del extremo origen (se rotula al otro lado de la línea).' },
   { key: 'targetCard', label: 'Multiplicidad destino', kind: 'text', doc: '"1", "0..1", "*", "1..*", "0..*" (se rotula junto al extremo destino).' },
-  { key: 'targetRole', label: 'Rol destino', kind: 'text' },
-  { key: 'navigable', label: 'Navegable', kind: 'select', options: 'target,source,both,none', optionLabels: { target: 'Hacia el destino', source: 'Hacia el origen', both: 'En ambos sentidos', none: 'Ninguno' } },
+  { key: 'targetRole', label: 'Rol destino', kind: 'text', doc: 'Nombre del extremo destino ("líneas"); se rotula junto a él.' },
+  { key: 'navigable', label: 'Navegable', kind: 'select', options: 'target,source,both,none', optionLabels: { target: 'Hacia el destino', source: 'Hacia el origen', both: 'En ambos sentidos', none: 'Ninguno' }, doc: 'En qué sentido se puede navegar la asociación (flecha abierta en ese extremo).' },
 ];
 
 export const UML_CLASS_RELATION_TYPES: RelationType[] = [

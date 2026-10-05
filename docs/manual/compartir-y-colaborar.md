@@ -139,6 +139,51 @@ caso el aviso es «Este espacio se ha borrado»). Si a un miembro se le **cambia
 **solo lectura**), su conexión se rehace sola con el rol nuevo: ve «Tus permisos en este espacio han cambiado» y, si
 pasa a solo lectura, deja de poder editar en ese mismo momento.
 
+## Insertar diagramas en otras webs {#insertar}
+
+Puedes mostrar una vista en **Confluence, Notion, Jira, GitHub** o cualquier web. Se ve en **solo lectura**, con zoom
+y desplazamiento, y **se actualiza sola** (comprueba cada 30 s si el diagrama ha cambiado). Solo el propietario lo
+configura.
+
+1. Pulsa **Compartir** y abre la pestaña **Insertar**.
+2. Elige la **Vista**, el **Tema** (automático —sigue al tema del sistema de quien mira—, claro u oscuro) y el
+   **Tamaño** (o escribe el ancho y el alto).
+3. Pulsa **Crear enlace de inserción**. Aparecen:
+   - el **código para insertar**: un `<iframe>` listo para pegar (**Copiar código**);
+   - el **enlace** de la página (**Copiar enlace**), para los sitios que lo convierten solos en un recuadro;
+   - la **imagen SVG** (**Copiar URL de la imagen** o **Copiar Markdown**), para donde no se admiten iframes.
+
+El enlace de inserción (`…/embed/<espacio>/<vista>?token=emb_…`) solo sirve para **ver esa vista**: no abre el espacio,
+no deja ver las demás vistas ni vale para la API. Cualquiera que lo tenga puede verla, así que trátalo como un enlace de
+lectura. Para dejar de mostrarla, pulsa **Revocar** en la lista **Enlaces de inserción**: las páginas que la incrustan
+muestran «Este diagrama ya no está disponible» en menos de un minuto. Un enlace de lectura normal (`lnk_…`) también
+sirve en la dirección `/embed/…`, pero da acceso a todo el espacio: es mejor uno de inserción.
+
+En la página insertada: **arrastra** para moverte, **Ctrl + rueda** (o los botones **+** y **−**) para el zoom, doble
+clic o **⤢** para encajar, y **Abrir en all-draw ↗** para ir al espacio (pedirá entrar si no tienes acceso).
+
+**Confluence.** Edita la página, escribe `/iframe` (macro **Iframe**, o **HTML** si tu administrador la permite) y pega
+la dirección de la página insertada (sin el `<iframe>`), con el ancho y el alto que quieras. En Confluence Cloud sin
+macro de iframe, pega el enlace en una línea sola y elige la vista **Insertado** (*Embed*) si la ofrece.
+
+**Notion.** Escribe `/embed`, elige **Insertar** (*Embed*) y pega el **enlace** (**Copiar enlace**). Notion reconoce la
+página por oEmbed y muestra el diagrama en un recuadro que puedes redimensionar.
+
+**Jira.** En la descripción o en un comentario, pega el enlace y elige la vista **Insertado** si aparece (Jira Cloud); si
+no, inserta la **imagen SVG** como imagen externa.
+
+**GitHub** (README, issues, wikis). GitHub no admite iframes: usa **Copiar Markdown**, que pega la imagen:
+`![Proceso de cobro](https://alldraw.bezenti.com/embed/<espacio>/<vista>.svg?token=emb_…)`. Con el tema automático la
+imagen sigue al modo claro u oscuro de quien la mira. GitHub guarda la imagen en caché un rato: los cambios pueden
+tardar unos minutos en verse.
+
+**WordPress y otras webs.** Pega el código `<iframe>` en un bloque HTML personalizado. Las que leen oEmbed (WordPress con
+el enlace en una línea sola, por ejemplo) lo convierten solas.
+
+> [!NOTE]
+> Para avisar de los cambios en Slack, Teams o Discord (en vez de insertar el diagrama), usa la pestaña **Webhooks**:
+> ver [Webhooks](agentes-y-api.md#webhooks).
+
 ## Presencia {#presencia}
 
 En un espacio del servidor la barra muestra un círculo de color por cada persona conectada (el tuyo, el primero), con

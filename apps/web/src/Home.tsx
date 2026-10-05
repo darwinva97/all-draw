@@ -331,7 +331,7 @@ function TemplateCard({ tpl, busy, onPick, colors }: { tpl: Template; busy: stri
   const name = t(tpl.name);
   const label = tpl.id === 'demo' ? t('Abrir la demo: {name}', { name }) : t('Crear desde la plantilla «{name}»', { name });
   return (
-    <button type="button" className="tpl" disabled={!!busy} aria-busy={busy === tpl.id} aria-label={label} title={t(tpl.description)} onClick={() => onPick(tpl)}>
+    <button type="button" className="tpl" disabled={!!busy} aria-busy={busy === tpl.id} aria-label={label} aria-description={`${t(tpl.description)} ${t(tpl.about)}`} title={t(tpl.about)} onClick={() => onPick(tpl)}>
       <div className="tpl__thumb" ref={ref} aria-hidden="true">
         {tpl.id === 'blank' ? <span className="tpl__blank"><Icon name="plus" size={22} /></span>
           : url ? <img src={url} alt="" draggable={false} /> : url === undefined ? <span className="skel" /> : null}
@@ -339,6 +339,8 @@ function TemplateCard({ tpl, busy, onPick, colors }: { tpl: Template; busy: stri
       <div className="tpl__body">
         <span className="tpl__name">{busy === tpl.id ? t('Creando…') : name}</span>
         <span className="tpl__desc">{t(tpl.description)}</span>
+        {/* Qué muestra y cómo seguir: tres líneas a la vista y el texto entero al pasar el puntero. */}
+        <span className="tpl__desc tpl__about"><span style={{ fontSize: 11.5, opacity: .85, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t(tpl.about)}</span></span>
         <span className="tpl__chips">{tpl.notations.slice(0, 3).map(n => <span key={n} className="chip"><span className="chip__dot" style={{ background: colors[n]?.color }} />{colors[n]?.name ?? n}</span>)}{tpl.notations.length > 3 && <span className="chip">+{tpl.notations.length - 3}</span>}</span>
       </div>
     </button>

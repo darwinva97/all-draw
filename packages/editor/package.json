@@ -16,6 +16,7 @@
   "dependencies": {
     "@all-draw/core": "workspace:*",
     "@all-draw/i18n": "workspace:*",
+    "@all-draw/io": "workspace:*",
     "@all-draw/notation-archimate": "workspace:*",
     "@all-draw/notation-grid": "workspace:*",
     "@all-draw/sim": "workspace:*",

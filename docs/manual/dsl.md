@@ -22,6 +22,61 @@ usa los tipos de **todas** las notaciones de all-draw (`archimate:BusinessActor`
   [layout automático](editor.md) según su notación.
 - Si el texto tiene un error, la importación se detiene y dice **la línea y la columna** y qué se esperaba.
 
+## Editar como texto {#editar-como-texto}
+
+El editor tiene un **panel de texto en vivo**: el modelo escrito en este lenguaje, al lado del lienzo y sincronizado
+en los dos sentidos. Ábrelo con el botón **Texto** de la barra, con **Ctrl+Shift+E** o desde **Ctrl+K → Editar como
+texto**; se cierra igual o con su botón ✕.
+
+- **Alcance**: *Vista actual* (la vista, sus elementos y las relaciones que dibuja) o *Todo el espacio* (también
+  librerías, personas, reglas y comentarios). Con *Vista actual*, el texto sigue a la vista que abras en el lienzo.
+- **Posiciones**: apagado (por defecto) el texto no lleva `at`, `size` ni `via` y queda limpio; encendido los escribe.
+  En los dos casos, **lo que no escribes se conserva**: la posición, el tamaño y los quiebros del lienzo solo cambian
+  si los escribes en esa línea.
+- **Cuándo se aplica**: al dejar de teclear (algo más de medio segundo) y solo si el texto **no tiene errores**.
+  Todo lo que cambiaste desde la última vez entra como **un único paso de deshacer** (Ctrl+Z en el lienzo lo deshace
+  entero). **Ctrl+S** aplica sin esperar. El estado (*Sincronizado*, *Sin aplicar…*, *N errores*) está bajo la barra
+  del panel.
+- **Errores**: se subrayan en el texto, el número de línea se pone rojo y la lista de debajo dice
+  `línea:columna` y el motivo; un clic lleva el cursor allí. Mientras haya errores el modelo no cambia.
+- **Autocompletado**: al escribir aparecen los tipos de la notación de la vista (`archimate:Bus…`) y los ids que ya
+  existen (tras `include`, `edge`, `->`, `detail`…). **Ctrl+Espacio** lo abre a mano; **↑/↓** e **Intro** o **Tab**
+  eligen; **Esc** lo cierra.
+- **Buscar**: **Ctrl+F** con el foco en el texto (no abre la búsqueda general); **Intro**/**F3** siguiente,
+  **Shift+Intro**/**Shift+F3** anterior.
+- **Selección cruzada**: con el cursor en la declaración de un elemento (o en su `include`, una relación, una arista)
+  se selecciona en el lienzo; al seleccionar algo en el lienzo, el texto salta a su línea y la marca.
+- **Teclado**: **Tab** sangra y **Shift+Tab** quita sangría; para salir del texto con el teclado pulsa **Esc** y luego
+  **Tab**. **Intro** mantiene la sangría (y la aumenta tras `{`).
+
+Qué hace cada cambio en el texto:
+
+| En el texto | En el modelo |
+|---|---|
+| Cambiar un nombre, un campo, `doc`, `tags`, el tipo… | Cambia ese dato; lo demás del registro queda igual |
+| Añadir una declaración (`x = pack:Tipo "…"`, `a -> b`) | Crea el elemento o la relación |
+| Añadir `include x` / `edge r` | Añade el nodo (colocado junto a lo que ya hay) o la arista |
+| Quitar `include x` | Quita el nodo de esta vista (y sus aristas); el elemento sigue en el modelo |
+| Quitar la declaración de un elemento | Lo **borra del modelo**, con sus apariciones y relaciones en todas las vistas |
+| Mover un `include` dentro o fuera del bloque de otro | Cambia de contenedor conservando su posición en pantalla |
+| Cambiar el id (en todas partes) | Elemento nuevo con ese id; sus nodos heredan la posición del anterior |
+| Una vista nueva sin `at` | Se crea y se coloca con el [layout automático](editor.md) |
+
+- Una declaración sin id (`archimate:BusinessActor "Ana"`) recibe uno al aplicarse y el texto lo escribe
+  (`ana = …`): así renombrar después no cambia el id.
+- Desde *Vista actual* puedes usar en `include` cualquier elemento del espacio, aunque no esté en el texto; lo que no
+  puedes es **declarar** un id que ya existe fuera del texto (se avisa y no se aplica: elige otro id).
+- Los comentarios `//` y el formato que escribas no se guardan en el modelo: cuando el texto se rehace, se pierden.
+
+**Si el modelo cambia mientras editas** (alguien lo cambia en el lienzo o desde otra sesión): si no tienes cambios
+pendientes, el texto se rehace solo, sin mover el cursor de su declaración; si los tienes, el texto no se toca y, al
+aplicarlo, los cambios se **combinan** (lo que tú cambiaste gana, lo que cambió el otro se conserva). Solo si los dos
+cambiasteis **el mismo dato** a valores distintos aparece el aviso *El modelo cambió…* con dos opciones:
+**Recargar texto** (descarta lo tuyo) o **Mantener el mío** (aplica tu texto).
+
+En **solo lectura** (enlaces de lectura) el panel muestra el texto, se actualiza con los cambios y permite buscar y
+seleccionar, pero no editar.
+
 ## Un ejemplo {#ejemplo}
 
 ```text

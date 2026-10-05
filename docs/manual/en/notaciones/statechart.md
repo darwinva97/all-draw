@@ -10,7 +10,7 @@ Use it for orders, accounts, files, tickets, application screens or any object w
 on "where it is". It follows the style of UML statecharts and XState: states can contain states, and
 regions can run in parallel.
 
-![The demo's state machine (Spanish interface)](../../img/06-estados.png)
+![The demo's state machine](../../img/06-estados-en.png)
 
 ## Key elements {#elementos-clave}
 

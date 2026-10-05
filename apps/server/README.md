@@ -27,6 +27,9 @@ apps/server/src/
   store/sqlite.ts   adaptador node:sqlite · store/postgres.ts adaptador pg (pool, migraciones idempotentes)
   legacy.ts         importación de ~/.alldraw-data/<id>.yupdate
   mcp.ts            servidor MCP (stdio) que habla con la API REST
+  mcp-tools.ts      herramientas y recursos MCP (compartidos por stdio y `POST /mcp`)
+  mcp-http.ts       MCP remoto: `POST /mcp` (Streamable HTTP sin estado, sólo con API key)
+  webhook-transport.ts  envío de webhooks con node:http(s): IP comprobada en el `lookup` del socket (SSRF)
   api.ts, docs.ts, notations.ts, store/{types,memory}.ts   re-exportan server-core
 test/               vitest (servidor real en puerto libre; contrato del store para memory, sqlite y postgres)
 SKILL.md            guía para agentes: cómo modelar con comandos
@@ -131,6 +134,10 @@ la línea `Environment=`.
   inmediato (`pendingEmail`: se confirma con el enlace enviado al nuevo y se avisa al anterior).
 - **Sesiones activas**: `GET /api/auth/sessions` (navegador y sistema resumidos, IP truncada, creada, último uso —
   apuntado como mucho cada 5 min—, `current`) y `DELETE /api/auth/sessions/{id}` (corta sus WebSockets con `4402`).
+- **Integraciones** (`docs/07-seguridad.md`, manual *Agentes y API → Webhooks* y *Compartir → Insertar*): webhooks por
+  espacio (`/api/workspaces/{id}/webhooks`, firma HMAC, reintentos, `workspace.changed` agregado 30 s con
+  `ChangeAggregator`), enlaces de inserción (`/api/workspaces/{id}/embeds`, `GET /embed/<id>/<vista>[.svg]`, oEmbed en
+  `/api/oembed`) y MCP remoto (`POST /mcp`).
 - **Notificaciones**: `GET /api/notifications`, `POST /api/notifications/read`. Se crean al mencionar a alguien en un
   comentario nuevo (regla en `packages/server-core/src/notifications.ts` y en el manual, *Comentarios*), al añadir un
   miembro, al cambiarle el rol o pasarle la propiedad y al restaurar una instantánea de un espacio ajeno.
@@ -203,9 +210,10 @@ sessions           token_hash PK, user_id FK→users (cascade), created_at, expi
 api_keys           id PK, user_id FK, name, prefix, key_hash UNIQUE, created_at, last_used_at
 workspaces         id PK, owner_id FK→users, name, created_at, updated_at
 workspace_members  (workspace_id FK cascade, user_id FK cascade) PK, role ∈ {editor, viewer}, created_at
-share_links        token PK, workspace_id FK cascade, role, created_by, created_at, expires_at NULL
+share_links        token PK, workspace_id FK cascade, role, created_by, created_at, expires_at NULL, view_id NULL (v5: enlaces de inserción `emb_…`)
 account_tokens     token_hash PK, user_id FK cascade, kind ∈ {reset, verify}, email, created_at, expires_at   (v4)
 notifications      id PK, user_id FK cascade, kind, workspace_id FK cascade NULL, payload JSON, created_at, read_at   (v4)
+webhooks           id PK, workspace_id FK cascade, url, events JSON, format, lang, secret, created_by, created_at, deliveries JSON (últimas 20)   (v5)
 docs               workspace_id PK FK cascade, state BLOB, updated_at
 doc_updates        id AUTOINCREMENT, workspace_id FK cascade, data BLOB, created_at
 schema_migrations  version PK, applied_at
@@ -408,9 +416,14 @@ https://alldraw-monitor.darwin-sva-97.workers.dev (ver `apps/monitor/README.md`)
 ALLDRAW_URL=https://alldraw.bezenti.com ALLDRAW_API_KEY=adk_… pnpm --filter @all-draw/server mcp
 ```
 
-Herramientas: `list_workspaces`, `get_snapshot`, `run_commands`, `validate`, `list_notations`,
-`render_svg`. Todas pasan por la API REST con `Authorization: Bearer $ALLDRAW_API_KEY`, así que el
+Herramientas: `list_workspaces`, `get_snapshot`, `list_views`, `run_commands`, `validate`, `list_notations`,
+`render_svg`; recursos `alldraw://workspaces`, `alldraw://workspaces/{id}/snapshot` y `…/views/{viewId}.svg`
+(`mcp-tools.ts`). Todas pasan por la API REST con `Authorization: Bearer $ALLDRAW_API_KEY`, así que el
 MCP puede correr en la máquina del agente. Ver `SKILL.md`.
+
+**Remoto**: el servidor publica lo mismo en `POST /mcp` (Streamable HTTP, sin sesiones, respuestas JSON), sólo con
+`Authorization: Bearer adk_…`; las herramientas llaman a la API en el mismo proceso con esa clave. Configuración de los
+clientes en `docs/manual/agentes-y-api.md#mcp-remoto`. No existe en el worker.
 
 ## Tests
 

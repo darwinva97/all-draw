@@ -49,23 +49,23 @@ export const DDD_ELEMENT_TYPES: ElementType[] = [
   el('Domain', 'Dominio', CAT.strategic, {
     shape: 'group', container: true, color: '#F5F5F5', icon: '◫',
     doc: 'Área de negocio que se modela (problema). Contiene sus subdominios y los contextos acotados que los resuelven.',
-    fields: [{ key: 'vision', label: 'Visión', kind: 'textarea' }],
+    fields: [{ key: 'vision', label: 'Visión', kind: 'textarea', doc: 'Para qué existe el dominio, en una o dos frases.' }],
   }),
   el('Subdomain', 'Subdominio', CAT.strategic, {
     shape: 'ellipse', color: '#FFF2CC',
     doc: 'Parte del dominio con su propio peso: núcleo (lo que diferencia al negocio), de soporte o genérico (se puede comprar).',
     fields: [
-      { key: 'kind', label: 'Tipo de subdominio', kind: 'select', options: 'core,supporting,generic', optionLabels: { core: 'Núcleo (core)', supporting: 'De soporte (supporting)', generic: 'Genérico (generic)' }, required: true },
-      { key: 'vision', label: 'Visión', kind: 'textarea' },
+      { key: 'kind', label: 'Tipo de subdominio', kind: 'select', options: 'core,supporting,generic', optionLabels: { core: 'Núcleo (core)', supporting: 'De soporte (supporting)', generic: 'Genérico (generic)' }, required: true, doc: 'Núcleo: lo que diferencia al negocio. De soporte: necesario y propio. Genérico: se puede comprar o reutilizar.' },
+      { key: 'vision', label: 'Visión', kind: 'textarea', doc: 'Qué aporta este subdominio y por qué importa.' },
     ],
   }),
   el('BoundedContext', 'Contexto acotado', CAT.strategic, {
     shape: 'rounded', container: true, color: '#EAF4FF',
     doc: 'Frontera dentro de la cual un modelo y su lenguaje ubicuo son coherentes (solución). Contiene agregados, entidades, eventos y servicios.',
     fields: [
-      { key: 'team', label: 'Equipo', kind: 'text' },
-      { key: 'responsibilities', label: 'Responsabilidades', kind: 'list', port: false },
-      { key: 'vision', label: 'Visión', kind: 'textarea' },
+      { key: 'team', label: 'Equipo', kind: 'text', doc: 'Equipo dueño del contexto.' },
+      { key: 'responsibilities', label: 'Responsabilidades', kind: 'list', port: false, doc: 'Una por línea: de qué se encarga el contexto.' },
+      { key: 'vision', label: 'Visión', kind: 'textarea', doc: 'Propósito del contexto en una frase.' },
     ],
   }),
   el('Aggregate', 'Agregado', CAT.tactical, {
@@ -99,7 +99,7 @@ export const DDD_ELEMENT_TYPES: ElementType[] = [
     doc: 'Operación del dominio que no pertenece a ninguna entidad ni objeto de valor («Service»).',
     fields: [
       stereotype,
-      { key: 'layer', label: 'Capa', kind: 'select', options: 'domain,application,infrastructure', optionLabels: { domain: 'Dominio', application: 'Aplicación', infrastructure: 'Infraestructura' } },
+      { key: 'layer', label: 'Capa', kind: 'select', options: 'domain,application,infrastructure', optionLabels: { domain: 'Dominio', application: 'Aplicación', infrastructure: 'Infraestructura' }, doc: 'Dominio (reglas del negocio), aplicación (orquesta los casos de uso) o infraestructura (lo técnico).' },
       operations,
     ],
     meta: { stereotypeDefault: 'Service', compartments: { sections: ['operations'], stereotype: 'stereotype' } },
@@ -111,10 +111,10 @@ export const DDD_RELATION_TYPES: RelationType[] = [
     id: CONTEXT_RELATION, name: 'Relación entre contextos', category: CAT.relations, line: 'solid', sourceHead: 'none', targetHead: 'none',
     doc: 'Cómo se relacionan dos contextos acotados: el patrón se rotula sobre la línea y cada extremo lleva U (upstream, del que se depende) o D (downstream).',
     fields: [
-      { key: 'pattern', label: 'Patrón', kind: 'select', options: Object.keys(CONTEXT_PATTERNS).join(','), optionLabels: { ...CONTEXT_PATTERNS }, required: true },
+      { key: 'pattern', label: 'Patrón', kind: 'select', options: Object.keys(CONTEXT_PATTERNS).join(','), optionLabels: { ...CONTEXT_PATTERNS }, required: true, doc: 'Cómo se relacionan los dos equipos y sus modelos: socios, núcleo compartido, cliente/proveedor, conformista, capa anticorrupción…' },
       role('sourceRole', 'Papel del origen'),
       role('targetRole', 'Papel del destino'),
-      { key: 'description', label: 'Descripción', kind: 'textarea' },
+      { key: 'description', label: 'Descripción', kind: 'textarea', doc: 'Qué se intercambian los contextos y en qué condiciones.' },
     ],
   },
   {
@@ -123,7 +123,7 @@ export const DDD_RELATION_TYPES: RelationType[] = [
   },
   {
     id: REFERENCE, name: 'Referencia', category: CAT.relations, line: 'solid', sourceHead: 'none', targetHead: 'open',
-    fields: [{ key: 'sourceCard', label: 'Multiplicidad origen', kind: 'text' }, { key: 'targetCard', label: 'Multiplicidad destino', kind: 'text' }],
+    fields: [{ key: 'sourceCard', label: 'Multiplicidad origen', kind: 'text', doc: '"1", "0..1", "*", "1..*", "0..*" (se rotula junto al extremo origen).' }, { key: 'targetCard', label: 'Multiplicidad destino', kind: 'text', doc: '"1", "0..1", "*", "1..*", "0..*" (se rotula junto al extremo destino).' }],
     doc: 'El origen conoce o usa al destino. Entre agregados, solo por identidad.',
   },
   {

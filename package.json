@@ -10,9 +10,12 @@
     "lint": "oxlint .",
     "gen:archimate": "node packages/notations/archimate/scripts/generate.mjs",
     "start": "node apps/server/src/server.mjs",
-    "e2e": "node e2e/smoke.mjs && node e2e/ui.mjs && node e2e/a11y.mjs && node e2e/comments.mjs && node e2e/mobile.mjs && node e2e/ui-polish.mjs && node e2e/docs.mjs && node e2e/panels-qa2.mjs && node e2e/canvas-qa2.mjs && node e2e/notations.mjs && node e2e/sync.mjs && node e2e/readonly.mjs && node e2e/revoke.mjs && node e2e/offline.mjs && node e2e/concurrent.mjs",
+    "e2e": "node e2e/smoke.mjs && node e2e/ui.mjs && node e2e/a11y.mjs && node e2e/comments.mjs && node e2e/mobile.mjs && node e2e/ui-polish.mjs && node e2e/docs.mjs && node e2e/panels-qa2.mjs && node e2e/canvas-qa2.mjs && node e2e/notations.mjs && node e2e/editor-wave2.mjs && node e2e/text-panel.mjs && node e2e/sync.mjs && node e2e/readonly.mjs && node e2e/revoke.mjs && node e2e/offline.mjs && node e2e/concurrent.mjs",
     "deploy": "pnpm --filter web build && systemctl --user restart alldraw",
-    "e2e:accounts": "STATIC_DIR=${STATIC_DIR:-apps/web/dist} node e2e/accounts.mjs"
+    "e2e:accounts": "STATIC_DIR=${STATIC_DIR:-apps/web/dist} node e2e/accounts.mjs",
+    "e2e:visual": "node e2e/visual.mjs",
+    "e2e:visual:update": "UPDATE=1 node e2e/visual.mjs",
+    "e2e:integrations": "node e2e/integrations.mjs"
   },
   "license": "MIT",
   "packageManager": "pnpm@12.6.0",
@@ -22,6 +25,7 @@
     "@types/node": "^26.6.2",
     "oxlint": "^1.85.0",
     "playwright-core": "^1.63.0",
+    "pngjs": "^7.0.0",
     "prettier": "^3.9.9",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"

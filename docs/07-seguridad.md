@@ -548,3 +548,103 @@ temporizador al aceptar el WebSocket y el `WorkspaceDO` guarda la caducidad en l
   completa está en `packages/server-core/src/notifications.ts` y en el manual (*Comentarios → Quién recibe el aviso*).
 - El correo de una mención sólo sale si hay correo y la cuenta tiene «recibir por correo» activado (por defecto sí);
   lleva un enlace a la preferencia para quitarlo.
+
+## Integraciones: webhooks, inserción y MCP remoto (5 de octubre de 2026)
+
+Tres superficies nuevas, cada una con su modelo de amenaza. Código: `packages/server-core/src/{webhooks,embed,api-integrations}.ts`,
+`apps/server/src/{webhook-transport,mcp-http,mcp-tools}.ts`, `apps/worker/src/webhooks-env.ts` y `do.ts`.
+
+### Webhooks: SSRF
+
+Un webhook hace que **el servidor** haga peticiones a una URL que elige un usuario: sin cuidado, sirve para llegar a
+servicios internos (la base de datos, `/metrics` en `127.0.0.1`, la IP de metadatos de la nube `169.254.169.254`, el
+router…). Defensas, por capas:
+
+1. **Al registrarlo** (`POST /api/workspaces/{id}/webhooks`, sólo el dueño con cuenta): sólo `https:`; sin usuario ni
+   contraseña en la URL; sin nombres locales (`localhost`, `*.localhost`, `*.local`, `*.internal`, `*.lan`,
+   `*.home.arpa`, nombres sin punto); la IP literal (también en formas raras como `https://2130706433/` o `[::ffff:127.0.0.1]`,
+   que el parser de URL normaliza) tiene que ser pública; y el nombre se **resuelve** (A y AAAA; en Workers por DNS sobre
+   HTTPS) y **todas** sus IPs tienen que ser públicas. Redes bloqueadas (`BLOCKED_CIDRS`): «esta red», privadas, CGNAT,
+   loopback, enlace local, documentación, pruebas, multicast y reservadas; en IPv6 loopback, ULA, enlace local, multicast,
+   documentación, NAT64 (`64:ff9b::/96`), 6to4 y Teredo (llevan una IPv4 dentro).
+2. **Al enviar**, otra vez: el DNS puede cambiar entre el registro y el envío (*DNS rebinding*). En Node la IP se
+   comprueba **dentro del `lookup` del socket** (`safeLookup`): se conecta exactamente a la IP comprobada, sin ventana
+   entre comprobar y conectar. En Workers se comprueba el DNS antes de cada envío y, además, Cloudflare no deja a un
+   Worker conectar con redes privadas.
+3. **Sin redirecciones** (una `302` a `http://127.0.0.1` se saltaría todo): un `3xx` cuenta como respuesta, no se sigue.
+4. **Tiempo y tamaño**: 10 s por intento y 64 KB de respuesta como mucho (el resto se descarta y se corta la conexión);
+   de la respuesta sólo se guardan el estado y 200 caracteres, que ve únicamente el dueño en su registro.
+5. **Volumen**: 10 webhooks por espacio, 5 intentos por entrega (espera 2, 4, 8, 16 s; sólo ante red, `5xx`, `408` y
+   `429`), «Probar» limitado a 20 por webhook cada 10 min, y `workspace.changed` agregado (un envío cada ≥ 30 s por espacio).
+6. **Copia de respaldo**: con `STANDBY` no se crean (503) ni se envían (la API no emite y el DO no envía aunque le llegue
+   un evento). Los webhooks no se sincronizan a la copia.
+
+`WEBHOOKS_ALLOW_PRIVATE=1` desactiva 1 y 2 (deja `http:` y direcciones privadas). **Sólo para pruebas** (el receptor local
+de `e2e/integrations.mjs`); el servidor avisa en el log al arrancar. Nunca en producción.
+
+**Contenido de los avisos.** Llevan nombres de espacios, elementos, vistas, comentarios (extracto) y personas (nombre, no
+el correo); el JSON, además, ids. Es lo que el dueño decide mandar fuera: sólo él puede registrar webhooks. Los mensajes de
+Slack escapan `<`, `>` y `&` (un comentario con `<!channel>` no avisa a todo el canal) y los de Discord van con
+`allowed_mentions: { parse: [] }`.
+
+**Firma y secreto.** `X-AllDraw-Signature: sha256=<HMAC-SHA256(secreto, cuerpo)>`; el secreto (`whsec_…`, 32 caracteres
+aleatorios) se muestra una vez y la API sólo devuelve su principio. Se guarda **en claro** en la tabla `webhooks` porque
+hace falta para firmar (como cualquier proveedor de webhooks); una copia de la base de datos permitiría falsificar avisos
+hacia esos receptores, nada más. `X-AllDraw-Delivery` es único por entrega (igual en sus reintentos) para que el receptor
+descarte repetidos; el cuerpo lleva `sentAt` para rechazar los viejos. Las URLs de Slack/Teams/Discord son secretos en sí:
+el log sólo apunta el host.
+
+### Inserción (`/embed/*`) y oEmbed
+
+- **Tokens de inserción** `emb_…` (32 caracteres aleatorios, en `share_links` con `view_id`): de lectura y **sólo para
+  esa vista** y sólo para `/embed/<espacio>/<vista>[.svg]`. `resolveToken` no los reconoce (cualquier enlace con `viewId`
+  deja de ser una identidad): no valen para la API, el WebSocket ni para abrir el espacio. Sólo el dueño los crea, lista y
+  revoca; se borran con el espacio; pueden caducar (`expiresAt`). Un enlace de lectura normal `lnk_…` también vale en
+  `/embed/…` (da acceso a todo el espacio, así que la interfaz crea siempre uno de inserción).
+- **Cabeceras**: `/embed/*` es la **única** ruta que se deja incrustar: `Content-Security-Policy` propia
+  (`default-src 'none'; script-src 'nonce-…'; style-src 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self';
+  base-uri 'none'; form-action 'none'; frame-ancestors *`), **sin** `X-Frame-Options`, `Cross-Origin-Resource-Policy:
+  cross-origin`, `Referrer-Policy: no-referrer` (el token va en la URL: no se filtra al pulsar «Abrir en all-draw»), `X-Robots-Tag:
+  noindex` y `Cache-Control: no-store` (la página) o `private, no-cache` con `ETag` (el SVG). El resto de la app sigue con
+  `frame-ancestors 'self'` y `X-Frame-Options: SAMEORIGIN` (sin *clickjacking* del editor). El proxy no debe añadir esas
+  cabeceras a `/embed/*`.
+- **La página** es HTML generado en el servidor: el SVG del render (los textos del modelo ya van escapados) y un único
+  script en línea con `nonce`; los datos que se le pasan van como JSON con `<` escapado. El script sólo hace zoom,
+  desplazamiento y un `fetch` al propio origen (el `.svg`, cada 30 s, con `If-None-Match`) sin credenciales. «Abrir en
+  all-draw» lleva a `#/s/<espacio>/v/<vista>` **sin** el token de inserción (sí con el `lnk_…` si se entró con uno).
+- **oEmbed** (`GET /api/oembed?url=…&format=json`, público y con CORS `*`): sólo acepta URLs `/embed/…` **de este mismo
+  origen** con un token válido; si no, 404. No revela nada que la URL (con su token) no dé ya.
+- **Riesgo asumido**: quien tenga un enlace de inserción ve esa vista (y sus cambios) hasta que se revoca; Notion, GitHub
+  (camo) y otros guardan copias en caché un rato. Revocar corta las páginas incrustadas en el siguiente sondeo.
+
+### MCP remoto (`POST /mcp`, sólo Node)
+
+- Sólo `Authorization: Bearer adk_…` (API key): ni cookie (no hay CSRF posible desde un navegador), ni sesión, ni
+  enlaces. Sin clave válida → `401` con `WWW-Authenticate: Bearer`. Revocar la clave lo corta en la siguiente petición.
+- Sin estado (cada petición crea su servidor MCP) y con respuesta JSON; cuerpo máximo 4 MB (el del SDK).
+- Cada herramienta llama a la API REST **en el mismo proceso** con esa misma clave: mismas comprobaciones de rol, mismos
+  límites y el mismo registro. El MCP no añade permisos: no puede hacer nada que la clave no pueda hacer por REST.
+- En el worker no existe (copia de solo lectura; el SDK añadiría dependencias que no hacen falta).
+
+### Endpoints nuevos (integraciones)
+
+| Método y ruta | Quién | Notas |
+|---|---|---|
+| `GET/POST /api/workspaces/{id}/webhooks` | dueño (cuenta) | máx. 10; SSRF al registrar; el secreto sólo en la respuesta del `POST` |
+| `DELETE /api/workspaces/{id}/webhooks/{hid}` | dueño | |
+| `POST /api/workspaces/{id}/webhooks/{hid}/test` | dueño | `ping` síncrono, un intento; 20 cada 10 min |
+| `GET/POST /api/workspaces/{id}/embeds`, `DELETE …/embeds/{token}` | dueño (cuenta) | `emb_…` con vista; 30 cada 15 min |
+| `GET /api/oembed?url=…` | público | sólo URLs `/embed/…` propias con token válido |
+| `GET /embed/{id}/{vista}[.svg]?token=…` | token `emb_`/`lnk_` | incrustable; CSP propia |
+| `POST /mcp` | API key | sólo Node |
+
+### Variables nuevas
+
+| Variable | Por defecto | Nota |
+|---|---|---|
+| `WEBHOOKS_ALLOW_PRIVATE` | vacío | `1` = webhooks a `http:` y redes privadas. **Inseguro, sólo pruebas** (Node y worker) |
+| `WEBHOOKS_DEBOUNCE_MS` | `30000` | espera de `workspace.changed` (pruebas; Node y worker) |
+| `WEBHOOKS_RETRY_BASE_MS` | `2000` | primer reintento (pruebas; Node) |
+
+`PUBLIC_URL` pasa a ser recomendable: los avisos que nacen de una edición (`workspace.changed`, `comment.created`) no
+tienen una petición de la que deducir la dirección de «Abrir en all-draw».

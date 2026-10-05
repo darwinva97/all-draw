@@ -6,6 +6,7 @@ import { AppFooter, AppHeader, UserMenu } from './Chrome';
 import { formError } from './Auth';
 import { EmailPrefsSection, SessionsList, VerifyNotice } from './AccountExtras';
 import './pwa';
+import './integrations.css';
 
 /** Pantalla "Cuenta" (`#/keys`): claves API, cambio de contraseña y, para administradores, las cuentas del servidor. */
 export function KeysScreen() {
@@ -30,6 +31,7 @@ export function KeysScreen() {
       <h1>{t('Cuenta')}</h1>
       <h2>{t('Claves API')}</h2>
       <p className="lead">{t('Para agentes y scripts: cabecera')} <code>Authorization: Bearer &lt;{t('clave')}&gt;</code>. {t('Documentación en')} <a href="/api/openapi.json">/api/openapi.json</a>. {t('Servidor MCP:')} <code>pnpm --filter @all-draw/server mcp</code> {t('con')} <code>ALLDRAW_URL</code> {t('y')} <code>ALLDRAW_API_KEY</code>.</p>
+      <McpRemote apiKey={created?.key ?? null} />
       <form className="row" onSubmit={create}>
         <label htmlFor="key-name" className="visually-hidden">{t('Nombre de la clave')}</label>
         <input id="key-name" className="input" placeholder={t('Nombre de la clave')} maxLength={80} value={name} onChange={e => setName(e.target.value)} />
@@ -140,6 +142,32 @@ function AdminUsers({ meId }: { meId: string }) {
         </div>)}
       </div>
     </section>
+  );
+}
+
+/** MCP remoto (`POST /mcp`): configuración copiable para Claude Desktop, Claude Code y otros clientes. */
+function McpRemote({ apiKey }: { apiKey: string | null }) {
+  const t = useT();
+  const url = `${location.origin}/mcp`;
+  const key = apiKey ?? 'adk_…';
+  const json = JSON.stringify({ mcpServers: { 'all-draw': { type: 'http', url, headers: { Authorization: `Bearer ${key}` } } } }, null, 2);
+  const cli = `claude mcp add --transport http all-draw ${url} --header "Authorization: Bearer ${key}"`;
+  // Claude Desktop sólo arranca programas locales: el puente `mcp-remote` habla HTTP por él.
+  const desktop = JSON.stringify({ mcpServers: { 'all-draw': { command: 'npx', args: ['-y', 'mcp-remote', url, '--header', 'Authorization:${ALLDRAW_AUTH}'], env: { ALLDRAW_AUTH: `Bearer ${key}` } } } }, null, 2);
+  const copy = async (text: string) => { try { await navigator.clipboard?.writeText(text); toast.success(t('Configuración copiada')); } catch { toast.info(t('No se pudo copiar; selecciónalo y cópialo a mano')); } };
+  const block = (label: string, text: string, button: string) => <>
+    <p className="hint">{label}</p>
+    <pre className="code" tabIndex={0}>{text}</pre>
+    <div className="row"><button className="btn btn--sm" type="button" onClick={() => void copy(text)}><Icon name="copy" size={14} />{button}</button></div>
+  </>;
+  return (
+    <details className="account__mcp">
+      <summary>{t('MCP remoto: conectar un asistente de IA por HTTP')}</summary>
+      <p className="hint">{t('Sin instalar nada: el asistente se conecta a {url} con una de tus claves API.', { url })}</p>
+      {block(t('Claude Code (.mcp.json), Cursor y otros clientes con HTTP (en VS Code, la clave es «servers»):'), json, t('Copiar JSON'))}
+      {block(t('En Claude Code:'), cli, t('Copiar comando'))}
+      {block(t('Claude Desktop (claude_desktop_config.json, con el puente mcp-remote; necesita Node):'), desktop, t('Copiar JSON'))}
+    </details>
   );
 }
 

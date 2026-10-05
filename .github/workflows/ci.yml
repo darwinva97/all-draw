@@ -65,6 +65,57 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Regresión visual (e2e/visual.mjs): cada plantilla de la galería, en claro y oscuro, lienzo y SVG exportado.
+  # El antialiasing del texto cambia con la versión de chromium/Skia, y el runner no trae el mismo chromium que se usa en
+  # local para generar e2e/visual-baseline/, así que comparar con esas referencias obligaría a un umbral tan alto que
+  # dejaría pasar cambios reales (una etiqueta, una flecha). En su lugar, en este mismo runner y con las mismas fuentes
+  # (solo DejaVu, vía fontconfig propio), se construye el commit base (base del PR, o el anterior en main), se generan
+  # las referencias con él y se compara el build del commit con los umbrales estrictos por defecto.
+  # Un cambio visual intencionado se acepta actualizando sus referencias en el mismo commit (`pnpm e2e:visual:update`):
+  # las imágenes cuya referencia cambia en e2e/visual-baseline/ se pasan en ACCEPT y solo avisan.
+  visual:
+    name: regresión visual
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: fuentes fijas (DejaVu) y chromium del runner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+          sudo apt-get install -y --no-install-recommends fonts-dejavu-mono || true  # en versiones antiguas va en -core
+          echo "CHROME=$(which chromium chromium-browser google-chrome 2>/dev/null | head -1)" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with: { name: web-dist, path: apps/web/dist }
+      - name: build del commit base
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha || github.event.before }}"
+          git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || BASE_SHA=$(git rev-parse HEAD~1)
+          echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
+          git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
+          cd "$RUNNER_TEMP/base"
+          pnpm install --frozen-lockfile
+          pnpm --filter web build --outDir "$RUNNER_TEMP/base-dist" --emptyOutDir
+      - name: referencias con el build base
+        run: UPDATE=1 STATIC_DIR="$RUNNER_TEMP/base-dist" BASELINE_DIR="$RUNNER_TEMP/visual-baseline" node e2e/visual.mjs
+      - name: comparar el build del commit
+        run: |
+          ACCEPT=$(git diff --name-only "$BASE_SHA" HEAD -- e2e/visual-baseline | xargs -r -n1 basename | sed 's/\.png$//' | paste -sd, -)
+          [ -n "$ACCEPT" ] && echo "Referencias actualizadas en este cambio (se aceptan sus diferencias): $ACCEPT"
+          ACCEPT="$ACCEPT" MISSING=warn STATIC_DIR=apps/web/dist BASELINE_DIR="$RUNNER_TEMP/visual-baseline" node e2e/visual.mjs
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-diff
+          path: /tmp/visual-diff
+          if-no-files-found: ignore
+          retention-days: 14
+
   e2e:
     name: e2e (chromium del runner)
     needs: build

@@ -104,7 +104,7 @@ already created stay.
 
 ## Open in another dimension {#abrir-en-otra-dimension}
 
-![Node menu: open in another dimension, appears in, traces (Spanish interface)](../img/05-menu-dimension.png)
+![Node menu: open in another dimension, appears in, traces](../img/05-menu-dimension-en.png)
 
 1. **Right-click** a node (on touch screens, press and hold for half a second).
 2. The **Open in another dimension** section shows one entry per dimension, with its color.
@@ -133,7 +133,7 @@ The same menu also has:
 
 ## Detail views and the view path {#vistas-de-detalle}
 
-![BPMN view opened from the ArchiMate process, with the view path in the toolbar (Spanish interface)](../img/04-bpmn-detalle.png)
+![BPMN view opened from the ArchiMate process, with the view path in the toolbar](../img/04-bpmn-detalle-en.png)
 
 When you enter a detail (double-click, **Enter detail** or **Open in another dimension**), the top toolbar
 shows the **view path**: *Arquitectura · Alta de cliente › Alta de cliente · BPMN*, with the current

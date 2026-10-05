@@ -72,6 +72,8 @@ export function randomToken(prefix: string, bytes = 32): string {
 export const SESSION_PREFIX = 'ads_';
 export const APIKEY_PREFIX = 'adk_';
 export const LINK_PREFIX = 'lnk_';
+/** Enlaces de inserción (`/embed/…`): de lectura y con alcance a una vista; no son una identidad de la API. */
+export const EMBED_PREFIX = 'emb_';
 export const SESSION_COOKIE = 'alldraw_session';
 /** Caducidad deslizante: cada uso renueva 30 días (a lo sumo una vez por `SESSION_RENEW_MS`). */
 export const SESSION_DAYS = 30;
@@ -110,7 +112,8 @@ export async function resolveToken(ctx: AuthContext, token: string | null | unde
   }
   if (token.startsWith(LINK_PREFIX)) {
     const link = await ctx.store.resolveShareLink(token);
-    return link ? { kind: 'link', link } : null;
+    // Un enlace con alcance a una vista (inserción) nunca da acceso a la API ni al WebSocket.
+    return link && !link.viewId ? { kind: 'link', link } : null;
   }
   const h = await ctx.hash(token);
   const session = await ctx.store.getSession(h);

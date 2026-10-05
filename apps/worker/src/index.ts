@@ -7,6 +7,9 @@
  *   /.well-known/security.txt → contacto de seguridad (RFC 9116)
  *   /api/*, /healthz   → createApi (store RegistryDO o D1, docs → WorkspaceDO)
  *   /ws/<id>?token=    → autoriza aquí y reenvía el upgrade al DO con el rol y la identidad (usuario o enlace) en cabeceras
+ *   /embed/<id>/<vista>[.svg] → insertar diagramas en otras webs (`handleEmbed`; las únicas rutas que se dejan incrustar)
+ *
+ * El MCP remoto (`POST /mcp`) sólo existe en el servidor Node: ver `docs/manual/agentes-y-api.md`.
  *   resto              → ASSETS (fallback SPA)
  *
  * Antes de la API, el rate limit de Workers (`ratelimit.ts`, bindings opcionales). Con `STANDBY="true"` el worker es la
@@ -14,7 +17,7 @@
  * WebSocket entran como `viewer`.
  */
 import {
-  SAFE_ID, SECURITY_TXT_PATH, authorizeConnection, createApi, credentialsFromRequest, isTrustedOrigin, jsonLogger, makeHasher, parseLogLevel, requestHost,
+  SAFE_ID, SECURITY_TXT_PATH, authorizeConnection, handleEmbed, createApi, credentialsFromRequest, isTrustedOrigin, jsonLogger, makeHasher, parseLogLevel, requestHost,
   securityTxtResponse, withSecurityHeaders, type Hasher,
 } from '@all-draw/server-core';
 import { IMPORT_PATH, handleImport } from './admin-import';
@@ -22,6 +25,7 @@ import { RESET_PATH, handleReset } from './admin-reset';
 import { EXPIRES_HEADER, KEY_HEADER, LINK_HEADER, ROLE_HEADER, SESSION_HEADER, USER_HEADER, WORKSPACE_HEADER, WorkspaceDO } from './do';
 import { envInt, type Env } from './env';
 import { workerMailer, workerNotifier } from './mail-env';
+import { workerWebhooks } from './webhooks-env';
 import { checkRateLimit } from './ratelimit';
 import { RegistryDO } from './registry';
 import { RemoteDocHost } from './remote-host';
@@ -48,6 +52,8 @@ function boot(env: Env): Runtime {
   const mailer = workerMailer(env, logger);
   const api = createApi({
     store, hash, docs, mailer, notifier: workerNotifier(env, store),
+    // Webhooks: los eventos se envían desde el DO del espacio (`webhooks-env.ts`); nada en la copia de respaldo.
+    webhooks: workerWebhooks(env, store, docs),
     config: {
       allowRegistration: env.ALLOW_REGISTRATION !== 'false', cookieSecure: true, publicUrl: env.PUBLIC_URL || null, inviteCode: env.INVITE_CODE || null,
       ...optional('maxWorkspacesPerUser', envInt(env.MAX_WORKSPACES_PER_USER)), ...optional('maxDocBytes', envInt(env.MAX_DOC_BYTES)), ...optional('registerMinMs', envInt(env.REGISTER_MIN_MS)),
@@ -107,6 +113,10 @@ export default {
     if (url.pathname === SECURITY_TXT_PATH) return withSecurityHeaders(securityTxtResponse(env.PUBLIC_URL || url.origin), sec);
     if (url.pathname === RESET_PATH) return withSecurityHeaders(await handleReset(request, rt.store, env.RESET_CODE || null), sec);
     if (url.pathname === IMPORT_PATH) return withSecurityHeaders(await handleImport(request, { store: rt.store, hash: rt.hash, docs: rt.docs, importSecret: env.IMPORT_SECRET || null, standby: isStandby(env) }), sec);
+    if (url.pathname.startsWith('/embed/')) {
+      const res = await handleEmbed(request, { store: rt.store, docs: rt.docs, publicUrl: env.PUBLIC_URL || null, ...(isStandby(env) ? { standby: true } : {}) });
+      if (res) return withSecurityHeaders(res, { ...sec, embed: true });
+    }
     if (url.pathname === '/healthz' || url.pathname === '/api' || url.pathname.startsWith('/api/')) return withSecurityHeaders(await rt.api.fetch(request, env, ctx), sec);
     return withSecurityHeaders(await env.ASSETS.fetch(request), sec);
   },

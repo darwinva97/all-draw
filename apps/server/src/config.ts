@@ -46,6 +46,16 @@ export interface Config extends ApiConfig {
   mail: MailEnv;
   /** `REQUIRE_EMAIL_VERIFICATION=true`: hay que verificar el correo para crear espacios en el servidor (sólo con correo). */
   requireEmailVerification: boolean;
+  /**
+   * `WEBHOOKS_ALLOW_PRIVATE=1`: **sólo para pruebas, inseguro**. Los webhooks pueden ir a `http:`, `localhost` e IPs
+   * privadas (el receptor de `e2e/integrations.mjs`). En producción, cualquiera que cree un webhook podría hacer que el
+   * servidor llame a servicios internos (SSRF).
+   */
+  webhooksAllowPrivate: boolean;
+  /** `WEBHOOKS_RETRY_BASE_MS` (2000): espera antes del primer reintento (luego ×2). Para pruebas. */
+  webhooksRetryBaseMs: number;
+  /** `WEBHOOKS_DEBOUNCE_MS` (30000): espera de `workspace.changed` desde el último cambio. Para pruebas. */
+  webhooksDebounceMs: number;
 }
 
 const MAIL_KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'MAIL_HTTP_URL', 'MAIL_HTTP_TOKEN', 'MAIL_HTTP_FORMAT', 'MAIL_HTTP_TEMPLATE', 'MAIL_HTTP_AUTH_HEADER', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_SECURE'] as const;
@@ -83,5 +93,8 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
     production: env.NODE_ENV === 'production' || /^https:\/\//i.test(env.PUBLIC_URL ?? ''),
     mail: Object.fromEntries(MAIL_KEYS.filter(k => env[k] !== undefined).map(k => [k, env[k]])) as MailEnv,
     requireEmailVerification: env.REQUIRE_EMAIL_VERIFICATION === 'true',
+    webhooksAllowPrivate: env.WEBHOOKS_ALLOW_PRIVATE === '1' || env.WEBHOOKS_ALLOW_PRIVATE === 'true',
+    webhooksRetryBaseMs: int(env.WEBHOOKS_RETRY_BASE_MS, 2000),
+    webhooksDebounceMs: int(env.WEBHOOKS_DEBOUNCE_MS, 30_000),
   };
 }

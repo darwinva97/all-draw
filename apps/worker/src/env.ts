@@ -65,6 +65,13 @@ export interface Env {
   MAIL_HTTP_AUTH_HEADER?: string;
   /** `"true"`: hay que verificar el correo para crear espacios en el servidor (sólo con correo). */
   REQUIRE_EMAIL_VERIFICATION?: string;
+  /**
+   * `"1"`: **sólo pruebas, inseguro**. Webhooks a `http:` y a direcciones privadas (en Workers, además, Cloudflare no deja
+   * conectar con redes privadas). Ver `@all-draw/server-core/webhooks`.
+   */
+  WEBHOOKS_ALLOW_PRIVATE?: string;
+  /** Espera de `workspace.changed` desde el último cambio (ms, por defecto 30000). Para pruebas. */
+  WEBHOOKS_DEBOUNCE_MS?: string;
 }
 
 /** Entero de una variable (`undefined` si falta o no es un número ≥ 0). */

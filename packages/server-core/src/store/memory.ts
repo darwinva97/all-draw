@@ -1,7 +1,7 @@
 /** Adaptador en memoria: tests y pruebas rápidas. Referencia de semántica para los demás adaptadores. */
 import * as Y from 'yjs';
 import { newId } from '@all-draw/core';
-import { MAX_NOTIFICATIONS_PER_USER, type AccountToken, type AccountTokenKind, type ApiKey, type Member, type MemberRole, type Notification, type NotificationKind, type Role, type Session, type SessionMeta, type ShareLink, type Snapshot, type SnapshotMeta, type User, type UserPatch, type WorkspaceRow, type WorkspaceStore } from './types';
+import { MAX_NOTIFICATIONS_PER_USER, pushDelivery, type NewWebhook, type Webhook, type WebhookDelivery, type AccountToken, type AccountTokenKind, type ApiKey, type Member, type MemberRole, type Notification, type NotificationKind, type Role, type Session, type SessionMeta, type ShareLink, type Snapshot, type SnapshotMeta, type User, type UserPatch, type WorkspaceRow, type WorkspaceStore } from './types';
 
 const now = () => new Date().toISOString();
 
@@ -17,6 +17,7 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
   snapshots = new Map<string, Snapshot>();
   accountTokens = new Map<string, AccountToken>();
   notifications = new Map<string, Notification>();
+  webhooks = new Map<string, Webhook>();
 
   async createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string; locale?: string | null }): Promise<User> {
     const email = u.email.trim().toLowerCase();
@@ -153,6 +154,7 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     for (const [k, l] of this.links) if (l.workspaceId === id) this.links.delete(k);
     for (const [k, sn] of this.snapshots) if (sn.workspaceId === id) this.snapshots.delete(k);
     for (const [k, n] of this.notifications) if (n.workspaceId === id) this.notifications.delete(k);
+    for (const [k, h] of this.webhooks) if (h.workspaceId === id) this.webhooks.delete(k);
   }
 
   async loadDoc(id: string) {
@@ -185,8 +187,8 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     });
   }
 
-  async createShareLink(l: { workspaceId: string; role: MemberRole; createdBy: string; token: string; expiresAt?: string | null }): Promise<ShareLink> {
-    const link: ShareLink = { token: l.token, workspaceId: l.workspaceId, role: l.role, createdBy: l.createdBy, createdAt: now(), expiresAt: l.expiresAt ?? null };
+  async createShareLink(l: { workspaceId: string; role: MemberRole; createdBy: string; token: string; expiresAt?: string | null; viewId?: string | null }): Promise<ShareLink> {
+    const link: ShareLink = { token: l.token, workspaceId: l.workspaceId, role: l.role, createdBy: l.createdBy, createdAt: now(), expiresAt: l.expiresAt ?? null, viewId: l.viewId ?? null };
     this.links.set(link.token, link); return link;
   }
   async listShareLinks(workspaceId: string) { return [...this.links.values()].filter(l => l.workspaceId === workspaceId); }
@@ -196,6 +198,21 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     return l;
   }
   async deleteShareLink(workspaceId: string, token: string) { const l = this.links.get(token); if (!l || l.workspaceId !== workspaceId) return false; this.links.delete(token); return true; }
+
+  async createWebhook(w: NewWebhook): Promise<Webhook> {
+    const row: Webhook = { id: w.id ?? newId('whk'), workspaceId: w.workspaceId, url: w.url, events: [...w.events], format: w.format, lang: w.lang, secret: w.secret, createdBy: w.createdBy, createdAt: now(), deliveries: [] };
+    this.webhooks.set(row.id, row);
+    return structuredClone(row);
+  }
+  async listWebhooks(workspaceId: string) {
+    return [...this.webhooks.values()].filter(h => h.workspaceId === workspaceId).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).map(h => structuredClone(h));
+  }
+  async getWebhook(workspaceId: string, id: string) { const h = this.webhooks.get(id); return h && h.workspaceId === workspaceId ? structuredClone(h) : null; }
+  async deleteWebhook(workspaceId: string, id: string) { const h = this.webhooks.get(id); if (!h || h.workspaceId !== workspaceId) return false; this.webhooks.delete(id); return true; }
+  async recordWebhookDelivery(workspaceId: string, id: string, d: WebhookDelivery) {
+    const h = this.webhooks.get(id);
+    if (h && h.workspaceId === workspaceId) h.deliveries = pushDelivery(h.deliveries, { ...d });
+  }
 
   async createSnapshot(s: { workspaceId: string; authorId: string | null; label: string | null; data: Uint8Array; id?: string }): Promise<SnapshotMeta> {
     const snap: Snapshot = { id: s.id ?? newId('snp'), workspaceId: s.workspaceId, createdAt: now(), authorId: s.authorId, label: s.label, size: s.data.byteLength, data: s.data };

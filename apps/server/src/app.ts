@@ -2,6 +2,10 @@
  * Compone el `http.Server`: API Hono bajo `/api` y `/healthz`, estáticos de la app web con
  * fallback SPA para el resto, y WebSocket Yjs en `/ws/<workspaceId>?token=…` sobre el mismo servidor.
  *
+ * Integraciones: `/embed/<espacio>/<vista>[.svg]` (insertar diagramas en otras webs; las únicas rutas que se dejan
+ * incrustar), `POST /mcp` (MCP remoto con API key) y los webhooks (`WebhookDispatcher` con el transporte de Node, que
+ * comprueba la IP en el propio socket; `workspace.changed` se agrega 30 s con `ChangeAggregator`).
+ *
  * Además (producción): log de accesos JSON (una línea por petición), `/metrics` (Prometheus, sólo local o
  * con `METRICS_TOKEN`), `/.well-known/security.txt`, límites de WebSocket por IP y por espacio, timeouts
  * de cabeceras y cuerpos, y cierre ordenado (`close()`: deja de aceptar, cierra los sockets con 1012,
@@ -15,7 +19,7 @@ import { WebSocketServer } from 'ws';
 import { createApi } from './api';
 import { archiveWriter } from './archive';
 import {
-  Notifier, SAFE_ID, SECURITY_TXT_PATH, WS_EXPIRED_REASON, WS_REVOKED, authorizeConnection, closeConn, credentialsFromRequest, isTrustedOrigin, jsonLogger, mailerFromEnv, makeHasher, mentionContextOf,
+  ChangeAggregator, Notifier, SAFE_ID, WebhookDispatcher, changeEventData, commentEventData, handleEmbed, SECURITY_TXT_PATH, WS_EXPIRED_REASON, WS_REVOKED, authorizeConnection, closeConn, credentialsFromRequest, isTrustedOrigin, jsonLogger, mailerFromEnv, makeHasher, mentionContextOf,
   msUntil, parseTrustedProxies, redactPath, requestHost, resolveClientIp, safeEqualString, securityHeaders, securityTxt, truncateIp, type BuildInfo, type ConnIdentity, type Logger, type Mailer, type Principal,
 } from './auth';
 import { smtpMailer } from './smtp';
@@ -25,6 +29,8 @@ import { DocManager, LocalDocHost } from './docs';
 import { Metrics } from './metrics';
 import type { Role, WorkspaceStore } from './store/types';
 import { setupConnection } from './ysync';
+import { MCP_PATH, createMcpHttpHandler } from './mcp-http';
+import { nodeResolver, nodeTransport } from './webhook-transport';
 
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.map': 'application/json', '.txt': 'text/plain' };
 
@@ -45,6 +51,10 @@ export interface App {
   mailer: Mailer;
   metrics: Metrics;
   logger: Logger;
+  /** Webhooks (los tests esperan a `webhooks.idle()`). */
+  webhooks: WebhookDispatcher;
+  /** Agregador de `workspace.changed`. */
+  changes: ChangeAggregator;
   /** Deja de aceptar, cierra WebSockets (1012), guarda los documentos y para el servidor. */
   close(): Promise<void>;
 }
@@ -80,18 +90,37 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
   // Correo: lanza al arrancar si falta una variable (mejor no arrancar que creer que hay correo).
   const mailer = opts.mailer ?? mailerFromEnv(config.mail, { logger, production: config.production, makeSmtp: s => smtpMailer(s) });
   const notifier = new Notifier({ store, mailer, logger, publicUrl: config.publicUrl ?? `http://${config.host}:${config.port}` });
-  // Menciones en los comentarios nuevos de un espacio abierto (WebSocket o API): ver `notifications.ts`.
-  const docs = new DocManager(store, { maxDocBytes: config.maxDocBytes, onNewComments: (id, cs, live) => { void notifier.mentions(id, cs, mentionContextOf(live.doc)); } });
+  // Webhooks: sin `http:` ni direcciones privadas salvo `WEBHOOKS_ALLOW_PRIVATE` (sólo pruebas); nada en la copia de respaldo.
+  if (config.webhooksAllowPrivate) logger.warn('WEBHOOKS_ALLOW_PRIVATE activo: los webhooks pueden llamar a localhost y a redes privadas (sólo para pruebas)');
+  const policy = config.webhooksAllowPrivate ? { allowPrivate: true } : {};
+  const webhooks = new WebhookDispatcher({
+    store, logger, transport: nodeTransport(policy), resolve: nodeResolver(), ...policy, enabled: !config.standby,
+    publicUrl: config.publicUrl ?? `http://${config.host}:${config.port}`, retryBaseMs: config.webhooksRetryBaseMs,
+  });
+  const changes = new ChangeAggregator((id, summary) => { const data = changeEventData(summary); if (data) void webhooks.emit(id, 'workspace.changed', data); }, { debounceMs: config.webhooksDebounceMs });
+  // Menciones en los comentarios nuevos de un espacio abierto (WebSocket o API): ver `notifications.ts`. Y los webhooks
+  // `comment.created` y `workspace.changed` (este último agregado).
+  const docs = new DocManager(store, {
+    maxDocBytes: config.maxDocBytes,
+    onNewComments: (id, cs, live) => {
+      void notifier.mentions(id, cs, mentionContextOf(live.doc));
+      for (const c of cs) { const data = commentEventData(c); if (data) void webhooks.emit(id, 'comment.created', data); }
+    },
+    onChanges: (id, cs) => changes.add(id, cs),
+  });
   /** Identidad de cada petición (la resuelve la API) para el log de accesos. */
   const who = new WeakMap<http.IncomingMessage, string>();
   const userLabel = (p: Principal | null) => (p ? (p.kind === 'user' ? p.user.id : 'link') : 'anon');
   const api = createApi({
-    store, docs: new LocalDocHost(docs), hash, config, logger, build, mailer, notifier,
+    store, docs: new LocalDocHost(docs), hash, config, logger, build, mailer, notifier, webhooks,
     archiveWorkspace: archiveWriter(config.backupDir),
     clientIp: c => { const inc = (c.env as { incoming?: http.IncomingMessage } | undefined)?.incoming; return inc ? ipOf(inc) : 'unknown'; },
     onIdentity: (c, p) => { const inc = (c.env as { incoming?: http.IncomingMessage } | undefined)?.incoming; if (inc) who.set(inc, userLabel(p)); },
   });
   const apiListener = getRequestListener(api.fetch);
+  const docHost = new LocalDocHost(docs);
+  const embedListener = getRequestListener(async req => (await handleEmbed(req, { store, docs: docHost, publicUrl: config.publicUrl, ...(config.standby ? { standby: true } : {}) })) ?? new Response('ruta desconocida', { status: 404 }));
+  const mcpListener = getRequestListener(createMcpHttpHandler({ api, store, hash, logger, version: build.version }));
   const staticDir = path.resolve(config.staticDir);
   const isHttps = (req: http.IncomingMessage) => config.cookieSecure || req.headers['x-forwarded-proto'] === 'https';
   const headersOf = (req: http.IncomingMessage) => ({ get: (n: string) => { const v = req.headers[n.toLowerCase()]; return (Array.isArray(v) ? v[0] : v) ?? null; } });
@@ -155,6 +184,15 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
     if (u === SECURITY_TXT_PATH) {
       res.writeHead(200, { ...secHeaders(req), 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=86400' });
       return res.end(securityTxt(publicBase(req)));
+    }
+    if (u.startsWith('/embed/')) {
+      // Única ruta que otras webs pueden incrustar: sus cabeceras (`frame-ancestors *`, CSP con nonce) las pone `handleEmbed`.
+      for (const [k, v] of Object.entries(securityHeaders({ https: isHttps(req), host: hostOf(req), embed: true }))) res.setHeader(k, v);
+      return embedListener(req, res);
+    }
+    if (u === MCP_PATH || u.startsWith(`${MCP_PATH}?`)) {
+      for (const [k, v] of Object.entries(secHeaders(req))) res.setHeader(k, v);
+      return mcpListener(req, res);
     }
     if (u === '/healthz' || u.startsWith('/api/') || u === '/api') {
       for (const [k, v] of Object.entries(secHeaders(req))) res.setHeader(k, v);
@@ -237,11 +275,13 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
   });
 
   return {
-    server, docs, metrics, logger, mailer,
+    server, docs, metrics, logger, mailer, webhooks, changes,
     async close() {
       if (draining) return;
       draining = true;
       clearInterval(purge);
+      // Los `workspace.changed` pendientes salen ya (con un margen corto para entregarse).
+      changes.flushAll();
       // 1. No más conexiones nuevas (las ya abiertas siguen hasta acabar o hasta el timeout).
       const closed = new Promise<void>(r => server.close(() => r()));
       // 2. Clientes WebSocket: cierre 1012 (reconectarán contra el proceso nuevo) y docs guardados.
@@ -254,6 +294,7 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
       const force = setTimeout(() => server.closeAllConnections(), 3000);
       await closed;
       clearTimeout(force);
+      await Promise.race([webhooks.idle(), new Promise(r => setTimeout(r, 2000).unref())]);
     },
   };
 }

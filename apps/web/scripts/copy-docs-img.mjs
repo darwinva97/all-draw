@@ -4,6 +4,10 @@
  * (`/docs-img/…`) tanto en desarrollo como en producción. Se ejecuta en `prebuild`; tras añadir imágenes al manual,
  * lánzalo a mano para verlas con `pnpm dev`: `node apps/web/scripts/copy-docs-img.mjs`.
  * Sincroniza: borra de destino lo que ya no existe en origen.
+ *
+ * Capturas por idioma, todas en `docs/manual/img/` (las genera `e2e/manual-shots.mjs`): `NN-nombre.png` con la interfaz
+ * en español y `NN-nombre-en.png` en inglés (las enlaza `docs/manual/en/**`). No van en `docs/manual/en/img/`: el visor
+ * resuelve `en/img/x.png` a `/docs-img/x.png`, la misma dirección que la española.
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';

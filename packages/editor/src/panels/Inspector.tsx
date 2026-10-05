@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { relationsOfElement, viewsOfElement, type Element, type FieldDef, type KeyValue, type Relation, type ViewNode } from '@all-draw/core';
 import { tn, useT } from '@all-draw/i18n';
 import { useEditor } from '../context';
@@ -272,12 +272,14 @@ function PeopleSection({ elementId }: { elementId: string }) {
 // ---------------------------------------------------------------- editores de campos
 export function FieldEditor({ def, value, onChange, disabled }: { def: FieldDef; value: unknown; onChange: (v: unknown) => void; disabled?: boolean }) {
   const t = useT();
-  const common = { className: 'ad-input', disabled };
+  const helpId = useId();
+  const help = def.doc?.trim();
+  const common = { className: 'ad-input', disabled, 'aria-describedby': help ? helpId : undefined };
   let input: React.ReactNode;
   switch (def.kind) {
     case 'textarea': case 'json': input = <textarea {...common} rows={def.kind === 'json' ? 5 : 3} value={String(value ?? '')} onChange={e => onChange(e.target.value)} spellCheck={false} style={def.kind === 'json' ? { fontFamily: 'monospace' } : undefined} />; break;
     case 'number': input = <input {...common} type="number" value={value === undefined || value === null ? '' : String(value)} onChange={e => onChange(e.target.value === '' ? undefined : Number(e.target.value))} />; break;
-    case 'checkbox': input = <input type="checkbox" disabled={disabled} checked={!!value} onChange={e => onChange(e.target.checked)} />; break;
+    case 'checkbox': input = <input type="checkbox" disabled={disabled} aria-describedby={common['aria-describedby']} checked={!!value} onChange={e => onChange(e.target.checked)} />; break;
     case 'date': input = <input {...common} type="date" value={String(value ?? '')} onChange={e => onChange(e.target.value)} />; break;
     case 'url': input = <input {...common} type="url" value={String(value ?? '')} onChange={e => onChange(e.target.value)} />; break;
     case 'select': {
@@ -292,7 +294,12 @@ export function FieldEditor({ def, value, onChange, disabled }: { def: FieldDef;
     default: input = <input {...common} value={String(value ?? '')} onChange={e => onChange(e.target.value)} />;
   }
   const isPin = def.port ?? ['json', 'list', 'keyvalue'].includes(def.kind);
-  return <label className={`ad-field ${def.kind === 'checkbox' ? 'ad-field--inline' : ''}`}><span>{def.label}{isPin && <small className="ad-pin-mark" title={t('Genera pines')}><Icon name="pin" size={12} /></small>}</span>{input}</label>;
+  // Ayuda del campo (`FieldDef.doc`): texto bajo el campo (asociado con `aria-describedby`) e icono con la misma ayuda.
+  return <label className={`ad-field ${def.kind === 'checkbox' ? 'ad-field--inline' : ''}`}>
+    <span className="ad-field__label">{def.label}{isPin && <small className="ad-pin-mark" title={t('Genera pines')}><Icon name="pin" size={12} /></small>}{help && <small className="ad-field__info" title={help} aria-hidden="true"><Icon name="info" size={12} /></small>}</span>
+    {input}
+    {help && <small id={helpId} className="ad-field__help">{help}</small>}
+  </label>;
 }
 
 function ListEditor({ value, onChange, disabled }: { value: string[]; onChange: (v: string[]) => void; disabled?: boolean }) {

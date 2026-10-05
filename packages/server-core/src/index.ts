@@ -19,6 +19,8 @@ export * from './mail';
 export * from './mail-templates';
 export * from './devices';
 export * from './notifications';
+export * from './webhooks';
+export * from './embed';
 export { RESET_PREFIX as RESET_TOKEN_PREFIX, VERIFY_PREFIX as VERIFY_TOKEN_PREFIX, RESET_TTL_MS, VERIFY_TTL_MS, DEFAULT_FORGOT_MIN_MS, background } from './api-accounts';
 export {
   createApi, SESSION_TOUCH_MS, DEFAULT_MAX_DOC_BYTES, DEFAULT_MAX_WORKSPACES_PER_USER, DEFAULT_REGISTER_MIN_MS, MAX_BODY_CLIENT_ERROR,

@@ -8,7 +8,7 @@
 import pg from 'pg';
 import * as Y from 'yjs';
 import { newId } from '@all-draw/core';
-import { MAX_NOTIFICATIONS_PER_USER, applyUserPatch, type AccountToken, type AccountTokenKind, type ApiKey, type Member, type MemberRole, type Notification, type NotificationKind, type Role, type Session, type SessionMeta, type ShareLink, type Snapshot, type SnapshotMeta, type User, type UserPatch, type WorkspaceRow, type WorkspaceStore } from '@all-draw/server-core';
+import { MAX_NOTIFICATIONS_PER_USER, applyUserPatch, pushDelivery, webhookFromRow, type NewWebhook, type Webhook, type WebhookDelivery, type AccountToken, type AccountTokenKind, type ApiKey, type Member, type MemberRole, type Notification, type NotificationKind, type Role, type Session, type SessionMeta, type ShareLink, type Snapshot, type SnapshotMeta, type User, type UserPatch, type WorkspaceRow, type WorkspaceStore } from '@all-draw/server-core';
 
 const { Pool } = pg;
 const now = () => new Date().toISOString();
@@ -124,6 +124,23 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, created_at);
   `,
+  // v5 — integraciones: enlaces de inserción por vista y webhooks por espacio (= sqlite.ts v5)
+  `
+  ALTER TABLE share_links ADD COLUMN IF NOT EXISTS view_id TEXT;
+  CREATE TABLE IF NOT EXISTS webhooks (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    events TEXT NOT NULL,
+    format TEXT NOT NULL,
+    lang TEXT NOT NULL DEFAULT 'es',
+    secret TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    deliveries TEXT NOT NULL DEFAULT '[]'
+  );
+  CREATE INDEX IF NOT EXISTS webhooks_ws ON webhooks(workspace_id, created_at);
+  `,
 ];
 
 type Row = Record<string, unknown>;
@@ -157,7 +174,7 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
 
   /** Vacía todas las tablas (sólo para tests). */
   async truncateAll() {
-    await this.pool.query('TRUNCATE users, sessions, api_keys, workspaces, workspace_members, share_links, docs, doc_updates, snapshots, account_tokens, notifications CASCADE');
+    await this.pool.query('TRUNCATE users, sessions, api_keys, workspaces, workspace_members, share_links, docs, doc_updates, snapshots, account_tokens, notifications, webhooks CASCADE');
   }
 
   private async one<T = Row>(sql: string, params: unknown[] = []): Promise<T | null> { return ((await this.pool.query(sql, params)).rows[0] as T | undefined) ?? null; }
@@ -185,7 +202,7 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
     return r ? { id: r.id as string, userId: r.user_id as string, name: r.name as string, prefix: r.prefix as string, keyHash: r.key_hash as string, createdAt: r.created_at as string, lastUsedAt: (r.last_used_at as string | null) ?? null } : null;
   }
   private link(r: Row | null): ShareLink | null {
-    return r ? { token: r.token as string, workspaceId: r.workspace_id as string, role: r.role as MemberRole, createdBy: r.created_by as string, createdAt: r.created_at as string, expiresAt: (r.expires_at as string | null) ?? null } : null;
+    return r ? { token: r.token as string, workspaceId: r.workspace_id as string, role: r.role as MemberRole, createdBy: r.created_by as string, createdAt: r.created_at as string, expiresAt: (r.expires_at as string | null) ?? null, viewId: (r.view_id as string | null) ?? null } : null;
   }
   private snapshotMeta(r: Row): SnapshotMeta {
     return { id: r.id as string, workspaceId: r.workspace_id as string, createdAt: r.created_at as string, authorId: (r.author_id as string | null) ?? null, label: (r.label as string | null) ?? null, size: Number(r.size) };
@@ -361,9 +378,9 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
     } satisfies Member & { user: Pick<User, 'id' | 'email' | 'name'> | null }));
   }
 
-  async createShareLink(l: { workspaceId: string; role: MemberRole; createdBy: string; token: string; expiresAt?: string | null }): Promise<ShareLink> {
-    const link: ShareLink = { token: l.token, workspaceId: l.workspaceId, role: l.role, createdBy: l.createdBy, createdAt: now(), expiresAt: l.expiresAt ?? null };
-    await this.run('INSERT INTO share_links (token, workspace_id, role, created_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6)', [link.token, link.workspaceId, link.role, link.createdBy, link.createdAt, link.expiresAt]);
+  async createShareLink(l: { workspaceId: string; role: MemberRole; createdBy: string; token: string; expiresAt?: string | null; viewId?: string | null }): Promise<ShareLink> {
+    const link: ShareLink = { token: l.token, workspaceId: l.workspaceId, role: l.role, createdBy: l.createdBy, createdAt: now(), expiresAt: l.expiresAt ?? null, viewId: l.viewId ?? null };
+    await this.run('INSERT INTO share_links (token, workspace_id, role, created_by, created_at, expires_at, view_id) VALUES ($1, $2, $3, $4, $5, $6, $7)', [link.token, link.workspaceId, link.role, link.createdBy, link.createdAt, link.expiresAt, link.viewId]);
     return link;
   }
   async listShareLinks(workspaceId: string) { return (await this.all('SELECT * FROM share_links WHERE workspace_id = $1 ORDER BY created_at', [workspaceId])).map(r => this.link(r)!); }
@@ -374,6 +391,19 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
     return l;
   }
   async deleteShareLink(workspaceId: string, token: string) { return (await this.run('DELETE FROM share_links WHERE token = $1 AND workspace_id = $2', [token, workspaceId])) > 0; }
+
+  async createWebhook(w: NewWebhook): Promise<Webhook> {
+    const row: Webhook = { id: w.id ?? newId('whk'), workspaceId: w.workspaceId, url: w.url, events: [...w.events], format: w.format, lang: w.lang, secret: w.secret, createdBy: w.createdBy, createdAt: now(), deliveries: [] };
+    await this.run('INSERT INTO webhooks (id, workspace_id, url, events, format, lang, secret, created_by, created_at, deliveries) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)', [row.id, row.workspaceId, row.url, JSON.stringify(row.events), row.format, row.lang, row.secret, row.createdBy, row.createdAt, '[]']);
+    return row;
+  }
+  async listWebhooks(workspaceId: string) { return (await this.all('SELECT * FROM webhooks WHERE workspace_id = $1 ORDER BY created_at, id', [workspaceId])).map(webhookFromRow); }
+  async getWebhook(workspaceId: string, id: string) { const r = await this.one('SELECT * FROM webhooks WHERE id = $1 AND workspace_id = $2', [id, workspaceId]); return r ? webhookFromRow(r) : null; }
+  async deleteWebhook(workspaceId: string, id: string) { return (await this.run('DELETE FROM webhooks WHERE id = $1 AND workspace_id = $2', [id, workspaceId])) > 0; }
+  async recordWebhookDelivery(workspaceId: string, id: string, d: WebhookDelivery) {
+    const h = await this.getWebhook(workspaceId, id);
+    if (h) await this.run('UPDATE webhooks SET deliveries = $1 WHERE id = $2', [JSON.stringify(pushDelivery(h.deliveries, d)), id]);
+  }
 
   async createSnapshot(s: { workspaceId: string; authorId: string | null; label: string | null; data: Uint8Array; id?: string }): Promise<SnapshotMeta> {
     const meta: SnapshotMeta = { id: s.id ?? newId('snp'), workspaceId: s.workspaceId, createdAt: now(), authorId: s.authorId, label: s.label, size: s.data.byteLength };

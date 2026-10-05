@@ -35,6 +35,11 @@ import { filterBpmnConnections } from './bpmn-rules';
 import { compartmentHeight } from './nodes/compartments';
 import { darken } from './nodes/shapes';
 import { groupRelationOptions, pruneBridges, explainNoRelation, type RelationGroups } from './edges/relation-options';
+import { LiteEdge, type LiteEdgeData } from './edges/LiteEdge';
+import { creatableTargets, type CreateCandidate } from './edges/connect-assist';
+import { ConnectFeedback, CreateConnectMenu, type ConnectFeedbackVerdict } from './panels/ConnectAssist';
+import { noteTypeUsed, recentTypes } from './prefs';
+import { WelcomeNote, WELCOME_PROP } from './panels/WelcomeNote';
 import { toast } from './ui/toast';
 import { Icon } from './icons';
 
@@ -42,7 +47,7 @@ export const CELL_PREFIX = 'cell:';
 const isCellId = (id: string | undefined | null) => !!id && id.startsWith(CELL_PREFIX);
 
 const nodeTypes = { element: ElementNode, visual: VisualNode, lifeline: LifelineNode, activation: ActivationNode, fragment: FragmentNode, ganttGrid: GanttGridNode, ganttScale: GanttScaleNode, ganttBar: GanttBarNode };
-const edgeTypes = { relation: RelationEdge, sequenceMessage: SequenceMessageEdge, ganttDep: GanttDependencyEdge };
+const edgeTypes = { relation: RelationEdge, relationLite: LiteEdge, sequenceMessage: SequenceMessageEdge, ganttDep: GanttDependencyEdge };
 
 export const DND_TYPE = 'application/x-all-draw-type';
 export const DND_TEMPLATE = 'application/x-all-draw-template';
@@ -53,6 +58,14 @@ export const DND_VISUAL = 'application/x-all-draw-visual';
 export const SNAP_GRID: [number, number] = [8, 8];
 /** A partir de tantos nodos en la vista, React Flow solo monta los que caen dentro del viewport. */
 export const VIRTUALIZE_FROM = 300;
+/**
+ * Montaje por tandas: con más de `BATCH_FROM` nodos, al abrir la vista se monta primero una tanda de `BATCH_FIRST`
+ * (los más cercanos al centro de lo que se ve) y después `BATCH_STEP` más en cada frame; mientras tanto, los que faltan
+ * se ven como siluetas. Así el primer frame llega pronto y entre tandas el navegador atiende la entrada.
+ */
+export const BATCH_FROM = 150;
+export const BATCH_FIRST = 60;
+export const BATCH_STEP = 150;
 
 export interface CanvasProps {
   /** La app conecta aquí su layout automático (menú del lienzo y paleta de comandos). */
@@ -70,6 +83,11 @@ export function Canvas(props: CanvasProps) {
 }
 
 interface Picker { x: number; y: number; groups: RelationGroups; onPick: (typeId: string) => void }
+interface CreateMenu { x: number; y: number; flow: { x: number; y: number }; sourceId: string; fromHandle: string | null; candidates: CreateCandidate[] }
+/** Silueta de un nodo que aún no se ha montado (montaje por tandas). */
+interface Ghost { id: string; x: number; y: number; w: number; h: number; color: string }
+/** Orden de montaje de una vista grande: ids por cercanía al centro visible, padre de cada uno y siluetas. */
+interface BatchPlan { order: string[]; all: Set<string>; parent: Map<string, string>; ghosts: Ghost[] }
 interface LiveBox { x?: number; y?: number; w?: number; h?: number }
 
 function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: CanvasShared }) {
@@ -86,6 +104,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
   const gantt = useGanttCanvas(view, { nodes: nodesVersion, edges: edgesVersion });
   const rf = useReactFlow();
   const [picker, setPicker] = useState<Picker | null>(null);
+  const [createMenu, setCreateMenu] = useState<CreateMenu | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number; flow: { x: number; y: number } } | null>(null);
   const [edgeMenu, setEdgeMenu] = useState<{ x: number; y: number; edgeId: string } | null>(null);
@@ -208,38 +227,6 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     return out;
   }, [nodesVersion, viewId, view, store, registry, selection.nodes, readOnly, elementsVersion, live, remoteSel, effectiveTheme, seq, gantt, renaming, styleOf, portsOf, libraries]);
 
-  const rfEdges = useMemo<Edge[]>(() => {
-    if (!viewId) return [];
-    const prev = edgeCache.current;
-    const next = new Map<string, Edge>();
-    const ids = new Set(rfNodes.map(n => n.id));
-    const selectedIds = new Set(selection.edges);
-    const nameOf = (nodeId: string) => {
-      const vn = store.get('nodes', nodeId); const el = vn?.elementId ? store.get('elements', vn.elementId) : undefined;
-      return el ? (el.name || registry.elementType(el.typeId)?.name || '') : vn?.text ?? '';
-    };
-    const out = indexOf(store).edgesOfView(viewId).filter(e => ids.has(e.fromNodeId) && ids.has(e.toNodeId)).map(e => {
-      const selected = selectedIds.has(e.id);
-      const old = prev.get(e.id);
-      // Lector de pantalla: «origen → destino (tipo)» en vez de «Edge from vn_… to vn_…».
-      const rel = e.relationId ? store.get('relations', e.relationId) : undefined;
-      const typeName = rel ? registry.relationType(rel.typeId)?.name ?? rel.typeId : '';
-      const ariaLabel = `${nameOf(e.fromNodeId)} → ${nameOf(e.toNodeId)}${typeName ? ` (${typeName})` : ''}${rel?.name ? ` «${rel.name}»` : ''}`;
-      // Misma arista del modelo y misma selección: el mismo objeto (las de secuencia se decoran de nuevo cada vez).
-      if (!seq.active && old && (old.data as { edge?: unknown }).edge === e && old.selected === selected && old.ariaLabel === ariaLabel) { next.set(e.id, old); return old; }
-      const base: Edge = {
-        id: e.id, type: 'relation', source: e.fromNodeId, target: e.toNodeId,
-        sourceHandle: e.fromPortId ?? '', targetHandle: e.toPortId ?? '',
-        data: { edge: e }, selected, ariaLabel,
-      };
-      const out = seq.active ? seq.decorateEdge(e, base) : gantt.active ? gantt.decorateEdge(e, base) : base;
-      next.set(e.id, out);
-      return out;
-    });
-    edgeCache.current = next;
-    return out;
-  }, [edgesVersion, store, registry, viewId, rfNodes, selection.edges, seq, gantt, elementsVersion]);
-
   // ---------------------------------------------------------------- cambio de vista
   /**
    * Cada vista monta su propio `ReactFlowProvider` (`key={viewId}` en `Canvas`), con un almacén nuevo. Con un solo
@@ -273,14 +260,89 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
   const lowZoom = useStore(s => (s.domNode ? s.transform[2] : initialViewport?.zoom ?? 1) < LOW_DETAIL_ZOOM);
   const nodeEnv = useMemo<NodeEnv>(() => ({ registry, readOnly, dark: effectiveTheme === 'dark', lowDetail: lowZoom, run, setRenaming }), [registry, readOnly, effectiveTheme, lowZoom, run, setRenaming]);
 
+  // ---------------------------------------------------------------- montaje por tandas (vistas grandes)
+  /** Plan de montaje: se calcula una vez al abrir la vista (con su encuadre inicial). */
+  const batchPlan = useMemo<BatchPlan | null>(() => {
+    if (!viewId || !view || !size || !initialViewport || view.kind === 'grid' || view.kind === 'sequence' || view.kind === 'gantt') return null;
+    if (rfNodes.length <= BATCH_FROM) return null;
+    const colorOf = (n: Node) => { const el = (n.data as Partial<ElementNodeData>).element; return (el && registry.elementType(el.typeId)?.color) || (effectiveTheme === 'dark' ? '#3a4150' : '#dddddd'); };
+    return planBatches(rfNodes, initialViewport, size, colorOf);
+  }, [viewId, !!size]); // eslint-disable-line react-hooks/exhaustive-deps -- solo al abrir la vista
+  const [mountLimit, setMountLimit] = useState(BATCH_FIRST);
+  const mounting = !!batchPlan && mountLimit < batchPlan.order.length;
+  const mountingRef = useRef(mounting); mountingRef.current = mounting;
+  const allowed = useMemo(() => (batchPlan && mounting ? mountSet(batchPlan, mountLimit) : null), [batchPlan, mounting, mountLimit]);
+  /** Nodos que se entregan a React Flow: todos, o los de las tandas ya montadas (y los nuevos, que no están en el plan). */
+  const shownNodes = useMemo(() => {
+    if (!allowed || !batchPlan) return rfNodes;
+    return rfNodes.filter(n => allowed.has(n.id) || !batchPlan.all.has(n.id));
+  }, [rfNodes, allowed, batchPlan]);
+  const ghosts = useMemo(() => (allowed && batchPlan ? batchPlan.ghosts.filter(g => !allowed.has(g.id)) : null), [allowed, batchPlan]);
+  useEffect(() => {
+    if (!mounting) return;
+    // Tras pintar el frame de esta tanda (rAF + tarea), la siguiente.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const raf = requestAnimationFrame(() => { timer = setTimeout(() => setMountLimit(l => l + BATCH_STEP), 0); });
+    return () => { cancelAnimationFrame(raf); if (timer) clearTimeout(timer); };
+  }, [mounting, mountLimit]);
+
+  const rfEdges = useMemo<Edge[]>(() => {
+    if (!viewId) return [];
+    const prev = edgeCache.current;
+    const next = new Map<string, Edge>();
+    const ids = new Set(shownNodes.map(n => n.id));
+    // Zoom bajo: aristas simplificadas (`LiteEdge`), salvo en secuencia y Gantt, que pintan las suyas.
+    const lite = lowZoom && !seq.active && !gantt.active;
+    const dark = effectiveTheme === 'dark';
+    const selectedIds = new Set(selection.edges);
+    const nameOf = (nodeId: string) => {
+      const vn = store.get('nodes', nodeId); const el = vn?.elementId ? store.get('elements', vn.elementId) : undefined;
+      return el ? (el.name || registry.elementType(el.typeId)?.name || '') : vn?.text ?? '';
+    };
+    const out = indexOf(store).edgesOfView(viewId).filter(e => ids.has(e.fromNodeId) && ids.has(e.toNodeId)).map(e => {
+      const selected = selectedIds.has(e.id);
+      const old = prev.get(e.id);
+      // Lector de pantalla: «origen → destino (tipo)» en vez de «Edge from vn_… to vn_…».
+      const rel = e.relationId ? store.get('relations', e.relationId) : undefined;
+      const typeName = rel ? registry.relationType(rel.typeId)?.name ?? rel.typeId : '';
+      const ariaLabel = `${nameOf(e.fromNodeId)} → ${nameOf(e.toNodeId)}${typeName ? ` (${typeName})` : ''}${rel?.name ? ` «${rel.name}»` : ''}`;
+      // Misma arista del modelo y misma selección: el mismo objeto (las de secuencia se decoran de nuevo cada vez).
+      let data: { edge: typeof e } | LiteEdgeData = { edge: e };
+      if (lite) {
+        const rt = rel ? registry.relationType(rel.typeId) : undefined;
+        const line = e.style.line ?? rt?.line;
+        data = { edge: e, color: e.style.color ?? rt?.color ?? (dark ? '#9aa3b2' : '#444'), dash: line === 'dashed' ? '8 5' : line === 'dotted' ? '2 4' : undefined };
+      }
+      const type = lite ? 'relationLite' : 'relation';
+      const od = old?.data as Partial<LiteEdgeData> | undefined;
+      if (!seq.active && old && old.type === type && od?.edge === e && od.color === (data as Partial<LiteEdgeData>).color && old.selected === selected && old.ariaLabel === ariaLabel) { next.set(e.id, old); return old; }
+      const base: Edge = {
+        id: e.id, type, source: e.fromNodeId, target: e.toNodeId,
+        sourceHandle: e.fromPortId ?? '', targetHandle: e.toPortId ?? '',
+        data, selected, ariaLabel,
+      };
+      const out = seq.active ? seq.decorateEdge(e, base) : gantt.active ? gantt.decorateEdge(e, base) : base;
+      next.set(e.id, out);
+      return out;
+    });
+    edgeCache.current = next;
+    return out;
+  }, [edgesVersion, store, registry, viewId, shownNodes, selection.edges, seq, gantt, elementsVersion, lowZoom, effectiveTheme]);
+
+
   // ---------------------------------------------------------------- API del lienzo para otros paneles
   const fitOptions = useCallback(() => {
     const el = wrapper.current;
     return { duration: 300, padding: fitPadding(el?.clientWidth ?? 0, el?.clientHeight ?? 0, minimapShown()), maxZoom: FIT_MAX_ZOOM };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const fitNodes = useCallback((nodeIds?: string[]) => {
-    if (nodeIds?.length) rf.fitView({ nodes: nodeIds.map(id => ({ id })), duration: 300, padding: 0.4, maxZoom: 1.5 });
-    else rf.fitView(fitOptions());
+    const fit = () => {
+      if (nodeIds?.length) rf.fitView({ nodes: nodeIds.map(id => ({ id })), duration: 300, padding: 0.4, maxZoom: 1.5 });
+      else rf.fitView(fitOptions());
+    };
+    // Aún montando por tandas: se monta todo y se encuadra cuando React Flow ya conoce los nodos.
+    if (mountingRef.current) { setMountLimit(Number.MAX_SAFE_INTEGER); requestAnimationFrame(() => requestAnimationFrame(fit)); }
+    else fit();
   }, [rf, fitOptions]);
   const selectAll = useCallback(() => {
     if (!viewId) return;
@@ -433,8 +495,9 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     // Entre tipos de una notación con matriz, las genéricas (enlace, traza…) no salvan una relación que la matriz prohíbe.
     opts = pruneBridges(registry, ea.typeId, eb.typeId, opts, viaPorts);
     if (detail) detail.matrix = opts;
-    // BPMN: flujo de secuencia solo dentro de la misma pool; flujo de mensaje solo entre pools distintas.
-    return filterBpmnConnections(store, c.source, c.target, opts);
+    // BPMN: flujo de secuencia solo dentro de la misma pool; flujo de mensaje solo entre pools distintas. Si eso deja
+    // solo las genéricas (enlace, traza…), tampoco valen: la matriz no las salva (como en `pruneBridges`).
+    return pruneBridges(registry, ea.typeId, eb.typeId, filterBpmnConnections(store, c.source, c.target, opts), viaPorts);
   }
 
   const onConnectEnd = useCallback<OnConnectEnd>((event, state: FinalConnectionState) => {
@@ -448,8 +511,10 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     const sourceId = from ?? state.fromNode.id;
     const byHandle = state.isValid && state.toNode && state.toNode.id !== sourceId ? state.toNode.id : undefined;
     const targetId = byHandle ?? (pt ? nodeAtPoint(pt.x, pt.y, sourceId) : undefined);
-    if (!targetId || isCellId(targetId) || !store.get('nodes', targetId)?.elementId) return;
     const fromHandle = state.fromHandle && state.fromNode.id === sourceId ? state.fromHandle.id ?? null : null;
+    // Soltar en un hueco vacío: «Crear y conectar» con los tipos que admiten la relación desde el origen.
+    if (!targetId && pt && canCreateConnect && !overAnyNode(pt.x, pt.y) && insideCanvas(wrapper.current, pt)) { openCreateMenu(sourceId, fromHandle, pt); return; }
+    if (!targetId || isCellId(targetId) || !store.get('nodes', targetId)?.elementId) return;
     const c: Connection = { source: sourceId, target: targetId, sourceHandle: fromHandle || null, targetHandle: byHandle ? state.toHandle?.id || null : null };
     const detail = { matrix: [] as string[] };
     const opts = relationOptions(c, detail);
@@ -469,7 +534,57 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     const def = view ? registry.pack(view.notationId)?.defaultRelation : undefined;
     if (opts.length === 1) create(opts[0]!);
     else setPicker({ x: pt?.x ?? 0, y: pt?.y ?? 0, groups: groupRelationOptions(registry, opts, ea.typeId, def), onPick: create });
-  }, [store, registry, run, viewId, view, readOnly, seq, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [store, registry, run, viewId, view, readOnly, seq, t, rf]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** «Crear y conectar» solo donde el lienzo coloca nodos libremente (no en secuencia ni en Gantt). */
+  const canCreateConnect = !readOnly && !seq.active && !gantt.active;
+  const openCreateMenu = (sourceId: string, fromHandle: string | null, pt: { x: number; y: number }) => {
+    const src = store.get('nodes', sourceId); const ea = src?.elementId ? store.get('elements', src.elementId) : undefined;
+    if (!ea || !view) return;
+    const usage = new Map<string, number>();
+    for (const e of store.list('elements')) usage.set(e.typeId, (usage.get(e.typeId) ?? 0) + 1);
+    const libraryTypes = store.list('libraries').flatMap(l => l.elementTypes.map(x => registry.elementType(x.id) ?? x));
+    const candidates = creatableTargets(registry, ea.typeId, view.notationId, view.viewpointId, { libraryTypes, usage, recent: recentTypes() });
+    if (!candidates.length) {
+      toast.info(t('«{from}» no puede ser origen de ninguna relación en esta vista', { from: registry.elementType(ea.typeId)?.name ?? ea.typeId }), { id: 'ad-connect-invalid' });
+      return;
+    }
+    setPicker(null); setMenu(null); setPaneMenu(null); setEdgeMenu(null);
+    setCreateMenu({ x: pt.x, y: pt.y, flow: rf.screenToFlowPosition(pt), sourceId, fromHandle, candidates });
+  };
+  /** Crea el elemento en el punto donde se soltó y la relación desde el origen: un solo paso de deshacer. */
+  const createAndConnect = (cm: CreateMenu, c: CreateCandidate) => {
+    if (readOnly || !viewId) return;
+    const a = store.get('nodes', cm.sourceId); const type = registry.elementType(c.typeId);
+    if (!a?.elementId || !type) return;
+    const element = makeElement(c.typeId, type.name, { libraryId: type.notationId ? undefined : findLibraryOfType(c.typeId) });
+    const size = defaultSize(type.shape, !!type.container, c.typeId);
+    const at = placeAt(cm.flow, size);
+    if (!at) { toast.warning(t('Suelta dentro de una celda para crear el elemento')); return; }
+    const node = makeNode(viewId, undefined, { x: at.x, y: at.y, w: size.w, h: size.h }, { parentNodeId: at.parentNodeId, cell: at.cell, style: { showPorts: false } });
+    const relation = makeRelation(c.relationId, { elementId: a.elementId, portId: cm.fromHandle || undefined }, { elementId: element.id });
+    const edge = makeEdge(viewId, undefined, a.id, node.id, { fromPortId: cm.fromHandle || undefined });
+    run({ type: 'batch', label: 'crear y conectar', commands: [{ type: 'addElementToView', element, node }, { type: 'connect', relation, edge }] });
+    select({ nodes: [node.id], edges: [] });
+    noteTypeUsed(c.typeId);
+  };
+  /** Veredicto de la etiqueta flotante al pasar sobre `targetId` mientras se arrastra una conexión. */
+  const evaluateConnect = useCallback((sourceId: string, targetId: string, fromHandle: string | null, toHandle: string | null): ConnectFeedbackVerdict | null => {
+    if (isCellId(targetId) || targetId.startsWith('hdr:')) return null;
+    const ea = store.get('elements', store.get('nodes', sourceId)?.elementId ?? ''), eb = store.get('elements', store.get('nodes', targetId)?.elementId ?? '');
+    if (!ea || !eb) return null;
+    const detail = { matrix: [] as string[] };
+    const opts = relationOptions({ source: sourceId, target: targetId, sourceHandle: fromHandle, targetHandle: toHandle }, detail);
+    if (opts.length) {
+      const g = groupRelationOptions(registry, opts, ea.typeId, view ? registry.pack(view.notationId)?.defaultRelation : undefined);
+      const first = g.native[0] ?? g.bridge[0]!;
+      const name = registry.relationType(first)?.name ?? first;
+      return { ok: true, text: opts.length === 1 ? t('Se creará «{rel}»', { rel: name }) : t('«{rel}» u otra relación ({n} posibles)', { rel: name, n: opts.length }) };
+    }
+    const why = explainNoRelation(registry, t, ea.typeId, eb.typeId, detail.matrix.length > 0);
+    return { ok: false, text: why.title, detail: why.description };
+  }, [store, registry, view, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  const connectSource = useCallback(() => connectFrom.current, []);
 
   // ---------------------------------------------------------------- soltar desde la paleta
   const onDragOver = useCallback((e: DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }, []);
@@ -515,6 +630,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     } else if (typeId) {
       const type = registry.elementType(typeId); if (!type) return;
       element = makeElement(typeId, type.name, { libraryId: type.notationId ? undefined : findLibraryOfType(typeId) });
+      noteTypeUsed(typeId);
     }
     if (!element) return;
     const type = registry.elementType(element.typeId);
@@ -610,7 +726,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     if (mod && e.key === '0') { e.preventDefault(); ed.canvas.current?.resetZoom(); return; }
     if (!mod && (e.key === '+' || e.key === '=')) { e.preventDefault(); rf.zoomIn({ duration: 150 }); return; }
     if (!mod && e.key === '-') { e.preventDefault(); rf.zoomOut({ duration: 150 }); return; }
-    if (e.key === 'Escape') { setPicker(null); setMenu(null); setPaneMenu(null); setEdgeMenu(null); setRenaming(null); return; }
+    if (e.key === 'Escape') { setPicker(null); setCreateMenu(null); setMenu(null); setPaneMenu(null); setEdgeMenu(null); setRenaming(null); return; }
     if (readOnly) return;
     if (mod && key === 'c') { if (copy()) e.preventDefault(); return; }
     if (mod && key === 'v') { e.preventDefault(); void pasteFromClipboard(e.shiftKey ? 'clone' : 'appearance'); return; }
@@ -756,6 +872,8 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
   const root = isEmpty && view.rootElementId ? store.get('elements', view.rootElementId) : undefined;
   const pack = registry.pack(view.notationId);
   const example = isEmpty && pack ? exampleType(pack)?.name : undefined;
+  /** Nota de bienvenida de la plantilla de la que salió el espacio (`props.welcome` de la vista). */
+  const welcome = !readOnly ? view.props?.[WELCOME_PROP] : undefined;
 
   const minimapColor = (n: Node) => { const vn = (n.data as { node?: ViewNode }).node; const el = vn?.elementId ? store.get('elements', vn.elementId) : undefined; return (el && registry.elementType(el.typeId)?.color) || (effectiveTheme === 'dark' ? '#3a4150' : '#dddddd'); };
 
@@ -779,10 +897,10 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
   ] : [];
 
   return (
-    <div ref={wrapper} className="ad-canvas" onKeyDown={onKeyDown} tabIndex={0} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave}>
+    <div ref={wrapper} className="ad-canvas" onKeyDown={onKeyDown} tabIndex={0} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave} data-mounting={mounting ? batchPlan!.order.length - (allowed?.size ?? 0) : undefined}>
       <NodeEnvContext.Provider value={nodeEnv}>
       {size && <ReactFlow
-        nodes={rfNodes} edges={rfEdges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
+        nodes={shownNodes} edges={rfEdges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={(chs) => { const sel = new Set(selection.edges); let c = false; for (const ch of chs) if (ch.type === 'select') { c = true; if (ch.selected) sel.add(ch.id); else sel.delete(ch.id); } if (c) select({ nodes: selection.nodes, edges: [...sel] }); }}
         onNodeDragStart={onNodeDragStart} onNodeDragStop={onNodeDragStop}
@@ -790,7 +908,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         onDrop={onDrop} onDragOver={onDragOver}
         onNodeDoubleClick={onNodeDoubleClick} onNodeContextMenu={onNodeContextMenu} onEdgeDoubleClick={onEdgeDoubleClick} onEdgeContextMenu={onEdgeContextMenu}
         onPaneContextMenu={onPaneContextMenu}
-        onPaneClick={() => { setPicker(null); setMenu(null); setPaneMenu(null); setEdgeMenu(null); }}
+        onPaneClick={() => { setPicker(null); setCreateMenu(null); setMenu(null); setPaneMenu(null); setEdgeMenu(null); }}
         defaultViewport={initialViewport} fitView={!initialViewport} onMoveEnd={onMoveEnd}
         minZoom={MIN_ZOOM} maxZoom={MAX_ZOOM} deleteKeyCode={null} multiSelectionKeyCode="Shift" selectionKeyCode="Shift"
         onlyRenderVisibleElements={rfNodes.length > VIRTUALIZE_FROM}
@@ -811,6 +929,8 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
           bgColor={effectiveTheme === 'dark' ? 'rgba(22,26,34,.72)' : 'rgba(255,255,255,.72)'}
           nodeColor={(n) => minimapColor(n)} nodeStrokeColor={(n) => darken(minimapColor(n), 0.35)} nodeStrokeWidth={2} />
         {peers.length > 0 && <PeerCursors peers={peers} viewId={viewId} />}
+        {ghosts && ghosts.length > 0 && <GhostLayer ghosts={ghosts} />}
+        {!readOnly && !seq.active && !gantt.active && <ConnectFeedback sourceId={connectSource} evaluate={evaluateConnect} nodeAt={nodeAtPoint} overNode={overAnyNode} canCreate={canCreateConnect} />}
         <CommentLayer />
       </ReactFlow>}
       </NodeEnvContext.Provider>
@@ -827,6 +947,10 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
           </>}
         </div>
       )}
+      {createMenu && <CreateConnectMenu x={createMenu.x} y={createMenu.y} candidates={createMenu.candidates}
+        typeName={id => registry.elementType(id)?.name ?? id} typeColor={id => registry.elementType(id)?.color} relationName={id => registry.relationType(id)?.name ?? id}
+        onPick={c => createAndConnect(createMenu, c)} onClose={() => setCreateMenu(null)} />}
+      {welcome && <WelcomeNote viewId={viewId} text={welcome} />}
       {picker && <RelationPicker picker={picker} title={t('Tipo de relación')} bridgeTitle={t('Trazabilidad')} nameOf={o => registry.relationType(o)?.name ?? o} docOf={o => registry.relationType(o)?.doc} />}
       {menu && <NodeMenu x={menu.x} y={menu.y} nodeId={menu.nodeId} onClose={() => setMenu(null)} />}
       {paneMenu && <PaneMenu x={paneMenu.x} y={paneMenu.y} items={paneItems} onClose={() => setPaneMenu(null)} />}
@@ -927,6 +1051,23 @@ function nodeAtPoint(x: number, y: number, exclude: string): string | undefined 
   }
   return undefined;
 }
+/** ¿Hay algún nodo (no celda ni cabecera de la rejilla) bajo el punto de pantalla? */
+function overAnyNode(x: number, y: number): boolean {
+  if (typeof document === 'undefined') return false;
+  for (const el of document.elementsFromPoint(x, y)) {
+    const n = (el as HTMLElement).closest?.<HTMLElement>('.react-flow__node');
+    const id = n?.dataset.id;
+    if (id && !isCellId(id) && !id.startsWith('hdr:')) return true;
+  }
+  return false;
+}
+
+/** ¿Está el punto de pantalla dentro del lienzo (y no sobre un panel o un control flotante)? */
+function insideCanvas(wrapper: HTMLElement | null, p: { x: number; y: number }): boolean {
+  if (!wrapper || typeof document === 'undefined') return false;
+  const top = document.elementFromPoint(p.x, p.y);
+  return !!top && wrapper.contains(top) && !!top.closest('.react-flow__pane, .react-flow__renderer, .react-flow__edges, .react-flow__edge');
+}
 const NO_RULE: RuleStyle = {};
 const NO_PORTS: Port[] = [];
 
@@ -1013,4 +1154,51 @@ function findContainerAt(rf: RF, store: StoreT, reg: RegT, p: { x: number; y: nu
 function findContainer(rf: RF, store: StoreT, reg: RegT, n: Node, abs: { x: number; y: number }, vn: ViewNode): Node | undefined {
   const w = n.measured?.width ?? vn.w, h = n.measured?.height ?? vn.h;
   return findContainerAt(rf, store, reg, { x: abs.x + w / 2, y: abs.y + Math.min(h / 2, 20) }, n);
+}
+
+/**
+ * Plan de montaje por tandas: los nodos por cercanía al centro del encuadre inicial (los visibles antes que los de
+ * fuera), con su padre (un hijo no se monta sin él) y sus siluetas en coordenadas absolutas.
+ */
+export function planBatches(nodes: Node[], vp: Viewport, size: { w: number; h: number }, colorOf: (n: Node) => string): BatchPlan {
+  const abs = new Map<string, { x: number; y: number }>();
+  const view = { x: -vp.x / vp.zoom, y: -vp.y / vp.zoom, w: size.w / vp.zoom, h: size.h / vp.zoom };
+  const cx = view.x + view.w / 2, cy = view.y + view.h / 2;
+  const parent = new Map<string, string>();
+  const scored: { id: string; d: number }[] = [];
+  const ghosts: Ghost[] = [];
+  for (const n of nodes) {
+    const p = n.parentId ? abs.get(n.parentId) : undefined;
+    if (n.parentId) parent.set(n.id, n.parentId);
+    const x = n.position.x + (p?.x ?? 0), y = n.position.y + (p?.y ?? 0), w = n.width ?? 0, h = n.height ?? 0;
+    abs.set(n.id, { x, y });
+    const inside = x + w >= view.x && y + h >= view.y && x <= view.x + view.w && y <= view.y + view.h;
+    const d = Math.hypot(x + w / 2 - cx, y + h / 2 - cy);
+    scored.push({ id: n.id, d: inside ? d : 1e12 + d });
+    ghosts.push({ id: n.id, x, y, w, h, color: colorOf(n) });
+  }
+  scored.sort((a, b) => a.d - b.d);
+  return { order: scored.map(s => s.id), all: new Set(abs.keys()), parent, ghosts };
+}
+
+/** Ids montados con un límite de `limit`: los primeros del plan y, con cada uno, sus antecesores. */
+export function mountSet(plan: Pick<BatchPlan, 'order' | 'parent'>, limit: number): Set<string> {
+  const out = new Set<string>();
+  for (const id of plan.order) {
+    if (out.size >= limit) break;
+    let cur: string | undefined = id;
+    while (cur && !out.has(cur)) { out.add(cur); cur = plan.parent.get(cur); }
+  }
+  return out;
+}
+
+/** Siluetas de los nodos que aún no se han montado (un solo SVG en coordenadas del lienzo). */
+function GhostLayer({ ghosts }: { ghosts: Ghost[] }) {
+  return (
+    <ViewportPortal>
+      <svg className="ad-ghosts" width={1} height={1} aria-hidden="true">
+        {ghosts.map(g => <rect key={g.id} x={g.x} y={g.y} width={g.w} height={g.h} rx={4} fill={g.color} />)}
+      </svg>
+    </ViewportPortal>
+  );
 }

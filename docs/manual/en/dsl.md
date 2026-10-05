@@ -22,6 +22,60 @@ by hand, diff in Git and generate from a script. It resembles Structurizr DSL an
   import.
 - If the text has an error, the import stops and tells you **the line and the column** and what was expected.
 
+## Editing as text {#editar-como-texto}
+
+The editor has a **live text panel**: the model written in this language, next to the canvas and synchronized both
+ways. Open it with the **Text** button in the bar, with **Ctrl+Shift+E** or from **Ctrl+K → Edit as text**; close it
+the same way or with its ✕ button.
+
+- **Scope**: *Current view* (the view, its elements and the relationships it draws) or *Whole space* (also libraries,
+  people, rules and comments). With *Current view*, the text follows the view you open on the canvas.
+- **Positions**: off (the default), the text has no `at`, `size` or `via` and stays clean; on, it writes them. Either
+  way, **what you don't write is kept**: position, size and bend points on the canvas only change if you write them on
+  that line.
+- **When it is applied**: when you stop typing (a little over half a second) and only if the text **has no errors**.
+  Everything you changed since last time goes in as **a single undo step** (Ctrl+Z on the canvas undoes all of it).
+  **Ctrl+S** applies without waiting. The status (*In sync*, *Not applied yet…*, *N errors*) is under the panel's bar.
+- **Errors**: they are underlined in the text, the line number turns red and the list below shows `line:column` and the
+  reason; a click takes the cursor there. While there are errors the model does not change.
+- **Autocomplete**: as you type, the types of the view's notation (`archimate:Bus…`) and existing ids (after `include`,
+  `edge`, `->`, `detail`…) show up. **Ctrl+Space** opens it by hand; **↑/↓** and **Enter** or **Tab** choose; **Esc**
+  closes it.
+- **Search**: **Ctrl+F** with the focus in the text (it does not open the general search); **Enter**/**F3** next,
+  **Shift+Enter**/**Shift+F3** previous.
+- **Cross selection**: with the cursor on an element's declaration (or its `include`, a relationship, an edge) it gets
+  selected on the canvas; when you select something on the canvas, the text jumps to its line and highlights it.
+- **Keyboard**: **Tab** indents and **Shift+Tab** outdents; to leave the text with the keyboard press **Esc** and then
+  **Tab**. **Enter** keeps the indentation (and adds to it after `{`).
+
+What each change in the text does:
+
+| In the text | In the model |
+|---|---|
+| Change a name, a field, `doc`, `tags`, the type… | Changes that data; the rest of the record stays the same |
+| Add a declaration (`x = pack:Type "…"`, `a -> b`) | Creates the element or the relationship |
+| Add `include x` / `edge r` | Adds the node (placed next to what is already there) or the edge |
+| Remove `include x` | Removes the node from this view (and its edges); the element stays in the model |
+| Remove an element's declaration | **Deletes it from the model**, with its appearances and relationships in every view |
+| Move an `include` into or out of another one's block | Changes its container keeping its position on screen |
+| Change the id (everywhere) | New element with that id; its nodes inherit the old one's position |
+| A new view without `at` | It is created and placed with the [automatic layout](editor.md) |
+
+- A declaration without an id (`archimate:BusinessActor "Ana"`) gets one when applied and the text writes it
+  (`ana = …`): that way renaming it later does not change the id.
+- From *Current view* you can `include` any element of the space, even if it is not in the text; what you cannot do is
+  **declare** an id that already exists outside the text (you are warned and nothing is applied: pick another id).
+- `//` comments and your own formatting are not stored in the model: when the text is rebuilt, they are lost.
+
+**If the model changes while you edit** (someone changes it on the canvas or from another session): if you have no
+pending changes, the text is rebuilt by itself, keeping the cursor on its declaration; if you do, the text is left alone
+and, when applied, the changes are **merged** (what you changed wins, what the other person changed is kept). Only if
+you both changed **the same data** to different values does the *The model changed…* notice show up, with two options:
+**Reload text** (discards yours) or **Keep mine** (applies your text).
+
+In **read-only** mode (read links) the panel shows the text, follows changes and lets you search and select, but not
+edit.
+
 ## An example {#ejemplo}
 
 ```text

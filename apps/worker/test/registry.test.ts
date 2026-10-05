@@ -15,7 +15,7 @@ storeContractTests('RegistryDO (SQLite del Durable Object)', () => {
 if (env.DB) {
   const db = env.DB;
   storeContractTests('D1', async () => {
-    for (const t of ['snapshots', 'doc_updates', 'docs', 'share_links', 'workspace_members', 'api_keys', 'sessions', 'workspaces', 'users']) await db.prepare(`DELETE FROM ${t}`).run();
+    for (const t of ['webhooks', 'snapshots', 'doc_updates', 'docs', 'share_links', 'workspace_members', 'api_keys', 'sessions', 'workspaces', 'users']) await db.prepare(`DELETE FROM ${t}`).run();
     return new D1WorkspaceStore(db);
   });
 }

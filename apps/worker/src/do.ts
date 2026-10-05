@@ -20,18 +20,25 @@
  * Las instantáneas (historial de versiones) también viven en el storage del DO: `snap:<id>` (meta) +
  * `snapd:<id>:<n>` (trozos del update Yjs).
  *
+ * Webhooks (`webhooks-env.ts`): `POST /webhook {event, data, baseUrl}` (eventos de la API) y, desde el doc vivo,
+ * `comment.created` y `workspace.changed`. Este último se agrega en el storage (`wh:changes`: resumen, primer cambio y
+ * hora de envío, 30 s tras el último cambio y como mucho 5 min tras el primero) y lo envía `alarm()` (la misma alarma que
+ * corta los enlaces caducados): sobrevive a la hibernación. Las entregas van con `ctx.waitUntil`.
+ *
  * Los sockets nuevos pasan por la puerta de versión de `LiveDoc` (los clientes de la app anterior al formato de
  * registros 2 se cierran con 4426 «recarga»); la versión admitida se guarda en el adjunto del socket.
  */
 import { DurableObject } from 'cloudflare:workers';
 import type { Command, Workspace, WorkspaceMeta } from '@all-draw/core';
 import {
-  CommandError, DEFAULT_MAX_DOC_BYTES, LiveDoc, WS_DELETED, WS_EXPIRED_REASON, WS_REVOKED, attachConnection, closeConn, matchesIdentity, mentionContextOf, opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, parseCommands, parseWorkspaceJson,
-  type ConnIdentity, type ConnMatch, type DocPersistence, type Notifier, type Role, type Snapshot, type SnapshotMeta, type SyncHandlers, type SyncSocket,
+  CommandError, DEFAULT_MAX_DOC_BYTES, LiveDoc, WEBHOOK_DEBOUNCE_MS, WEBHOOK_MAX_WAIT_MS, changeEventData, commentEventData, isWebhookEvent, mergeChanges, WS_DELETED, WS_EXPIRED_REASON, WS_REVOKED, attachConnection, closeConn, matchesIdentity, mentionContextOf, opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, parseCommands, parseWorkspaceJson,
+  type ChangeSummary, type ConnIdentity, type ConnMatch, type DocChange, type DocPersistence, type Notifier, type Role, type Snapshot, type SnapshotMeta, type SyncHandlers, type SyncSocket,
+  type WebhookDispatcher,
 } from '@all-draw/server-core';
 import { newId } from '@all-draw/core';
 import { envInt, type Env } from './env';
-import { workerNotifier } from './mail-env';
+import { registryFromEnv, workerNotifier } from './mail-env';
+import { workerDispatcher } from './webhooks-env';
 
 export const ROLE_HEADER = 'x-alldraw-role';
 /** Identidad de la conexión (sólo una de las dos): la pone el worker tras autorizar; nunca se fía de la del cliente. */
@@ -45,6 +52,11 @@ export const WORKSPACE_HEADER = 'x-alldraw-workspace';
 /** Caducidad del enlace con el que se abre el socket (ISO): etiqueta `e:<ms>` y `alarm()` para cerrarlo a su hora. */
 export const EXPIRES_HEADER = 'x-alldraw-expires';
 const WORKSPACE_KEY = 'ws:id';
+/** Cambios pendientes de `workspace.changed` (ver arriba). */
+const CHANGES_KEY = 'wh:changes';
+interface PendingChanges { summary: ChangeSummary; first: number; due: number }
+/** Cada cuánto se vuelve a preguntar al registro si hay webhooks de `workspace.changed` (cada cambio no hace una consulta). */
+const HOOKS_TTL_MS = 60_000;
 const expiryTag = (ms: number) => `e:${ms}`;
 /** Milisegundos de caducidad de un socket (etiqueta `e:`), o `null`. */
 export const expiryOfTags = (tags: string[]): number | null => { const v = tags.find(t => t.startsWith('e:'))?.slice(2); const n = v ? Number(v) : NaN; return Number.isFinite(n) ? n : null; };
@@ -155,6 +167,22 @@ export class WorkspaceDO extends DurableObject<Env> {
   private notifier: Notifier | null = null;
   /** Notificaciones de menciones en curso: se esperan antes de terminar cada mensaje (el DO puede hibernar después). */
   private notifying = new Set<Promise<unknown>>();
+  private webhooks: WebhookDispatcher | null = null;
+  /** Cola de cambios (`workspace.changed`): en orden, uno tras otro. */
+  private changeChain: Promise<unknown> = Promise.resolve();
+  private pendingChanges: PendingChanges | null | undefined = undefined;
+  private changeHooks: { at: number; value: boolean } | null = null;
+
+  private dispatcher(): WebhookDispatcher {
+    this.webhooks ??= workerDispatcher(this.env, registryFromEnv(this.env), p => this.ctx.waitUntil(p));
+    return this.webhooks;
+  }
+  private get standby() { return this.env.STANDBY === 'true'; }
+  /** Algo que hay que esperar antes de terminar el mensaje o la petición (el DO puede hibernar después). */
+  private keep(p: Promise<unknown>) {
+    const q = p.catch(e => console.error('DO tarea', e)).finally(() => this.notifying.delete(q));
+    this.notifying.add(q);
+  }
 
   private doc(): Promise<LiveDoc> {
     this.live ??= (async () => {
@@ -169,7 +197,15 @@ export class WorkspaceDO extends DurableObject<Env> {
           await this.notifier.mentions(wid, cs, mentionContextOf(d.doc));
         })().catch(e => console.error('menciones', e)).finally(() => this.notifying.delete(p));
         this.notifying.add(p);
+        // Webhooks `comment.created`.
+        if (!this.standby) this.keep((async () => {
+          const wid = await this.knownWorkspace();
+          if (!wid) return;
+          for (const c of cs) { const data = commentEventData(c); if (data) await this.dispatcher().emit(wid, 'comment.created', data); }
+        })());
       };
+      // Webhooks `workspace.changed`: se agregan en el storage y los envía `alarm()`.
+      d.onChanges = cs => { if (!this.standby) this.keep(this.changeChain = this.changeChain.then(() => this.queueChanges(cs)).catch(e => console.error('cambios', e))); };
       await d.load();
       return d;
     })();
@@ -189,18 +225,57 @@ export class WorkspaceDO extends DurableObject<Env> {
   }
   private drainNotifications() { return Promise.allSettled([...this.notifying]); }
 
-  /** Programa la alarma para el socket que caduca antes (enlaces con `expiresAt`). */
+  /** Programa la alarma para lo primero que toque: el socket que caduca antes (enlaces con `expiresAt`) o el envío de `workspace.changed`. */
   private async scheduleExpiry() {
     let next: number | null = null;
     for (const ws of this.ctx.getWebSockets()) { const e = expiryOfTags(this.ctx.getTags(ws)); if (e !== null && (next === null || e < next)) next = e; }
+    const due = (await this.loadPendingChanges())?.due ?? null;
+    if (due !== null && (next === null || due < next)) next = due;
     if (next === null) return;
     const cur = await this.ctx.storage.getAlarm();
     if (cur === null || next < cur) await this.ctx.storage.setAlarm(next);
   }
 
-  /** Alarma: cierra (4401 `expired`) los sockets abiertos con un enlace ya caducado y programa la siguiente. */
+  // ---------------------------------------------------------------- Webhooks: `workspace.changed`
+  private async loadPendingChanges(): Promise<PendingChanges | null> {
+    if (this.pendingChanges === undefined) this.pendingChanges = (await this.ctx.storage.get<PendingChanges>(CHANGES_KEY)) ?? null;
+    return this.pendingChanges;
+  }
+  private async hasChangeHooks(workspaceId: string): Promise<boolean> {
+    if (this.changeHooks && Date.now() - this.changeHooks.at < HOOKS_TTL_MS) return this.changeHooks.value;
+    let value = false;
+    try { value = (await registryFromEnv(this.env).listWebhooks(workspaceId)).some(h => h.events.includes('workspace.changed')); } catch (e) { console.error('webhooks', e); }
+    this.changeHooks = { at: Date.now(), value };
+    return value;
+  }
+  private async queueChanges(cs: DocChange[]) {
+    const wid = await this.knownWorkspace();
+    if (!wid || !(await this.hasChangeHooks(wid))) return;
+    const cur = await this.loadPendingChanges();
+    const now = Date.now();
+    const debounce = envInt(this.env.WEBHOOKS_DEBOUNCE_MS) ?? WEBHOOK_DEBOUNCE_MS;
+    const first = cur?.first ?? now;
+    const next: PendingChanges = { summary: mergeChanges(cur?.summary ?? null, cs), first, due: Math.min(now + debounce, first + WEBHOOK_MAX_WAIT_MS) };
+    this.pendingChanges = next;
+    await this.ctx.storage.put(CHANGES_KEY, next);
+    // Si la alarma ya estaba antes (el envío anterior), salta, ve que aún no toca y se reprograma a `due`.
+    await this.scheduleExpiry();
+  }
+  /** Envía `workspace.changed` si ya toca. */
+  private async flushChanges(now: number) {
+    const cur = await this.loadPendingChanges();
+    if (!cur || cur.due > now) return;
+    this.pendingChanges = null;
+    await this.ctx.storage.delete(CHANGES_KEY);
+    const wid = await this.knownWorkspace();
+    const data = changeEventData(cur.summary);
+    if (wid && data && !this.standby) await this.dispatcher().emit(wid, 'workspace.changed', data);
+  }
+
+  /** Alarma: cierra (4401 `expired`) los sockets abiertos con un enlace ya caducado, envía `workspace.changed` si toca y programa la siguiente. */
   override async alarm() {
     const now = Date.now();
+    await this.flushChanges(now).catch(e => console.error('workspace.changed', e));
     const live = this.live ? await this.live : null;
     for (const ws of this.ctx.getWebSockets()) {
       const e = expiryOfTags(this.ctx.getTags(ws));
@@ -263,6 +338,16 @@ export class WorkspaceDO extends DurableObject<Env> {
   override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     await this.rememberWorkspace(request);
+    // Alta o baja de un webhook: se vuelve a mirar si hay suscritos a `workspace.changed`.
+    if (url.pathname === '/webhook/refresh' && request.method === 'POST') { this.changeHooks = null; return json({ ok: true }); }
+    // Eventos de webhook de la API: se envían desde aquí (`ctx.waitUntil`), sin cargar el doc.
+    if (url.pathname === '/webhook' && request.method === 'POST') {
+      const b = await request.json() as { event?: string; data?: Record<string, unknown>; baseUrl?: string | null };
+      const wid = await this.knownWorkspace();
+      if (!wid || !b.event || !isWebhookEvent(b.event)) return json({ error: 'evento desconocido' }, 400);
+      if (!this.standby) await this.dispatcher().emit(wid, b.event, b.data && typeof b.data === 'object' ? b.data : {}, b.baseUrl ?? undefined);
+      return json({ ok: true });
+    }
     // Antes de cargar el doc: sin sockets abiertos no hay nada que cerrar ni motivo para leer el storage.
     if (url.pathname === '/revoke' && request.method === 'POST') {
       const b = await request.json() as ConnMatch & { code?: number; reason?: string };
@@ -353,12 +438,14 @@ export class WorkspaceDO extends DurableObject<Env> {
           this.sockets.clear();
           live.conns.clear();
           this.live = null;
+          this.pendingChanges = null;
           await this.ctx.storage.deleteAll();
           return json({ ok: true });
         }
         default: return json({ error: 'ruta desconocida en el DO' }, 404);
       }
       await live.flush();
+      await this.drainNotifications();
       return json({ ok: true });
     } catch (e) {
       if (e instanceof CommandError) return json({ error: e.message, ...(e.issues ? { issues: e.issues } : {}), ...e.extra }, e.status);

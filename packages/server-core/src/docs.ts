@@ -12,6 +12,7 @@ import type { Workspace } from '@all-draw/core';
 import { RECORD_FORMAT, SYNC_PROTOCOL, WS_UPGRADE_REQUIRED, YjsStore, migrateRecords, recordValue, replaceInto } from '@all-draw/sync';
 import type { SnapshotMeta, SnapshotStore, WorkspaceStore } from './store/types';
 import { docTooLarge } from './ops';
+import type { DocChange, TrackedCollection } from './webhooks';
 
 export const SAVE_DEBOUNCE_MS = 500;
 const IDLE_UNLOAD_MS = 60_000;
@@ -147,6 +148,14 @@ export class LiveDoc {
    * notificaciones para las menciones (`Notifier.mentions`).
    */
   onNewComments: ((comments: Record<string, unknown>[]) => void) | null = null;
+  /**
+   * Elementos, relaciones y vistas añadidos, cambiados o borrados (los cambios de nodos y aristas cuentan como cambios de
+   * su vista), venga el cambio de un WebSocket, de la API, de una restauración o de un reemplazo; no lo que entra al
+   * cargar el doc. Lo usan los webhooks (`workspace.changed`).
+   */
+  onChanges: ((changes: DocChange[]) => void) | null = null;
+  /** Ya cargado: a partir de aquí los cambios se notifican (`onChanges`). */
+  private ready = false;
 
   constructor(readonly id: string, private persist: DocPersistence, private onIdle: () => void = () => {}, private debounceMs = SAVE_DEBOUNCE_MS, private autoSnapshotMs = AUTO_SNAPSHOT_MS) {
     this.doc = new Y.Doc({ gc: true });
@@ -185,6 +194,41 @@ export class LiveDoc {
         if (v) added.push(v);
       }
       if (added.length) { try { this.onNewComments(added); } catch (e) { console.error('onNewComments', this.id, e); } }
+    });
+    for (const name of ['elements', 'relations', 'views', 'nodes', 'edges'] as const) this.trackChanges(name);
+  }
+
+  private trackChanges(name: 'elements' | 'relations' | 'views' | 'nodes' | 'edges') {
+    const map = this.doc.getMap(name);
+    /** Un campo del registro sin convertirlo entero (formato 2: `Y.Map`; formato 1: JSON plano). */
+    const field = (v: unknown, k: string): string | null => {
+      try {
+        const x = v instanceof Y.Map ? v.get(k) : v && typeof v === 'object' ? (v as Record<string, unknown>)[k] : undefined;
+        return typeof x === 'string' ? x : null;
+      } catch { return null; }
+    };
+    const views = this.doc.getMap('views');
+    const push = (out: DocChange[], id: string, kind: DocChange['kind'], v: unknown) => {
+      if (name === 'nodes' || name === 'edges') {
+        const viewId = field(v, 'viewId');
+        if (viewId) out.push({ collection: 'views', id: viewId, kind: 'changed', name: field(views.get(viewId), 'name') });
+      } else out.push({ collection: name as TrackedCollection, id, kind, name: field(v, 'name') });
+    };
+    map.observeDeep(events => {
+      if (!this.ready || !this.onChanges) return;
+      const out: DocChange[] = [];
+      for (const ev of events) {
+        if (ev.target === map) {
+          for (const [key, ch] of ev.changes.keys) {
+            const kind = ch.action === 'add' ? 'added' : ch.action === 'delete' ? 'deleted' : 'changed';
+            push(out, key, kind, ch.action === 'delete' ? ch.oldValue : map.get(key));
+          }
+        } else {
+          const key = ev.path[0];
+          if (typeof key === 'string') push(out, key, 'changed', map.get(key));
+        }
+      }
+      if (out.length) { try { this.onChanges(out); } catch (e) { console.error('onChanges', this.id, e); } }
     });
   }
 
@@ -238,6 +282,7 @@ export class LiveDoc {
     this.pendingBytes = 0;
     this.lastSnapshotAt = update ? await this.lastSavedSnapshotAt() : Date.now();
     if (update) await this.migrateFormat();
+    this.ready = true;
   }
 
   /**
@@ -360,6 +405,8 @@ export interface DocManagerOptions {
   maxDocBytes?: number;
   /** Comentarios nuevos de un espacio (ver `LiveDoc.onNewComments`): el servidor Node notifica las menciones. */
   onNewComments?: (workspaceId: string, comments: Record<string, unknown>[], live: LiveDoc) => void;
+  /** Cambios de elementos, relaciones y vistas (ver `LiveDoc.onChanges`): el servidor Node los agrega para los webhooks. */
+  onChanges?: (workspaceId: string, changes: DocChange[], live: LiveDoc) => void;
 }
 
 export class DocManager {
@@ -384,6 +431,8 @@ export class DocManager {
         d.maxBytes = this.opts.maxDocBytes ?? 0;
         const hook = this.opts.onNewComments;
         if (hook) d.onNewComments = cs => hook(id, cs, d);
+        const onChanges = this.opts.onChanges;
+        if (onChanges) d.onChanges = cs => onChanges(id, cs, d);
         await d.load();
         d.touch();
         return d;

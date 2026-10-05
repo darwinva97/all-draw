@@ -44,7 +44,7 @@ import { parseWorkspace, SCHEMA_VERSION, type Workspace, type Element, type Rela
 
 type Layer = GridLayout['layers'][number];
 type Stage = GridLayout['stages'][number];
-import { emptyWs } from './archimate';
+import { emptyWs } from './empty';
 import { tr } from './i18n';
 
 export const DSL_VERSION = 1;

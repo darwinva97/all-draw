@@ -74,6 +74,15 @@ cuatro pestañas:
 | **Modelo** | Los elementos que **ya existen** en el espacio. Los que no aparecen en ninguna vista se marcan como huérfanos. | Para dibujar en esta vista algo que ya está en otra. |
 | **Visual** | **Nota**, **Grupo** (un marco que arrastra lo que contiene), **Etiqueta** (texto sin borde) e **Imágenes** (por URL o desde un fichero, que se guarda dentro del espacio). | Para anotar y decorar: estos nodos no son parte del modelo y solo existen en esta vista. |
 
+Encima de las categorías de **Notación** hay dos secciones que solo existen en tu navegador:
+
+- **Favoritos**: pasa el ratón por un tipo y pulsa la **estrella** (con el teclado, **F** sobre el tipo). Vuelve a
+  pulsarla para quitarlo.
+- **Recientes**: los 8 últimos tipos que has añadido (desde la paleta, con Ctrl+K o con *Crear y conectar*).
+
+Las categorías se pliegan y despliegan con un clic en su título, y la paleta lo **recuerda para cada notación**: si en
+BPMN pliegas *Coreografía*, seguirá plegada la próxima vez que abras una vista BPMN.
+
 > [!TIP]
 > Arrastrar desde **Modelo** no crea un elemento nuevo: crea otra *aparición* del mismo. Si luego le cambias el
 > nombre, cambia en todas las vistas. Es la forma correcta de reutilizar; ver [Modelo y vistas](modelo-y-vistas.md).
@@ -93,12 +102,23 @@ Si lo sueltas encima de un contenedor (un pool, un grupo, un sistema C4…), que
 
 1. Pasa el ratón por encima del nodo de origen: aparecen unos puntos pequeños en su borde.
 2. Arrastra desde el **punto del borde inferior** hasta el otro nodo y suelta sobre él (mientras arrastras se
-   iluminan los puntos de conexión de todos los nodos).
+   iluminan los puntos de conexión de todos los nodos). Mientras arrastras, el nodo que tienes debajo se marca en
+   **verde** si la conexión vale, con una etiqueta que dice qué relación se creará (o cuántas hay para elegir), y en
+   **rojo** si no vale, con el motivo (por ejemplo, que en BPMN el flujo de secuencia no sale de su pool).
 3. Lo que pasa depende de la notación:
    - si solo hay **una** relación posible entre esos dos tipos, se crea directamente;
    - si hay **varias**, aparece el menú **Tipo de relación** para que elijas (la relación por defecto de la notación
      sale la primera);
    - si **ninguna** está permitida, la línea no se engancha y no se crea nada.
+
+### Crear y conectar {#crear-y-conectar}
+
+Si sueltas la conexión en un **hueco vacío** del lienzo, aparece el menú **Crear y conectar** con los tipos de la
+notación que admiten una relación desde el origen: primero los que aceptan la relación habitual (en BPMN, el flujo de
+secuencia), y dentro de ellos los que has usado hace poco y los que más hay en el espacio; el resto, en **Más tipos**.
+Al elegir uno se crea el elemento en ese punto, ya conectado con la relación por defecto. Es **un solo paso** de
+deshacer: **Ctrl+Z** quita el elemento y la relación a la vez. Desde una tarea BPMN, así se dibuja un proceso entero
+sin volver a la paleta.
 
 ### Por qué se rechaza una conexión {#conexion-rechazada}
 
@@ -224,6 +244,10 @@ Si te equivocas, **Ctrl+Z** lo recupera.
 
 El inspector cambia según lo que selecciones.
 
+Los campos de los tipos llevan una **ayuda** debajo (y un icono ⓘ junto al nombre) cuando la notación la define: qué
+significa el campo y qué valores espera. Por ejemplo, en BPMN *Tipo de tarea* explica cada tipo, y en ER *Al borrar*
+qué pasa con las filas hijas.
+
 **Un elemento** tiene cuatro pestañas:
 
 | Pestaña | Contenido |
@@ -276,18 +300,37 @@ Es la vista que crea el importador de `.drawer`. Más detalles en [Rejilla](nota
 **Ctrl+K** (o **Ctrl+F**, o el botón **Buscar** de la barra) abre la búsqueda. Escribe y elige con las flechas y **Enter**:
 
 - **Elementos**: te lleva a uno y lo encuadra. Si está en varias vistas y no en la actual, te pregunta a cuál ir.
-- **Vistas**: las abre.
-- **Acciones**: crear una vista de cualquier notación, abrir **Espacio**, **Layout automático de la vista**,
-  **Ajustar a la vista**, cambiar el tema y ver los atajos.
+- **Vistas**: las abre. **Ir a la vista…** deja en la lista solo las vistas.
+- **Añadir *tipo***: uno por cada tipo de la notación de la vista y de tus librerías (escribe «añadir tarea»): lo pone
+  en un hueco libre del lienzo, igual que un clic en la paleta.
+- **Acciones**: **Nueva vista…** (eliges la notación), abrir **Espacio**, **Layout automático de la vista**,
+  **Simular esta vista** (BPMN y estados), **Exportar la vista como SVG / PNG / PDF / Mermaid / draw.io**, exportar el
+  espacio en JSON, **Importar un fichero…**, **Generar código…**, **Compartir…** e **Historial de versiones…** (en los
+  espacios del servidor, si puedes usarlos), **Abrir la documentación** de la notación de la vista, **Ajustar a la
+  vista**, cambiar el tema y ver los atajos.
 
-**Esc** cierra la búsqueda. Junto con el inspector, es la forma de recorrer el modelo sin ratón.
+La búsqueda no distingue tildes ni mayúsculas y perdona **una errata por palabra** («conetar», «exportr svg»). Al
+abrirla sin escribir nada, arriba salen tus **recientes**: lo último que elegiste aquí.
+
+**Esc** cierra la búsqueda (o vuelve a la lista si estabas en *Ir a la vista…* o *Nueva vista…*). Junto con el
+inspector, es la forma de recorrer el modelo sin ratón.
+
+## Editar como texto (Ctrl+Shift+E) {#texto}
+
+El botón **Texto** de la barra (o **Ctrl+Shift+E**) abre a la izquierda del lienzo el **panel de texto**: la vista
+actual —o todo el espacio— escrita en el [lenguaje textual](dsl.md) de all-draw. Escribe y, al dejar de teclear, el
+lienzo se pone al día (un solo paso de deshacer); cambia algo en el lienzo y el texto se rehace. Tiene numeración de
+líneas, colores, sugerencias de tipos e ids (**Ctrl+Espacio**), búsqueda (**Ctrl+F**) y la lista de errores con
+línea y columna. Poner el cursor en una declaración la selecciona en el lienzo, y al revés. El borde derecho del panel
+se arrastra para cambiar su ancho. Todos los detalles en [Editar como texto](dsl.md#editar-como-texto).
 
 ## Panel de problemas {#problemas}
 
 ![Panel de problemas desplegado](img/08-problemas.png)
 
 La barra de debajo del lienzo resume cuántos **errores**, **avisos** y **notas** hay. Se recalcula un
-momento después de cada cambio (verás `calculando…`). Haz clic en ella para desplegar la lista:
+momento después de cada cambio (verás `calculando…`), por partes y en los ratos libres del navegador, para que en
+vistas grandes no frene lo que estés haciendo. Haz clic en ella para desplegar la lista:
 
 1. Haz clic en el texto de un problema para ir a él: abre la vista y selecciona el nodo o la arista.
 2. Si hay un botón al lado, es un **arreglo** automático: cambiar la relación por una válida, borrar un duplicado,

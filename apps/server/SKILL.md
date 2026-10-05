@@ -15,8 +15,20 @@ los mismos comandos, y todos los clientes conectados ven el resultado al instant
 
 - REST: `Authorization: Bearer $ALLDRAW_API_KEY` contra `$ALLDRAW_URL` (p. ej. `https://alldraw.bezenti.com`).
   Referencia completa en `GET /api/openapi.json`.
-- MCP (stdio): `ALLDRAW_URL=… ALLDRAW_API_KEY=… pnpm --filter @all-draw/server mcp` expone
-  `list_workspaces`, `get_snapshot`, `run_commands`, `validate`, `list_notations`, `render_svg`.
+- MCP remoto (HTTP, sin instalar nada): `POST $ALLDRAW_URL/mcp` con `Authorization: Bearer $ALLDRAW_API_KEY`
+  (solo API keys `adk_…`; solo en el servidor principal, no en la copia de Cloudflare). Configuración del cliente:
+
+  ```json
+  { "mcpServers": { "all-draw": { "type": "http", "url": "https://alldraw.bezenti.com/mcp", "headers": { "Authorization": "Bearer adk_…" } } } }
+  ```
+
+  En Claude Code: `claude mcp add --transport http all-draw https://alldraw.bezenti.com/mcp --header "Authorization: Bearer adk_…"`.
+  En Claude Desktop (sólo arranca programas locales), con el puente `mcp-remote`:
+  `{"command": "npx", "args": ["-y", "mcp-remote", "https://alldraw.bezenti.com/mcp", "--header", "Authorization:${ALLDRAW_AUTH}"], "env": {"ALLDRAW_AUTH": "Bearer adk_…"}}`.
+- MCP (stdio): `ALLDRAW_URL=… ALLDRAW_API_KEY=… pnpm --filter @all-draw/server mcp`.
+- Los dos exponen las mismas herramientas: `list_workspaces`, `get_snapshot`, `list_views` (vistas sin leer el
+  espacio entero), `run_commands`, `validate`, `list_notations`, `render_svg`; y los recursos `alldraw://workspaces`,
+  `alldraw://workspaces/{id}/snapshot` y `alldraw://workspaces/{id}/views/{viewId}.svg`.
 - La API key se crea desde la web (o `POST /api/keys` con sesión). Tu rol en cada espacio lo dice
   `GET /api/workspaces`; para escribir necesitas `editor` u `owner`.
 

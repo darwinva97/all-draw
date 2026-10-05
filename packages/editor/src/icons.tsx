@@ -81,6 +81,8 @@ const PATHS = {
   template: <><rect x="2" y="2.5" width="12" height="11" rx="1.75" /><path d="M2 6.2h12M6.5 6.2v7.3" /></>,
   folder: <path d="M2 4.5a1 1 0 0 1 1-1h3.2l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z" />,
   pin: <><circle cx="8" cy="6" r="2.2" /><path d="M8 8.2V14" /></>,
+  star: <path d="M8 2.2l1.75 3.55 3.9.57-2.83 2.76.67 3.89L8 11.13 4.51 12.97l.67-3.89-2.83-2.76 3.9-.57Z" />,
+  starFilled: <path d="M8 2.2l1.75 3.55 3.9.57-2.83 2.76.67 3.89L8 11.13 4.51 12.97l.67-3.89-2.83-2.76 3.9-.57Z" fill="currentColor" />,
   wand: <path d="m2.5 13.5 8-8m-1.5-1.5 3 3M12 1.8v2m-1-1h2M3.5 2.5v2m-1-1h2M13 9.5v2m-1-1h2" />,
 } satisfies Record<string, ReactNode>;
 

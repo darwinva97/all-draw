@@ -32,7 +32,7 @@ export const STATECHART_ELEMENT_TYPES: ElementType[] = [
   el('History', 'Historia', {
     shape: 'circle', color: '#FFFFFF', icon: 'H',
     doc: 'Pseudoestado de historia (H o H*).',
-    fields: [{ key: 'deep', label: 'Profunda (H*)', kind: 'checkbox' }],
+    fields: [{ key: 'deep', label: 'Profunda (H*)', kind: 'checkbox', doc: 'Profunda (H*): recuerda el subestado más interno. Superficial (H): solo el del primer nivel.' }],
   }),
   el('Parallel', 'Región paralela', {
     shape: 'rect', container: true, color: '#E1D5E7', icon: '⫴',
@@ -47,11 +47,11 @@ export const STATECHART_RELATION_TYPES: RelationType[] = [
     id: T, name: 'Transición', category: CAT, line: 'solid', targetHead: 'arrow',
     doc: 'Etiqueta: evento [guarda] / acciones. `delay` para transiciones temporizadas (after), `internal` para las que no salen del estado.',
     fields: [
-      { key: 'event', label: 'Evento', kind: 'text' },
-      { key: 'guard', label: 'Guarda', kind: 'text' },
-      { key: 'actions', label: 'Acciones', kind: 'list', port: false },
+      { key: 'event', label: 'Evento', kind: 'text', doc: 'Evento que dispara la transición ("pagar", "timeout").' },
+      { key: 'guard', label: 'Guarda', kind: 'text', doc: 'Condición que tiene que cumplirse para dispararla; se rotula entre corchetes ("[saldo > 0]").' },
+      { key: 'actions', label: 'Acciones', kind: 'list', port: false, doc: 'Una por línea: lo que se hace al dispararse ("enviar factura").' },
       { key: 'delay', label: 'Retardo', kind: 'text', doc: 'Transición temporizada (after 500ms).' },
-      { key: 'internal', label: 'Interna', kind: 'checkbox' },
+      { key: 'internal', label: 'Interna', kind: 'checkbox', doc: 'No sale del estado: no ejecuta sus acciones de entrada ni de salida.' },
     ],
   },
 ];

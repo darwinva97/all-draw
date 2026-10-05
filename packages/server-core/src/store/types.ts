@@ -117,6 +117,73 @@ export interface ShareLink {
   createdBy: string;
   createdAt: string;
   expiresAt: string | null;
+  /**
+   * Enlace de **inserción** (`emb_…`, ver `embed.ts`): sólo sirve para `GET /embed/<espacio>/<vista>` de esta vista,
+   * siempre de lectura; no es una identidad de la API ni del WebSocket. `null` = enlace compartido normal (`lnk_…`).
+   */
+  viewId?: string | null;
+}
+
+// ---------------------------------------------------------------- Webhooks
+/** Eventos a los que se puede suscribir un webhook (`webhooks.ts`). `ping` es el de «Probar». */
+export const WEBHOOK_EVENTS = ['workspace.changed', 'comment.created', 'snapshot.created', 'snapshot.restored', 'member.added'] as const;
+export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+/** Cuerpo de la petición: JSON propio o el mensaje de Slack, Microsoft Teams (Adaptive Card) o Discord. */
+export const WEBHOOK_FORMATS = ['json', 'slack', 'teams', 'discord'] as const;
+export type WebhookFormat = (typeof WEBHOOK_FORMATS)[number];
+/** Webhooks por espacio. */
+export const MAX_WEBHOOKS_PER_WORKSPACE = 10;
+/** Entregas que se recuerdan por webhook (las más recientes). */
+export const MAX_WEBHOOK_DELIVERIES = 20;
+
+/** Una entrega (con sus reintentos): la última respuesta, cuánto tardó y cuántos intentos lleva. */
+export interface WebhookDelivery {
+  id: string;
+  event: WebhookEvent | 'ping';
+  /** Cuándo empezó (ISO). */
+  at: string;
+  /** Estado HTTP del último intento; 0 = sin respuesta (red, tiempo agotado, dirección bloqueada). */
+  status: number;
+  ok: boolean;
+  /** Latencia del último intento (ms). */
+  ms: number;
+  attempts: number;
+  /** `true` mientras quedan reintentos programados. */
+  pending: boolean;
+  error: string | null;
+}
+
+export interface Webhook {
+  id: string;
+  workspaceId: string;
+  url: string;
+  events: WebhookEvent[];
+  format: WebhookFormat;
+  /** Idioma de los mensajes legibles (Slack, Teams, Discord). */
+  lang: 'es' | 'en';
+  /** Secreto de la firma HMAC (`X-AllDraw-Signature`); la API sólo lo muestra al crearlo. */
+  secret: string;
+  createdBy: string;
+  createdAt: string;
+  /** Últimas entregas, la más reciente primero (máx. `MAX_WEBHOOK_DELIVERIES`). */
+  deliveries: WebhookDelivery[];
+}
+export type NewWebhook = Pick<Webhook, 'workspaceId' | 'url' | 'events' | 'format' | 'lang' | 'secret' | 'createdBy'> & { id?: string };
+
+/** Registra una entrega en la lista (sustituye la del mismo id, la pone delante y recorta). Común a los adaptadores. */
+export function pushDelivery(list: WebhookDelivery[], d: WebhookDelivery): WebhookDelivery[] {
+  return [d, ...list.filter(x => x.id !== d.id)].slice(0, MAX_WEBHOOK_DELIVERIES);
+}
+/** Lee las columnas JSON de un webhook guardado en SQL (tolerante a datos corruptos). */
+export function webhookFromRow(r: Record<string, unknown>): Webhook {
+  const arr = <T>(v: unknown): T[] => { try { const x = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(x) ? x as T[] : []; } catch { return []; } };
+  return {
+    id: r.id as string, workspaceId: r.workspace_id as string, url: r.url as string,
+    events: arr<WebhookEvent>(r.events).filter(e => (WEBHOOK_EVENTS as readonly string[]).includes(e)),
+    format: (WEBHOOK_FORMATS as readonly string[]).includes(r.format as string) ? r.format as WebhookFormat : 'json',
+    lang: r.lang === 'en' ? 'en' : 'es', secret: r.secret as string, createdBy: r.created_by as string, createdAt: r.created_at as string,
+    deliveries: arr<WebhookDelivery>(r.deliveries),
+  };
 }
 
 /** Instantánea del contenido de un espacio (historial de versiones). `data` es un update Yjs completo. */
@@ -220,11 +287,21 @@ export interface WorkspaceStore extends SnapshotStore {
   setRole(workspaceId: string, userId: string, role: MemberRole | null): Promise<void>;
   listMembers(workspaceId: string): Promise<(Member & { user: Pick<User, 'id' | 'email' | 'name'> | null })[]>;
 
-  // Enlaces compartidos
-  createShareLink(l: { workspaceId: string; role: MemberRole; createdBy: string; token: string; expiresAt?: string | null }): Promise<ShareLink>;
+  // Enlaces compartidos (y de inserción: con `viewId`)
+  createShareLink(l: { workspaceId: string; role: MemberRole; createdBy: string; token: string; expiresAt?: string | null; viewId?: string | null }): Promise<ShareLink>;
+  /** Todos: los compartidos (`viewId: null`) y los de inserción. */
   listShareLinks(workspaceId: string): Promise<ShareLink[]>;
   resolveShareLink(token: string): Promise<ShareLink | null>;
   deleteShareLink(workspaceId: string, token: string): Promise<boolean>;
+
+  // Webhooks (se borran con el espacio)
+  createWebhook(w: NewWebhook): Promise<Webhook>;
+  /** Por fecha de creación. */
+  listWebhooks(workspaceId: string): Promise<Webhook[]>;
+  getWebhook(workspaceId: string, id: string): Promise<Webhook | null>;
+  deleteWebhook(workspaceId: string, id: string): Promise<boolean>;
+  /** Apunta (o actualiza, por `id`) una entrega en el registro del webhook (`pushDelivery`). No hace nada si ya no existe. */
+  recordWebhookDelivery(workspaceId: string, id: string, d: WebhookDelivery): Promise<void>;
 
   close(): Promise<void>;
 }

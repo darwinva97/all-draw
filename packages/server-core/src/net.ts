@@ -142,3 +142,10 @@ export function resolveClientIp(trust: TrustedProxies, remote: string | null | u
     ip = prev;
   }
 }
+
+/** ¿Está la IP en alguna de estas redes CIDR? (IPv4 mapeada en IPv6 cuenta como IPv4). `false` si no es una IP. */
+export function ipInCidrs(raw: string, cidrs: string[]): boolean {
+  const ip = parseIp(raw);
+  if (!ip) return false;
+  return inList(ip, cidrs.map(c => { const p = parseCidr(c); if (!p) throw new Error(`CIDR no válido: ${c}`); return p; }));
+}

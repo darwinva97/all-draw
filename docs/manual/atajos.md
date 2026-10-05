@@ -13,7 +13,7 @@ Dentro del editor, pulsa **?** para ver un resumen en pantalla (o el botón **At
 Hay dos clases de atajos:
 
 - **Globales**: funcionan en cualquier parte del editor mientras no estés escribiendo en un campo. Son
-  **Ctrl+K**, **Ctrl+F**, **?** y **F2**.
+  **Ctrl+K**, **Ctrl+F**, **?** y **F2** (y **Ctrl+Shift+E**, que funciona incluso escribiendo).
 - **Del lienzo**: el resto (copiar, pegar, mover con flechas, zoom, borrar…). Solo funcionan cuando el foco está
   en el lienzo. Si un atajo "no hace nada", **haz clic en una zona vacía del lienzo** y vuelve a probar.
 
@@ -26,6 +26,7 @@ los atajos del lienzo no se disparan. Así **Supr** borra letras y no nodos.
 |---|---|
 | **Ctrl+K** o **Ctrl+F** | Abre (o cierra) la búsqueda: elementos, vistas y acciones |
 | **?** | Abre (o cierra) el panel de atajos |
+| **Ctrl+Shift+E** | Abre (o cierra) el [panel de texto](dsl.md#editar-como-texto) |
 | **Esc** | Cierra menús, paneles y diálogos; cancela el renombrado |
 | **Shift+F10** o tecla **Menú** | Abre el menú contextual de lo seleccionado en el lienzo (o el del lienzo, sin selección) |
 | **Ctrl+Z** | Deshacer |
@@ -90,10 +91,25 @@ Al renombrar un nodo en el propio lienzo (con **F2** o doble clic sobre el nombr
 
 | Tecla | Qué hace |
 |---|---|
-| Escribir | Filtra elementos, vistas y acciones |
+| Escribir | Filtra elementos, vistas y acciones (sin tildes y con una errata por palabra) |
 | **↑** / **↓** | Mueve la selección por la lista |
 | **Intro** | Abre el resultado elegido |
-| **Esc** | Si estabas eligiendo vista para un elemento, vuelve a los resultados; si no, cierra |
+| **Esc** | Si estabas eligiendo vista para un elemento, o en *Ir a la vista…* / *Nueva vista…*, vuelve a los resultados; si no, cierra |
+
+## Panel de texto (Ctrl+Shift+E) {#texto}
+
+Con el foco en el texto del panel ([Editar como texto](dsl.md#editar-como-texto)):
+
+| Tecla | Qué hace |
+|---|---|
+| **Ctrl+Espacio** | Sugerencias de tipos e ids (también salen solas al escribir) |
+| **↑** / **↓**, **Intro** o **Tab** | Recorre y elige la sugerencia; **Esc** cierra la lista |
+| **Ctrl+F** | Busca en el texto (no abre la búsqueda general) |
+| **Intro** / **F3** | Coincidencia siguiente; con **Shift**, la anterior |
+| **Ctrl+S** | Aplica el texto ya, sin esperar |
+| **Tab** / **Shift+Tab** | Sangra / quita sangría |
+| **Esc**, luego **Tab** | Sale del texto con el teclado |
+| **Ctrl+Z** | Deshace lo escrito en el texto (en el lienzo, deshace el cambio aplicado entero) |
 
 ## Comentarios {#comentarios}
 
@@ -123,6 +139,7 @@ En los diálogos (entrar, compartir, búsqueda, atajos, Espacio…):
 | **↑** / **↓**, **Inicio** / **Fin** | Menú contextual | Recorre las opciones; **Intro** elige; **Esc** o **Tab** lo cierran y el foco vuelve al lienzo |
 | **Tab**, luego **↑** / **↓** | Paleta y lista de vistas | Entra en la lista (una sola parada de **Tab**) y se mueve por ella |
 | **Intro** o **Espacio** | Un tipo de la paleta | Lo añade en un hueco libre cerca del centro del lienzo visible (igual que un clic) |
+| **F** o **\*** | Un tipo de la paleta | Lo marca o desmarca como favorito |
 | **Intro** / **Supr** | Una vista de la lista | La abre / la borra (pide confirmación) |
 | **←** / **→** | Pestañas (paleta, inspector, Espacio) | Cambia de pestaña |
 
@@ -137,7 +154,8 @@ En los diálogos (entrar, compartir, búsqueda, atajos, Espacio…):
 | Clic | Un tipo de la paleta | Lo añade en un hueco libre cerca del centro del lienzo |
 | Arrastrar | Un nodo | Lo mueve; si lo sueltas dentro de un contenedor, lo anida |
 | Arrastrar | Esquinas de un nodo seleccionado | Cambia su tamaño |
-| Arrastrar | Desde el borde inferior de un nodo hasta otro | Crea una relación (aparece el menú **Tipo de relación**) |
+| Arrastrar | Desde el borde inferior de un nodo hasta otro | Crea una relación (aparece el menú **Tipo de relación**). Mientras arrastras, el destino se marca en verde si vale y en rojo si no, con el motivo |
+| Arrastrar | Desde el borde inferior de un nodo hasta un hueco vacío | Menú **Crear y conectar**: crea un elemento ahí ya conectado (un solo Ctrl+Z lo deshace) |
 | Arrastrar | Desde un pin hasta otro pin | Crea una relación entre pines, con su mapeo |
 | Doble clic | Un nodo | Entra en su vista de detalle |
 | Doble clic | El nombre de un nodo | Lo renombra en línea |

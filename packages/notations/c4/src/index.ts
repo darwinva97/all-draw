@@ -26,7 +26,7 @@ const el = (id: string, name: string, category: string, extra: Partial<ElementTy
 });
 
 const external: FieldDef = { key: 'external', label: 'Externo', kind: 'checkbox', doc: 'Fuera del alcance del equipo: se pinta en gris (#999999).' };
-const technology: FieldDef = { key: 'technology', label: 'Tecnología', kind: 'text' };
+const technology: FieldDef = { key: 'technology', label: 'Tecnología', kind: 'text', doc: 'Tecnología o plataforma ("Spring Boot", "PostgreSQL", "Kubernetes", "HTTPS/JSON").' };
 
 export const C4_ELEMENT_TYPES: ElementType[] = [
   el('Person', 'Persona', CAT.people, {
@@ -46,7 +46,7 @@ export const C4_ELEMENT_TYPES: ElementType[] = [
     doc: 'Aplicación o almacén de datos desplegable por separado. Contiene componentes.',
     fields: [
       technology,
-      { key: 'kind', label: 'Tipo de contenedor', kind: 'select', options: 'app,database,queue,filesystem,browser,mobile,microservice', optionLabels: { app: 'Aplicación', database: 'Base de datos', queue: 'Cola', filesystem: 'Sistema de ficheros', browser: 'Navegador', mobile: 'App móvil', microservice: 'Microservicio' } },
+      { key: 'kind', label: 'Tipo de contenedor', kind: 'select', options: 'app,database,queue,filesystem,browser,mobile,microservice', optionLabels: { app: 'Aplicación', database: 'Base de datos', queue: 'Cola', filesystem: 'Sistema de ficheros', browser: 'Navegador', mobile: 'App móvil', microservice: 'Microservicio' }, doc: 'Cambia la figura: aplicación, base de datos (cilindro), cola, ficheros, navegador, móvil o microservicio.' },
     ],
     meta: { level: 2 },
   }),
@@ -59,25 +59,25 @@ export const C4_ELEMENT_TYPES: ElementType[] = [
   el('Code', 'Código', CAT.static, {
     shape: 'rect', color: C4_COLORS.code, icon: '{ }',
     doc: 'Clase, interfaz, módulo o función. Nivel 4, opcional.',
-    fields: [{ key: 'kind', label: 'Tipo de elemento de código', kind: 'select', options: 'class,interface,module,function,enum', optionLabels: { class: 'Clase', interface: 'Interfaz', module: 'Módulo', function: 'Función', enum: 'Enumeración' } }],
+    fields: [{ key: 'kind', label: 'Tipo de elemento de código', kind: 'select', options: 'class,interface,module,function,enum', optionLabels: { class: 'Clase', interface: 'Interfaz', module: 'Módulo', function: 'Función', enum: 'Enumeración' }, doc: 'Clase, interfaz, módulo, función o enumeración.' }],
     meta: { level: 4 },
   }),
   el('DeploymentNode', 'Nodo de despliegue', CAT.deployment, {
     shape: 'rect', container: true, color: C4_COLORS.deployment, icon: '▦',
     doc: 'Infraestructura donde se despliegan contenedores: servidor, VM, contenedor Docker, cloud. Se anidan.',
-    fields: [technology, { key: 'instances', label: 'Instancias', kind: 'number' }],
+    fields: [technology, { key: 'instances', label: 'Instancias', kind: 'number', doc: 'Cuántas instancias iguales hay del nodo (se rotula «×N»).' }],
   }),
   el('Boundary', 'Límite', CAT.static, {
     shape: 'group', container: true, color: C4_COLORS.boundary, icon: '▢',
     doc: 'Límite visual (empresa, sistema, contenedor) para agrupar elementos en una vista.',
-    fields: [{ key: 'kind', label: 'Tipo de límite', kind: 'select', options: 'enterprise,system,container,group', optionLabels: { enterprise: 'Empresa', system: 'Sistema', container: 'Contenedor', group: 'Grupo' } }],
+    fields: [{ key: 'kind', label: 'Tipo de límite', kind: 'select', options: 'enterprise,system,container,group', optionLabels: { enterprise: 'Empresa', system: 'Sistema', container: 'Contenedor', group: 'Grupo' }, doc: 'Qué agrupa el límite: la empresa, un sistema, un contenedor o un grupo libre.' }],
     meta: { borderStyle: 'dashed' },
   }),
 ];
 
 const relFields: FieldDef[] = [
   technology,
-  { key: 'description', label: 'Descripción', kind: 'textarea' },
+  { key: 'description', label: 'Descripción', kind: 'textarea', doc: 'Qué hace la relación, en una frase ("Lee y escribe pedidos").' },
 ];
 
 export const C4_RELATION_TYPES: RelationType[] = [

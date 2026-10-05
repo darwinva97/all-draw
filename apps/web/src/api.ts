@@ -16,6 +16,13 @@ export interface AuthInfo { registration: RegistrationMode; email: boolean; emai
 /** Sesión activa (`GET /api/auth/sessions`). */
 export interface SessionInfo { id: string; current: boolean; device: { browser: string | null; os: string | null; type: 'desktop' | 'mobile' | 'tablet' | 'cli' | 'unknown' }; ip: string | null; createdAt: string; lastUsedAt: string | null; expiresAt: string }
 export type NotificationKind = 'mention' | 'shared' | 'role' | 'restored';
+/** Webhooks del espacio (`/api/workspaces/:id/webhooks`). */
+export type WebhookEvent = 'workspace.changed' | 'comment.created' | 'snapshot.created' | 'snapshot.restored' | 'member.added';
+export type WebhookFormat = 'json' | 'slack' | 'teams' | 'discord';
+export interface WebhookDelivery { id: string; event: WebhookEvent | 'ping'; at: string; status: number; ok: boolean; ms: number; attempts: number; pending: boolean; error: string | null }
+export interface WebhookInfo { id: string; url: string; events: WebhookEvent[]; format: WebhookFormat; lang: 'es' | 'en'; createdAt: string; secretPrefix: string; deliveries: WebhookDelivery[] }
+/** Enlace de inserción de una vista (`/api/workspaces/:id/embeds`). */
+export interface EmbedLink { token: string; viewId: string; createdAt: string; expiresAt: string | null; url: string; svgUrl: string }
 export interface NotificationInfo { id: string; kind: NotificationKind; workspaceId: string | null; payload: Record<string, unknown>; createdAt: string; readAt: string | null; href: string | null }
 
 let bearer: string | null = null;
@@ -69,6 +76,14 @@ export const SERVER_ERRORS: Record<string, string> = {
   email_unverified: 'Confirma tu correo para crear espacios en el servidor: abre el enlace que te enviamos (o pide otro en Cuenta). Los espacios de este navegador siguen funcionando.',
   email_failed: 'No se pudo enviar el correo; inténtalo más tarde',
   session_not_found: 'No existe esa sesión',
+  webhooks_limit: 'Un espacio puede tener como mucho {limit} webhooks: borra alguno antes',
+  webhook_not_found: 'No existe ese webhook',
+  webhooks_unavailable: 'Los webhooks no están disponibles en esta instalación',
+  webhook_url_invalid: 'La URL del webhook no es válida',
+  webhook_url_scheme: 'La URL del webhook tiene que empezar por https://',
+  webhook_url_private: 'La URL del webhook apunta a una dirección local o privada',
+  webhook_url_dns: 'No se pudo resolver el nombre de la URL del webhook',
+  link_expires_past: 'La fecha de caducidad ya ha pasado: elige una futura',
 };
 const ROLE_NAMES: Record<string, string> = { owner: 'propietario', editor: 'puede editar', viewer: 'solo lectura' };
 const fmtBytes = (n: number) => (n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(n % (1024 * 1024) ? 1 : 0)} MB` : `${Math.round(n / 1024)} KB`);
@@ -227,4 +242,12 @@ export const api = {
   snapshot: (id: string, sid: string) => req<unknown>('GET', `/api/workspaces/${encodeURIComponent(id)}/snapshots/${encodeURIComponent(sid)}`),
   restoreSnapshot: (id: string, sid: string) => req<{ ok: true }>('POST', `/api/workspaces/${encodeURIComponent(id)}/snapshots/${encodeURIComponent(sid)}/restore`),
   deleteSnapshot: (id: string, sid: string) => req<void>('DELETE', `/api/workspaces/${encodeURIComponent(id)}/snapshots/${encodeURIComponent(sid)}`),
+  // Integraciones: webhooks e inserción (dueño del espacio; siempre con la sesión, no con el token de un enlace)
+  webhooks: (id: string) => req<{ webhooks: WebhookInfo[]; max: number; enabled: boolean }>('GET', `/api/workspaces/${encodeURIComponent(id)}/webhooks`, undefined, { bearer: false }),
+  createWebhook: (id: string, body: { url: string; events: WebhookEvent[]; format?: WebhookFormat | 'auto'; lang?: 'es' | 'en' }) => req<{ webhook: WebhookInfo; secret: string }>('POST', `/api/workspaces/${encodeURIComponent(id)}/webhooks`, body, { bearer: false }),
+  deleteWebhook: (id: string, hid: string) => req<void>('DELETE', `/api/workspaces/${encodeURIComponent(id)}/webhooks/${encodeURIComponent(hid)}`, undefined, { bearer: false }),
+  testWebhook: (id: string, hid: string) => req<{ delivery: WebhookDelivery }>('POST', `/api/workspaces/${encodeURIComponent(id)}/webhooks/${encodeURIComponent(hid)}/test`, undefined, { bearer: false }).then(r => r.delivery),
+  embeds: (id: string) => req<{ embeds: EmbedLink[] }>('GET', `/api/workspaces/${encodeURIComponent(id)}/embeds`, undefined, { bearer: false }).then(r => r.embeds),
+  createEmbed: (id: string, viewId: string) => req<EmbedLink>('POST', `/api/workspaces/${encodeURIComponent(id)}/embeds`, { viewId }, { bearer: false }),
+  deleteEmbed: (id: string, token: string) => req<void>('DELETE', `/api/workspaces/${encodeURIComponent(id)}/embeds/${encodeURIComponent(token)}`, undefined, { bearer: false }),
 };

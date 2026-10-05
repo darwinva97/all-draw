@@ -54,6 +54,8 @@ export const make = (o) => { const registry = new NotationRegistry(); registry.r
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
 const page = await browser.newPage({ locale: 'es-ES', viewport: { width: 1440, height: 900 } });
 await page.addInitScript(() => localStorage.setItem('alldraw:tour', 'done')); // sin recorrido guiado
+// Tareas largas (> 50 ms) del hilo principal: con ellas se ve si la validación del panel de problemas bloquea.
+await page.addInitScript(() => { window.__long = []; try { new PerformanceObserver(l => { for (const e of l.getEntries()) window.__long.push({ start: e.startTime, ms: e.duration }); }).observe({ type: 'longtask', buffered: true }); } catch { /* sin longtask */ } });
 const errors = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error' && !/status of 40[14]/.test(m.text())) errors.push('console: ' + m.text()); });
@@ -104,30 +106,35 @@ console.log(`${ELEMENTS} elementos × ${VIEWS} vistas × ${PER_VIEW} nodos · cr
 await page.waitForTimeout(500);
 
 // 2) Cambiar entre vistas desde el panel de vistas.
-if (TRACE) await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline,v8.execute,blink,cc,gpu', transferMode: 'ReturnAsStream' });
+if (TRACE) await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline,v8.execute,blink,cc,gpu,blink.user_timing', transferMode: 'ReturnAsStream' });
 if (PROFILE) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 }); await cdp.send('Profiler.start'); }
 const switches = [];
 for (let i = 2; i <= SWITCHES + 1; i++) {
   const prevIds = await nodeIds();
-  const item = page.locator('.ad-views__item > span', { hasText: new RegExp(`^Vista ${i}$`) }).first();
+  const item = page.locator('.ad-views__item .ad-views__open, .ad-views__item > span', { hasText: new RegExp(`^Vista ${i}$`) }).first();
   await item.scrollIntoViewIfNeeded();
   await page.waitForTimeout(150);
   // Medida dentro de la página: desde el `pointerdown` del clic (sin la espera de "accionabilidad" de playwright) hasta
   // el primer frame pintado con la vista nueva (comprobado en requestAnimationFrame; el mensaje de MessageChannel se
   // entrega cuando ese frame ya se ha pintado).
+  // Dos medidas: «primer pintado» (primer frame con nodos y aristas de la vista nueva: con el montaje por tandas, la
+  // primera tanda —lo que se ve en el centro— y las siluetas del resto) y «completo» (todo montado: sin
+  // `.ad-canvas[data-mounting]` y, sin virtualizar, con los `n` nodos). Antes del montaje por tandas, las dos coinciden.
   await page.evaluate(({ i, n, prevIds }) => {
     window.__benchDone = new Promise(resolve => {
       document.addEventListener('pointerdown', () => {
         performance.mark(`bench:view${i}:start`);
         const prev = new Set(prevIds);
+        let first = null;
+        const painted = (name, cb) => { const ch = new MessageChannel(); ch.port1.onmessage = () => { performance.mark(`bench:view${i}:${name}`); cb(performance.measure(`bench:switch${i}:${name}`, `bench:view${i}:start`, `bench:view${i}:${name}`).duration); }; ch.port2.postMessage(0); };
         const tick = () => {
           const nodes = document.querySelectorAll('.react-flow__node');
-          let ok = nodes.length >= n && document.querySelector('.react-flow__edge') !== null;
-          if (ok) for (const el of nodes) if (prev.has(el.getAttribute('data-id'))) { ok = false; break; }
-          if (!ok) { requestAnimationFrame(tick); return; }
-          const ch = new MessageChannel();
-          ch.port1.onmessage = () => { performance.mark(`bench:view${i}:painted`); resolve(performance.measure(`bench:switch${i}`, `bench:view${i}:start`, `bench:view${i}:painted`).duration); };
-          ch.port2.postMessage(0);
+          let fresh = nodes.length > 0 && document.querySelector('.react-flow__edge') !== null;
+          if (fresh) for (const el of nodes) if (prev.has(el.getAttribute('data-id'))) { fresh = false; break; }
+          if (fresh && first === null) { first = -1; painted('first', d => { first = d; }); }
+          const complete = fresh && nodes.length >= n && !document.querySelector('.ad-canvas[data-mounting]');
+          if (!complete) { requestAnimationFrame(tick); return; }
+          painted('painted', d => { const done = () => (first === -1 ? setTimeout(done, 0) : resolve({ complete: d, first: first ?? d })); done(); });
         };
         requestAnimationFrame(tick);
       }, { capture: true, once: true });
@@ -135,11 +142,12 @@ for (let i = 2; i <= SWITCHES + 1; i++) {
   }, { i, n: minNodes, prevIds });
   const s0 = Date.now();
   await item.click();
-  const measured = await page.evaluate(() => window.__benchDone);
+  const res = await page.evaluate(() => window.__benchDone);
+  const measured = res?.complete ?? null, first = res?.first ?? null;
   const ms = Date.now() - s0;
   const mounted = await page.locator('.react-flow__node').count();
-  switches.push({ view: `Vista ${i}`, ms, measured: measured === null ? null : Math.round(measured), mounted });
-  console.log(`cambiar a Vista ${i}: ${Math.round(measured)} ms (${ms} ms con el clic de playwright, ${mounted} nodos montados)`);
+  switches.push({ view: `Vista ${i}`, ms, measured: measured === null ? null : Math.round(measured), first: first === null ? null : Math.round(first), mounted });
+  console.log(`cambiar a Vista ${i}: primer pintado ${Math.round(first)} ms · completo ${Math.round(measured)} ms (${ms} ms con el clic de playwright, ${mounted} nodos montados)`);
 }
 if (PROFILE) { const { profile } = await cdp.send('Profiler.stop'); writeFileSync(PROFILE, JSON.stringify(profile)); console.log(`perfil de CPU en ${PROFILE}`); }
 let traceSummary;
@@ -157,24 +165,33 @@ if (TRACE) {
 const measuredAll = switches.map(s => s.measured ?? s.ms).sort((a, b) => a - b);
 const avg = measuredAll.reduce((a, s) => a + s, 0) / measuredAll.length;
 const median = measuredAll[Math.floor(measuredAll.length / 2)];
+const firstAll = switches.map(s => s.first ?? s.measured ?? s.ms).sort((a, b) => a - b);
+const firstMedian = firstAll[Math.floor(firstAll.length / 2)];
 const m2 = await metrics();
 
-// 3) Panel de problemas: tiempo hasta que deja de "calculando…" tras abrirlo.
+// 3) Panel de problemas: tiempo hasta que deja de "calculando…" tras abrirlo, y la tarea más larga mientras valida
+//    (tras un cambio en el modelo: mover un nodo con las flechas).
 const p0 = Date.now();
 await page.locator('.ad-problems__bar').click();
 await page.waitForFunction(() => !document.querySelector('.ad-problems__busy'), null, { timeout: 30000 });
 const problemsMs = Date.now() - p0;
-console.log(`problemas (vista actual): ${problemsMs} ms · ${await page.locator('.ad-problems__bar').innerText()}`);
+await page.locator('.react-flow__node').first().click();
+const l0 = await page.evaluate(() => performance.now());
+await page.keyboard.press('ArrowRight');
+await page.waitForFunction(() => !!document.querySelector('.ad-problems__busy'), null, { timeout: 5000 }).catch(() => {});
+await page.waitForFunction(() => !document.querySelector('.ad-problems__busy'), null, { timeout: 30000 });
+const problemsLongest = await page.evaluate(t0 => Math.round(Math.max(0, ...window.__long.filter(x => x.start >= t0 + 250).map(x => x.ms))), l0);
+console.log(`problemas (vista actual): ${problemsMs} ms · tarea más larga al revalidar tras un cambio: ${problemsLongest} ms · ${(await page.locator('.ad-problems__bar').innerText()).replace(/\s+/g, ' ')}`);
 
 const result = {
   base, elements: ELEMENTS, views: VIEWS, perView: PER_VIEW,
   createToUrlMs: tUrl, createToPaintedMs: firstPaint, createToPaintedMeasureMs: createToPainted, nodes: nodeCount, edges: edgeCount,
-  switches, switchAvgMs: Math.round(avg), switchMedianMs: median, switchMinMs: measuredAll[0], switchMaxMs: measuredAll[measuredAll.length - 1], problemsMs,
+  switches, switchAvgMs: Math.round(avg), switchMedianMs: median, switchFirstMedianMs: firstMedian, switchFirstMinMs: firstAll[0], switchFirstMaxMs: firstAll[firstAll.length - 1], switchMinMs: measuredAll[0], switchMaxMs: measuredAll[measuredAll.length - 1], problemsMs, problemsLongestTaskMs: problemsLongest,
   trace: traceSummary,
   metrics: { afterOpen: { JSHeapUsedMB: +(m1.JSHeapUsedSize / 1048576).toFixed(1), DOMNodes: m1.Nodes, LayoutCount: m1.LayoutCount, ScriptDurationS: +m1.ScriptDuration.toFixed(2) }, afterSwitches: { JSHeapUsedMB: +(m2.JSHeapUsedSize / 1048576).toFixed(1), DOMNodes: m2.Nodes, LayoutCount: m2.LayoutCount, ScriptDurationS: +m2.ScriptDuration.toFixed(2) } },
   errors,
 };
-console.log(`cambio de vista: media ${Math.round(avg)} ms · mediana ${median} ms · [${measuredAll[0]}–${measuredAll[measuredAll.length - 1]}] · heap ${result.metrics.afterSwitches.JSHeapUsedMB} MB · ${m2.Nodes} nodos DOM`);
+console.log(`cambio de vista: primer pintado mediana ${firstMedian} ms [${firstAll[0]}–${firstAll[firstAll.length - 1]}] · completo media ${Math.round(avg)} ms · mediana ${median} ms · [${measuredAll[0]}–${measuredAll[measuredAll.length - 1]}] · heap ${result.metrics.afterSwitches.JSHeapUsedMB} MB · ${m2.Nodes} nodos DOM`);
 if (out) writeFileSync(out, JSON.stringify(result, null, 2));
 console.log('ERRORS', errors.length, errors.slice(0, 10));
 await browser.close();

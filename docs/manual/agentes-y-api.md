@@ -173,9 +173,12 @@ programa —el *servidor MCP*— que le ofrece acciones con nombre ("listar espa
 El asistente decide cuándo usarlas y tú ves cada llamada. Con el servidor MCP de all-draw puedes pedir
 en lenguaje natural "dibújame en BPMN el proceso de alta de cliente" y verlo aparecer en el navegador.
 
-El servidor MCP de all-draw funciona por **stdio** (el asistente lo arranca como un programa local) y
-habla con la API REST usando tu clave, así que corre en tu máquina y puede apuntar a cualquier servidor
-de all-draw (el público, el tuyo o uno en Cloudflare).
+Hay dos formas de conectarlo, con las mismas herramientas:
+
+- **Remoto por HTTP** (lo más fácil): el asistente se conecta a `https://<tu-servidor>/mcp` con una de tus
+  claves API. No instalas nada. Ver [MCP remoto por HTTP](#mcp-remoto).
+- **Local por stdio**: el asistente arranca un pequeño programa en tu máquina que habla con la API REST
+  usando tu clave; puede apuntar a cualquier servidor de all-draw (el público, el tuyo o uno en Cloudflare).
 
 **Herramientas que ofrece:**
 
@@ -186,7 +189,65 @@ de all-draw (el público, el tuyo o uno en Cloudflare).
 | `run_commands` | Aplica una lista de comandos (necesita rol `editor`); devuelve el comando inverso |
 | `validate` | Devuelve los diagnósticos del modelo con los arreglos propuestos |
 | `list_notations` | Lista las notaciones con sus tipos de elemento y relación (todas, o solo `packId`) |
-| `render_svg` | Devuelve el SVG de una vista |
+| `list_views` | Lista las vistas de un espacio (id, nombre, notación y número de nodos) sin leerlo entero |
+| `render_svg` | Devuelve el SVG de una vista (tema claro, oscuro o `dual`) |
+
+**Recursos** (para los clientes que los muestran como «adjuntos»): `alldraw://workspaces` (tus espacios),
+`alldraw://workspaces/{id}/snapshot` (el Workspace JSON de cada uno) y
+`alldraw://workspaces/{id}/views/{viewId}.svg` (el SVG de una vista).
+
+### MCP remoto por HTTP {#mcp-remoto}
+
+El servidor principal publica el MCP en **`POST /mcp`** (transporte *Streamable HTTP* del estándar, sin
+sesiones). Se entra **solo con una clave API** (`Authorization: Bearer adk_…`): ni la sesión del navegador ni
+un enlace compartido valen. Cada herramienta llama a la API con esa clave, así que el asistente no puede
+hacer nada que tú no puedas hacer. En **Cuenta → Claves API → MCP remoto** tienes este bloque ya rellenado
+con la dirección de tu servidor (y con la clave recién creada, si acabas de crear una).
+
+**Claude Code, Cursor y otros clientes** con transporte HTTP: añade esto a su configuración MCP (en Claude
+Code, `.mcp.json` en la raíz del proyecto; en Cursor, `~/.cursor/mcp.json`; en VS Code, `.vscode/mcp.json` con la
+clave `servers` en vez de `mcpServers`):
+
+```json
+{
+  "mcpServers": {
+    "all-draw": {
+      "type": "http",
+      "url": "https://alldraw.bezenti.com/mcp",
+      "headers": { "Authorization": "Bearer adk_…" }
+    }
+  }
+}
+```
+
+**Claude Code**:
+
+```bash
+claude mcp add --transport http all-draw https://alldraw.bezenti.com/mcp \
+  --header "Authorization: Bearer adk_…"
+```
+
+**Claude Desktop** (y cualquier cliente que solo arranque programas locales): su `claude_desktop_config.json`
+no admite servidores HTTP con cabeceras, así que se usa el puente `mcp-remote` (necesita Node en esa máquina):
+
+```json
+{
+  "mcpServers": {
+    "all-draw": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://alldraw.bezenti.com/mcp", "--header", "Authorization:${ALLDRAW_AUTH}"],
+      "env": { "ALLDRAW_AUTH": "Bearer adk_…" }
+    }
+  }
+}
+```
+
+> [!NOTE]
+> El MCP remoto existe solo en el **servidor principal** (Node). La copia de respaldo en Cloudflare Workers
+> no lo publica: es de solo lectura y el SDK de MCP añadiría al worker dependencias que no necesita. Desde
+> cualquier máquina puedes usar igualmente el MCP por stdio apuntando a ella.
+
+### MCP local por stdio {#mcp-stdio}
 
 **Requisitos** en la máquina donde corre el asistente: Node 22.13 o superior, pnpm y una copia del
 repositorio con las dependencias instaladas:
@@ -235,6 +296,74 @@ dos variables de entorno.
 > [!NOTE]
 > Si falta `ALLDRAW_API_KEY`, el servidor arranca igual pero todas las llamadas fallan con `401`. Si
 > falta `ALLDRAW_URL`, usa `http://127.0.0.1:4002` (un servidor local).
+
+## Webhooks {#webhooks}
+
+Un **webhook** avisa a otra aplicación cuando pasa algo en un espacio: all-draw hace una petición `POST` a
+la URL que registres. Sirve para recibir los cambios en **Slack**, **Microsoft Teams** o **Discord**, o
+para disparar tu propio proceso (regenerar documentación, abrir una tarea…).
+
+Se configuran en **Compartir → Webhooks** (solo el propietario del espacio) o por la API:
+`GET`/`POST /api/workspaces/{id}/webhooks`, `DELETE /api/workspaces/{id}/webhooks/{hid}` y
+`POST /api/workspaces/{id}/webhooks/{hid}/test` («Probar»). Cada espacio admite **10 webhooks**.
+
+**Eventos** (eliges cuáles):
+
+| Evento | Cuándo |
+|---|---|
+| `workspace.changed` | Cambios en el contenido. Se **agrupan**: sale un único aviso 30 s después del último cambio (como mucho 5 min después del primero), con los elementos, relaciones y vistas añadidos, cambiados y borrados |
+| `comment.created` | Un comentario nuevo |
+| `snapshot.created` | Alguien guarda una versión a mano (las automáticas no avisan) |
+| `snapshot.restored` | Alguien restaura una versión |
+| `member.added` | Alguien recibe acceso como miembro (los cambios de rol no avisan) |
+
+**Formato.** Si la URL es de Slack (`hooks.slack.com`), Teams (`*.webhook.office.com`, flujos de Power
+Automate en `*.logic.azure.com`) o Discord (`discord.com/api/webhooks/…`), el cuerpo es un **mensaje
+legible** de esa aplicación (Slack: `text` + `blocks`; Teams: una *Adaptive Card*; Discord: un *embed*) con
+un botón «Abrir en all-draw». Para cualquier otra URL es **JSON**:
+
+```json
+{
+  "id": "dlv_…",
+  "event": "workspace.changed",
+  "sentAt": "2026-10-05T10:00:00.000Z",
+  "workspace": { "id": "ws_…", "name": "Pagos", "url": "https://alldraw.bezenti.com/#/s/ws_…" },
+  "data": {
+    "since": "…", "until": "…",
+    "counts": { "elements": { "added": 1, "changed": 2, "deleted": 0 }, "relations": { … }, "views": { … } },
+    "elements": { "added": [{ "id": "el_…", "name": "Cobrar" }], "changed": […], "deleted": [] },
+    "relations": { … }, "views": { … }
+  },
+  "text": "Cambios en «Pagos»\nElementos: 1 añadido (Cobrar); 2 cambiados (…)"
+}
+```
+
+Puedes forzar el formato al crearlo (`format`: `json`, `slack`, `teams` o `discord`) y el idioma de los
+mensajes (`lang`: `es` o `en`; por defecto, el de tu cuenta).
+
+**Firma.** Al crear el webhook se muestra **una sola vez** su secreto (`whsec_…`). Cada petición lleva:
+
+- `X-AllDraw-Signature: sha256=<hex>`: HMAC-SHA256 del **cuerpo exacto** con ese secreto;
+- `X-AllDraw-Event`: el evento (`ping` en «Probar»);
+- `X-AllDraw-Delivery`: un id único por entrega (igual en sus reintentos: úsalo para descartar repetidas).
+
+Para comprobarla (Node):
+
+```js
+import crypto from 'node:crypto';
+const expected = 'sha256=' + crypto.createHmac('sha256', process.env.ALLDRAW_WEBHOOK_SECRET).update(rawBody).digest('hex');
+const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.headers['x-alldraw-signature'] ?? ''));
+```
+
+**Entregas y reintentos.** Se espera respuesta 10 s como mucho. Si no llega, o es un `5xx`, `408` o `429`,
+se reintenta hasta **5 intentos** con espera exponencial (2, 4, 8 y 16 s); un `4xx` no se reintenta y las
+redirecciones no se siguen. En la pestaña se ven las **últimas 20 entregas** de cada webhook con su estado
+HTTP, latencia e intentos.
+
+**Seguridad.** Solo se admiten URLs `https://` a **direcciones públicas**: ni `localhost`, ni IPs privadas o
+de enlace local (como la de metadatos de la nube), ni nombres que resuelvan a ellas; la IP se comprueba
+otra vez al conectar. La copia de respaldo de solo lectura no envía webhooks. Detalles en
+[`docs/07-seguridad.md`](https://github.com/darwinva97/all-draw/blob/main/docs/07-seguridad.md).
 
 ## SKILL.md: la guía para agentes {#skill}
 
@@ -300,7 +429,9 @@ se registra es administrador.
 | `ALLOW_REGISTRATION` | `true` | `false` cierra el registro. Con el registro cerrado ni siquiera se puede crear el primer usuario, salvo con `INVITE_CODE` |
 | `INVITE_CODE` | *(vacío)* | Si lo defines, registrarse exige este código |
 | `COOKIE_SECURE` | `false` | Fuerza la cookie `Secure`. Detrás de un proxy HTTPS que envíe `x-forwarded-proto` no hace falta |
-| `PUBLIC_URL` | *(de la petición)* | URL pública para construir los enlaces compartidos, si el proxy no la transmite bien |
+| `PUBLIC_URL` | *(de la petición)* | URL pública para construir los enlaces compartidos, los de inserción, los botones «Abrir en all-draw» de los webhooks y oEmbed. **Recomendada** si usas webhooks: los avisos que nacen de una edición no tienen petición de la que deducirla |
+| `WEBHOOKS_ALLOW_PRIVATE` | *(vacío)* | **Solo para pruebas, inseguro.** `1` deja enviar webhooks a `http:`, `localhost` e IPs privadas (lo usa `e2e/integrations.mjs`). En producción permitiría a quien cree un webhook hacer que el servidor llame a servicios internos |
+| `WEBHOOKS_DEBOUNCE_MS` / `WEBHOOKS_RETRY_BASE_MS` | `30000` / `2000` | Espera de `workspace.changed` y del primer reintento. Para pruebas |
 
 ### Servicio systemd {#systemd}
 
@@ -345,6 +476,9 @@ alldraw.ejemplo.com {
 Caddy obtiene el certificado y pasa el WebSocket de sincronización (`/ws/<id>`) sin configuración
 extra. Con nginx, añade en la `location /ws/` las cabeceras `Upgrade` y `Connection "upgrade"`, y
 `X-Forwarded-Proto https` para que la cookie sea `Secure`.
+Las cabeceras de seguridad las pone la aplicación: no añadas `X-Frame-Options` ni `frame-ancestors` en el
+proxy, o las páginas de inserción (`/embed/…`, las únicas que se dejan incrustar en otras webs) dejarán de
+verse en Confluence, Notion o Jira.
 
 ### Copias de seguridad {#copias}
 

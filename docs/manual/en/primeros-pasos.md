@@ -25,7 +25,7 @@ case file, and check which pieces are not connected across levels. All of this i
 
 ## The home screen {#pantalla-de-inicio}
 
-![all-draw home screen (Spanish interface)](../img/01-inicio.png)
+![all-draw home screen](../img/01-inicio-en.png)
 
 When you open the app you see a short introduction, three buttons and, below them, your workspaces:
 
@@ -88,7 +88,7 @@ agents.
 4. If the server asks for an **Invite code**, type it in (the server administrator gives it to you).
 5. Press **Register**. The dialog closes and you are signed in.
 
-![Sign in / create account dialog (Spanish interface)](../img/02-entrar.png)
+![Sign in / create account dialog](../img/02-entrar-en.png)
 
 To **sign in** with an existing account: **Sign in / register**, type your email and password and press
 **Sign in**. The **I already have an account** link takes you back from registration to sign-in.
@@ -151,7 +151,7 @@ element in two views. That is what [Model and views](modelo-y-vistas.md) explain
 ## The "Alta de cliente" demo {#demo}
 
 The demo is the best way to understand all-draw. It models how a bank onboards a new customer and draws the
-same model in **six dimensions**. Its content is in Spanish ("Alta de cliente" means *customer onboarding*):
+same model in **six dimensions**. Its content follows the language of the interface:
 
 | View | Notation | What it shows |
 |---|---|---|
@@ -167,7 +167,7 @@ services without a repository), a "Sistemas" library with the *Microservicio* ty
 between notations (for example, the BPMN task "Verificar identidad" is traced to the ArchiMate service
 "Verificación KYC").
 
-![Editor showing the demo's ArchiMate view (Spanish interface)](../img/03-editor-archimate.png)
+![Editor showing the demo's ArchiMate view](../img/03-editor-archimate-en.png)
 
 Open it with **Open the demo** and try these four things:
 

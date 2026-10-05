@@ -39,6 +39,7 @@ export const REGISTRY_METHODS = [
   'loadDoc', 'saveDoc', 'appendUpdate',
   'getRole', 'setRole', 'listMembers',
   'createShareLink', 'listShareLinks', 'resolveShareLink', 'deleteShareLink',
+  'createWebhook', 'listWebhooks', 'getWebhook', 'deleteWebhook', 'recordWebhookDelivery',
   'createSnapshot', 'listSnapshots', 'getSnapshot', 'deleteSnapshot', 'pruneSnapshots',
   'importRows', 'replaceRows',
 ] as const;

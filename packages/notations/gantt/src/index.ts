@@ -38,7 +38,7 @@ export const GANTT_ELEMENT_TYPES: ElementType[] = [
       { key: 'end', label: 'Fin', kind: 'date', doc: 'Último día de la tarea (inclusivo). Si falta, se calcula con la duración.' },
       { key: 'duration', label: 'Duración (días)', kind: 'number', doc: 'Días naturales, contando el primero y el último. Se usa si falta el inicio o el fin.' },
       { key: 'progress', label: 'Progreso (%)', kind: 'number', doc: 'De 0 a 100.' },
-      { key: 'assignee', label: 'Responsable', kind: 'text' },
+      { key: 'assignee', label: 'Responsable', kind: 'text', doc: 'Persona o equipo responsable de la tarea.' },
       { key: 'critical', label: 'Crítica', kind: 'checkbox', doc: 'Está en el camino crítico: cualquier retraso retrasa el proyecto.' },
     ],
   }),
@@ -58,7 +58,7 @@ export const GANTT_RELATION_TYPES: RelationType[] = [
     id: DEPENDENCY, name: 'Dependencia', category: CAT.relations, line: 'solid', sourceHead: 'none', targetHead: 'arrow',
     doc: 'La tarea destino depende de la origen. FS: empieza cuando la otra acaba (la habitual); SS: empiezan a la vez; FF: acaban a la vez; SF: acaba cuando la otra empieza. Se dibuja como flecha en codo.',
     fields: [
-      { key: 'kind', label: 'Tipo de dependencia', kind: 'select', options: DEPENDENCY_KINDS.join(','), optionLabels: { FS: 'Fin → inicio (FS)', SS: 'Inicio → inicio (SS)', FF: 'Fin → fin (FF)', SF: 'Inicio → fin (SF)' } },
+      { key: 'kind', label: 'Tipo de dependencia', kind: 'select', options: DEPENDENCY_KINDS.join(','), optionLabels: { FS: 'Fin → inicio (FS)', SS: 'Inicio → inicio (SS)', FF: 'Fin → fin (FF)', SF: 'Inicio → fin (SF)' }, doc: 'FS: empieza cuando la otra acaba (lo habitual). SS: empiezan a la vez. FF: acaban a la vez. SF: acaba cuando la otra empieza.' },
       { key: 'lag', label: 'Desfase (días)', kind: 'number', doc: 'Días de espera entre una tarea y otra (negativo: solapamiento).' },
     ],
   },

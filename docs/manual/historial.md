@@ -29,6 +29,25 @@ lista de instantáneas, la más reciente arriba. De cada una ves:
 
 En un espacio local el botón **Historial** no aparece: ver [espacios locales](#espacios-locales).
 
+## Ver una instantánea sin restaurarla {#ver}
+
+Pulsa **Ver** junto a una instantánea para abrir una **vista previa de solo lectura**: el espacio tal como estaba en
+ese momento, con el lienzo y el selector de vistas (arriba), sin tocar el espacio actual. Puedes moverte, acercarte y
+seleccionar, pero no cambiar nada. Cualquier rol puede verla, también el de solo lectura.
+
+Desde la vista previa:
+
+- **Comparar con la actual** abre a la derecha un resumen de lo que ha cambiado **desde esa versión hasta ahora**, por
+  elementos, relaciones y vistas:
+  - **Añadidos desde entonces**: lo que no existía en la versión (se quitaría al restaurarla).
+  - **Borrados desde entonces**: lo que existía y ya no (volvería al restaurarla).
+  - **Cambiados desde entonces**: con su nombre actual (y el de antes, si cambió) y qué cambió: nombre,
+    documentación, campos, propiedades, estilo… En las vistas, *contenido* quiere decir que cambiaron sus nodos o
+    líneas.
+  - Al final, si cambió el nombre del espacio o cuántos cambios hay en librerías, personas, reglas o comentarios.
+- **Restaurar esta versión** hace lo mismo que **Restaurar** en la lista (ver [restaurar](#restaurar)).
+- **Cerrar** (o Escape) vuelve a la lista.
+
 ## Instantáneas automáticas {#automaticas}
 
 El servidor crea instantáneas sin que hagas nada:
@@ -61,7 +80,10 @@ Qué pasa al restaurar:
 - Después sustituye el contenido del espacio por el de la instantánea: modelo, vistas,
   librerías, reglas, personas y comentarios.
 - Todas las personas que tengan el espacio abierto ven el cambio al instante, como cualquier otra
-  edición.
+  edición, y un aviso: "*Ana* ha restaurado la versión de *fecha*". Así nadie se encuentra el espacio cambiado sin
+  saber por qué.
+- Solo cambia lo que difiere de la instantánea: si alguien está escribiendo en un elemento que la restauración no
+  toca, no pierde lo que escribe.
 
 Si te equivocaste de instantánea, abre **Historial** otra vez y restaura la automática que se creó
 justo antes (la más reciente de la lista).
@@ -89,6 +111,7 @@ confirmación y no se puede deshacer.
 | Acción | solo lectura | puede editar | propietario |
 |---|:---:|:---:|:---:|
 | Ver la lista | ✓ | ✓ | ✓ |
+| Ver una instantánea y compararla | ✓ | ✓ | ✓ |
 | Descargar JSON | ✓ | ✓ | ✓ |
 | Crear instantánea | | ✓ | ✓ |
 | Restaurar | | ✓ | ✓ |
@@ -156,3 +179,8 @@ permitir perder, guarda además tu propio `.alldraw.json`.
   atrás, restaura la instantánea automática previa.
 - **"La lista está vacía."** El espacio es nuevo o lleva poco tiempo sin cambios: crea una
   instantánea a mano.
+- **"Hay una instantánea automática de octubre de 2026 que no creó nadie."** Es la que guarda el
+  servidor antes de pasar un espacio antiguo al formato nuevo de edición simultánea (ver
+  [compartir y colaborar](compartir-y-colaborar.md#edicion-simultanea)). Se poda como las demás automáticas.
+- **"No sé qué versión restaurar."** Pulsa **Ver** y luego **Comparar con la actual** en cada candidata antes de
+  restaurar.

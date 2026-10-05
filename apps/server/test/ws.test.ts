@@ -5,7 +5,7 @@ import { WebsocketProvider } from 'y-websocket';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import * as syncProtocol from 'y-protocols/sync';
-import { YjsStore } from '@all-draw/sync';
+import { SYNC_PROTOCOL, YjsStore } from '@all-draw/sync';
 import { makeElement } from '@all-draw/core';
 import { register, startServer, until, wait, type TestServer } from './helpers';
 
@@ -17,6 +17,7 @@ const providers: WebsocketProvider[] = [];
 
 function connect(room: string, token: string | undefined, doc = new Y.Doc()) {
   const p = new WebsocketProvider(s.wsUrl, room, doc, { params: token ? { token } : {}, WebSocketPolyfill: WebSocket as unknown as typeof globalThis.WebSocket, disableBc: true, maxBackoffTime: 500 });
+  p.awareness.setLocalStateField('proto', SYNC_PROTOCOL); // como `connectRemote`: sin esperar a la puerta de versión
   providers.push(p);
   return { doc, provider: p, store: new YjsStore(doc) };
 }
@@ -77,6 +78,19 @@ describe('websocket con roles', () => {
     const deEditor = makeElement('freeform:box', 'Del editor');
     e.store.set('elements', deEditor.id, deEditor);
     await until(() => o.store.get('elements', deEditor.id) !== undefined && v.store.get('elements', deEditor.id) !== undefined);
+  });
+
+  it('un cliente de la app anterior (presencia sin `proto`) se cierra con 4426 sin recibir el documento', async () => {
+    const doc = new Y.Doc();
+    const p = new WebsocketProvider(s.wsUrl, wsId, doc, { params: { token: owner.token }, WebSocketPolyfill: WebSocket as unknown as typeof globalThis.WebSocket, disableBc: true, connect: false });
+    providers.push(p);
+    p.awareness.setLocalStateField('name', 'Pestaña vieja'); // como el editor anterior: nombre y color, sin versión
+    const closed = new Promise<number>(r => p.on('connection-close', (ev: { code: number } | null) => { if (ev) r(ev.code); }));
+    p.connect();
+    expect(await closed).toBe(4426);
+    expect(doc.getMap('meta').size).toBe(0); // no le llegó nada del espacio
+    expect(p.synced).toBe(false);
+    p.destroy();
   });
 
   it('commands por REST llegan al instante a los clientes conectados', async () => {

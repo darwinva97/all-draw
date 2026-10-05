@@ -9,7 +9,7 @@ export { MSG_AUTH, MSG_AWARENESS, MSG_SYNC, READ_ONLY_REASON } from '@all-draw/s
 const PING_MS = 30_000;
 
 /** `identity` (usuario o enlace con el que entró) permite cerrarla al revocar ese acceso (`LocalDocHost.revoke`). */
-export function setupConnection(ws: WebSocket, live: LiveDoc, role: Role, identity?: ConnIdentity): void {
+export function setupConnection(ws: WebSocket, live: LiveDoc, role: Role, identity?: ConnIdentity): SyncSocket {
   ws.binaryType = 'arraybuffer';
   const conn: SyncSocket = {
     ...(identity ? { identity } : {}),
@@ -30,4 +30,5 @@ export function setupConnection(ws: WebSocket, live: LiveDoc, role: Role, identi
   ws.on('pong', () => { alive = true; });
   ws.on('close', () => { h.onClose(); clearInterval(ping); });
   ws.on('error', () => { h.onClose(); clearInterval(ping); });
+  return conn;
 }

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import type { WorkspaceStore } from '../src/store/types';
+import { MAX_NOTIFICATIONS_PER_USER, type WorkspaceStore } from '../src/store/types';
 
 export function storeContractTests(name: string, factory: () => WorkspaceStore | Promise<WorkspaceStore>) {
   describe(`WorkspaceStore ${name}`, () => {
@@ -159,6 +159,106 @@ export function storeContractTests(name: string, factory: () => WorkspaceStore |
       expect((await s.listSnapshots(wa.id)).find(x => x.id === snap.id)?.authorId).toBeNull();
       expect(await s.countUsers()).toBe(1);
       expect((await s.getWorkspace(wa.id))?.ownerId).toBe(a.id);
+      await s.close();
+    });
+    it('cuentas v4: verificación, idioma, preferencias y sesiones activas', async () => {
+      const s = await factory();
+      const u = await s.createUser({ email: 'v@x.io', name: 'V', passwordHash: 'h', locale: 'en' });
+      expect(u).toMatchObject({ emailVerifiedAt: null, locale: 'en', notifyEmail: true });
+      expect(await s.getUser(u.id)).toMatchObject({ emailVerifiedAt: null, locale: 'en', notifyEmail: true });
+      const at = new Date().toISOString();
+      expect(await s.updateUser(u.id, { emailVerifiedAt: at, locale: 'es', notifyEmail: false })).toMatchObject({ emailVerifiedAt: at, locale: 'es', notifyEmail: false });
+      expect(await s.getUserByEmail('v@x.io')).toMatchObject({ emailVerifiedAt: at, locale: 'es', notifyEmail: false });
+      expect((await s.updateUser(u.id, { name: 'V2' }))).toMatchObject({ name: 'V2', emailVerifiedAt: at, notifyEmail: false });
+      expect((await s.updateUser(u.id, { emailVerifiedAt: null }))?.emailVerifiedAt).toBeNull();
+
+      const later = new Date(Date.now() + 60_000).toISOString();
+      await s.createSession(u.id, 'sa', later, { device: 'Firefox;Linux;desktop', ip: '203.0.113.0' });
+      await new Promise(r => setTimeout(r, 5));
+      await s.createSession(u.id, 'sb', later);
+      await s.createSession(u.id, 'sc', new Date(Date.now() - 1000).toISOString());
+      const other = await s.createUser({ email: 'o@x.io', name: 'O', passwordHash: 'h' });
+      await s.createSession(other.id, 'so', later);
+      let list = await s.listUserSessions(u.id);
+      expect(list.map(x => x.tokenHash)).toEqual(['sb', 'sa']);
+      expect(list[1]).toMatchObject({ device: 'Firefox;Linux;desktop', ip: '203.0.113.0' });
+      expect(list[1]!.lastUsedAt).toBeTruthy();
+      const used = new Date(Date.now() + 5000).toISOString();
+      await s.markSessionUsed('sa', used, '198.51.100.0');
+      await s.markSessionUsed('sb', new Date(Date.now() + 1000).toISOString(), null);
+      list = await s.listUserSessions(u.id);
+      expect(list.map(x => x.tokenHash)).toEqual(['sa', 'sb']);
+      expect(list[0]).toMatchObject({ lastUsedAt: used, ip: '198.51.100.0' });
+      expect((await s.getSession('sa'))?.device).toBe('Firefox;Linux;desktop');
+      await s.close();
+    });
+
+    it('tokens de correo: un solo uso, por tipo, caducidad y borrado', async () => {
+      const s = await factory();
+      const u = await s.createUser({ email: 't@x.io', name: 'T', passwordHash: 'h' });
+      const soon = new Date(Date.now() + 60_000).toISOString();
+      const tok = await s.createAccountToken({ tokenHash: 'r1', userId: u.id, kind: 'reset', email: 'T@x.io', expiresAt: soon });
+      expect(tok).toMatchObject({ email: 't@x.io', kind: 'reset' });
+      expect(await s.consumeAccountToken('r1', 'verify')).toBeNull(); // otro tipo: no se gasta
+      expect(await s.consumeAccountToken('r1', 'reset')).toMatchObject({ userId: u.id, email: 't@x.io', kind: 'reset' });
+      expect(await s.consumeAccountToken('r1', 'reset')).toBeNull(); // un solo uso
+      await s.createAccountToken({ tokenHash: 'old', userId: u.id, kind: 'verify', email: 't@x.io', expiresAt: new Date(Date.now() - 1000).toISOString() });
+      expect(await s.consumeAccountToken('old', 'verify')).toBeNull();
+      await s.createAccountToken({ tokenHash: 'v1', userId: u.id, kind: 'verify', email: 'nuevo@x.io', expiresAt: soon });
+      await s.createAccountToken({ tokenHash: 'r2', userId: u.id, kind: 'reset', email: 't@x.io', expiresAt: soon });
+      await s.deleteAccountTokens(u.id, 'reset');
+      expect(await s.consumeAccountToken('r2', 'reset')).toBeNull();
+      expect((await s.consumeAccountToken('v1', 'verify'))?.email).toBe('nuevo@x.io');
+      await s.createAccountToken({ tokenHash: 'v2', userId: u.id, kind: 'verify', email: 't@x.io', expiresAt: soon });
+      await s.createAccountToken({ tokenHash: 'gone', userId: u.id, kind: 'reset', email: 't@x.io', expiresAt: new Date(Date.now() - 1000).toISOString() });
+      await s.purgeExpiredSessions();
+      await s.deleteAccountTokens(u.id);
+      expect(await s.consumeAccountToken('v2', 'verify')).toBeNull();
+      // Borrar la cuenta borra sus tokens
+      await s.createAccountToken({ tokenHash: 'v3', userId: u.id, kind: 'verify', email: 't@x.io', expiresAt: soon });
+      await s.deleteUser(u.id);
+      expect(await s.consumeAccountToken('v3', 'verify')).toBeNull();
+      await s.close();
+    });
+
+    it('notificaciones: crear (idempotente con id), listar, contar, marcar leídas y borrar en cascada', async () => {
+      const s = await factory();
+      const a = await s.createUser({ email: 'na@x.io', name: 'A', passwordHash: 'h' });
+      const b = await s.createUser({ email: 'nb@x.io', name: 'B', passwordHash: 'h' });
+      const w = await s.createWorkspace({ ownerId: a.id, name: 'W' });
+      const n1 = await s.createNotification({ id: 'ntf_fijo', userId: b.id, kind: 'mention', workspaceId: w.id, payload: { excerpt: 'hola «@B»', n: 1 } });
+      expect(n1).toMatchObject({ id: 'ntf_fijo', userId: b.id, kind: 'mention', workspaceId: w.id, payload: { excerpt: 'hola «@B»', n: 1 }, readAt: null });
+      expect(await s.createNotification({ id: 'ntf_fijo', userId: b.id, kind: 'mention', workspaceId: w.id, payload: {} })).toBeNull();
+      await new Promise(r => setTimeout(r, 5));
+      const n2 = await s.createNotification({ userId: b.id, kind: 'shared', workspaceId: w.id, payload: { role: 'editor' } });
+      await s.createNotification({ userId: a.id, kind: 'role', workspaceId: null, payload: {} });
+      expect((await s.listNotifications(b.id, 10)).map(n => n.id)).toEqual([n2!.id, 'ntf_fijo']);
+      expect(await s.listNotifications(b.id, 1)).toHaveLength(1);
+      expect(await s.countUnreadNotifications(b.id)).toBe(2);
+      expect(await s.markNotificationsRead(b.id, ['ntf_fijo', 'ajena'])).toBe(1);
+      expect(await s.markNotificationsRead(a.id, [n2!.id])).toBe(0); // de otro usuario: no
+      expect(await s.countUnreadNotifications(b.id)).toBe(1);
+      expect((await s.listNotifications(b.id, 10)).find(n => n.id === 'ntf_fijo')?.readAt).toBeTruthy();
+      expect(await s.markNotificationsRead(b.id, [])).toBe(0);
+      expect(await s.markNotificationsRead(b.id)).toBe(1);
+      expect(await s.countUnreadNotifications(b.id)).toBe(0);
+      // Borrar el espacio borra sus notificaciones; borrar la cuenta, las suyas
+      await s.deleteWorkspace(w.id);
+      expect(await s.listNotifications(b.id, 10)).toEqual([]);
+      expect(await s.listNotifications(a.id, 10)).toHaveLength(1);
+      await s.deleteUser(a.id);
+      expect(await s.countUnreadNotifications(a.id)).toBe(0);
+      await s.close();
+    });
+
+    it('notificaciones: poda a las más recientes', async () => {
+      const s = await factory();
+      const u = await s.createUser({ email: 'p@x.io', name: 'P', passwordHash: 'h' });
+      for (let i = 0; i < MAX_NOTIFICATIONS_PER_USER + 3; i++) await s.createNotification({ id: `ntf_${String(i).padStart(4, '0')}`, userId: u.id, kind: 'role', workspaceId: null, payload: { i } });
+      const list = await s.listNotifications(u.id, 1000);
+      expect(list).toHaveLength(MAX_NOTIFICATIONS_PER_USER);
+      expect(list.some(n => n.id === 'ntf_0000')).toBe(false);
+      expect(list.some(n => n.id === `ntf_${String(MAX_NOTIFICATIONS_PER_USER + 2).padStart(4, '0')}`)).toBe(true);
       await s.close();
     });
   });

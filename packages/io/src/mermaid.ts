@@ -30,6 +30,7 @@ import { cardToHead } from './svg';
 import { tr } from './i18n';
 import { ImportError } from './errors';
 import { isSequenceView, sequenceGeometry, type MessageKind } from './svg-sequence';
+import { isGanttView, ganttGeometry, dayOf, isoOf, GANTT_DEPENDENCY, GANTT_GROUP, GANTT_MILESTONE, GANTT_TASK, type GanttRowGeo } from './svg-gantt';
 
 export interface MermaidImport { workspace: Workspace; warnings: string[] }
 export const MERMAID_VIEW_ID = 'view_mermaid';
@@ -167,6 +168,10 @@ export function exportMermaid(ws: Workspace, viewId: string): TextExport {
   if (isSequenceView(view) || view.notationId === 'sequence') return exportSequenceDiagram(ws, view.id, warnings);
   // Clases UML: clases con atributos y operaciones, interfaces, enumeraciones y sus relaciones.
   if (view.notationId === 'uml' || nodes.some(n => elOf(n)?.typeId.startsWith('uml:'))) return exportClassDiagram(ws, nodes, edges, warnings);
+
+  // Gantt → `gantt`; actividad y casos de uso → `flowchart` con marca de notación (vuelven con sus tipos al importar).
+  if (isGanttView(view) || view.notationId === 'gantt') return exportGanttMermaid(ws, view.id, warnings);
+  if (view.notationId === 'activity' || view.notationId === 'usecase') return exportFlavoredFlowchart(ws, view.id, view.notationId, warnings);
 
   const isEr = view.notationId === 'er' || nodes.some(n => elOf(n)?.typeId.startsWith('er:'));
   if (isEr) return exportErDiagram(ws, nodes, edges, warnings);
@@ -485,6 +490,9 @@ const LINK = /^\s*(<?)(-{2,}|={2,}|-\.+-?)(?:\s*([^-=.<>|]+?)\s*(-{2,}|={2,}|\.-
 const unquote = (s: string) => { const t = s.trim(); return t.startsWith('"') && t.endsWith('"') && t.length >= 2 ? t.slice(1, -1) : t; };
 
 export function importMermaid(text: string): MermaidImport {
+  // Flowchart exportado desde una vista de actividad o de casos de uso: se importa como flowchart y se le devuelven los tipos.
+  const flavor = /%%\s*all-draw:\s*(activity|usecase)\b/.exec(text)?.[1] as 'activity' | 'usecase' | undefined;
+  if (flavor) return asFlavor(importMermaid(text.replace(/%%\s*all-draw:[^\n]*/g, '')), flavor, text);
   const warnings: string[] = [];
   const warn = (s: string) => { if (!warnings.includes(s)) warnings.push(s); };
   const lines = text.split(/\r?\n/).map(l => l.replace(/%%.*$/, '').trim()).filter(Boolean);
@@ -492,6 +500,7 @@ export function importMermaid(text: string): MermaidImport {
   const done = (w: Workspace): MermaidImport => { w.meta.currentViewId = MERMAID_VIEW_ID; return { workspace: parseWorkspace(w), warnings }; };
   if (/^sequenceDiagram\b/.test(header)) return done(importSequenceDiagram(lines, warn));
   if (/^classDiagram(-v2)?\b/.test(header)) return done(importClassDiagram(lines, warn));
+  if (/^gantt\b/.test(header)) return done(importGanttMermaid(lines, warn));
   const m = /^(flowchart|graph|stateDiagram(?:-v2)?)\b\s*(TD|TB|LR|RL|BT)?/.exec(header);
   if (!m) {
     const kind = /^[\w-]+/.exec(header)?.[0];
@@ -949,4 +958,286 @@ function levelLayout(ids: string[], edges: { from: string; to: string }[], sizeO
     offset += thick + (horizontal ? gapX : gapY);
   }
   return pos;
+}
+
+// ---------------------------------------------------------------- Gantt, actividad y casos de uso
+/*
+ * Gantt ↔ Mermaid `gantt`: cada fase es una `section` (las anidadas, "Fase › Subfase"), cada tarea `nombre :etiquetas, id,
+ * inicio, Nd` con `crit`, `done`/`active` (progreso) y `milestone`; una dependencia FS sin desfase coherente con las fechas
+ * se escribe `after id` (las SS/FF/SF y los desfases van como fechas fijas, con aviso). Al importar, `after` y las tareas
+ * sin inicio (que en Mermaid siguen a la anterior) se convierten en dependencias FS, y las fechas de fin son exclusivas
+ * salvo `inclusiveEndDates`.
+ * Actividad y casos de uso ↔ `flowchart` con la marca `%% all-draw: activity|usecase` y una clase por tipo (`class a,b Action`):
+ * así un flowchart exportado desde aquí vuelve con sus tipos; sin clase, el tipo sale de la figura.
+ */
+const ACTIVITY_SHAPES: Record<string, [string, string]> = {
+  Action: ['(', ')'], Initial: ['((', '))'], ActivityFinal: ['(((', ')))'], FlowFinal: ['((', '))'], Decision: ['{', '}'], Fork: ['[', ']'],
+  ObjectNode: ['[', ']'], SendSignal: ['[/', '/]'], AcceptEvent: ['>', ']'],
+};
+const ACTIVITY_CLASSDEFS: Record<string, string> = {
+  Initial: 'fill:#000,stroke:#000,color:#000', ActivityFinal: 'fill:#000,stroke:#000,color:#fff', FlowFinal: 'fill:#fff,stroke:#333',
+  Fork: 'fill:#000,stroke:#000,color:#000', Decision: 'fill:#fff,stroke:#333', Action: 'fill:#fff,stroke:#333', ObjectNode: 'fill:#fff,stroke:#333',
+  SendSignal: 'fill:#fff,stroke:#333', AcceptEvent: 'fill:#fff,stroke:#333', Partition: 'fill:#f5f5f5,stroke:#999',
+};
+const USECASE_SHAPES: Record<string, [string, string]> = { Actor: ['[', ']'], UseCase: ['([', '])'] };
+const USECASE_CLASSDEFS: Record<string, string> = { Actor: 'fill:#fff,stroke:#333', UseCase: 'fill:#fff8e1,stroke:#b8860b', System: 'fill:#fff,stroke:#333', Package: 'fill:#f5f5f5,stroke:#999' };
+/** Texto sin `:`, `;` ni `#` (separadores en Mermaid). */
+const gtext = (s: string) => s.replace(/[:;#]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** `flowchart` con marca de notación (actividad o casos de uso): figura y clase por tipo, subgraph por contenedor. */
+function exportFlavoredFlowchart(ws: Workspace, viewId: string, flavor: 'activity' | 'usecase', warnings: string[]): TextExport {
+  const nodes = Object.values(ws.nodes).filter(n => n.viewId === viewId);
+  const byId = new Map(nodes.map(n => [n.id, n] as const));
+  const edges = Object.values(ws.edges).filter(e => e.viewId === viewId && byId.has(e.fromNodeId) && byId.has(e.toNodeId));
+  const mapper = idMapper();
+  const elOf = (n: ViewNode) => (n.elementId ? ws.elements[n.elementId] : undefined);
+  const local = (n: ViewNode) => { const t = elOf(n)?.typeId ?? ''; return t.startsWith(`${flavor}:`) ? t.slice(flavor.length + 1) : ''; };
+  const mid = (n: ViewNode) => mapper(n.id, elOf(n)?.name || n.text);
+  const shapes = flavor === 'activity' ? ACTIVITY_SHAPES : USECASE_SHAPES;
+  const containers = new Set(flavor === 'activity' ? ['Partition'] : ['System', 'Package']);
+  const out = [`%% all-draw: ${flavor}`, flavor === 'activity' ? 'flowchart TD' : 'flowchart LR'];
+  const classes = new Map<string, string[]>();
+  const kidsOf = (id: string | undefined) => nodes.filter(n => (n.parentNodeId && byId.has(n.parentNodeId) ? n.parentNodeId : undefined) === id).sort((a, b) => a.y - b.y || a.x - b.x);
+  const write = (n: ViewNode, indent: string) => {
+    const el = elOf(n), kind = local(n), id = mid(n);
+    if (kind) classes.set(kind, [...(classes.get(kind) ?? []), id]);
+    let label = n.text ?? el?.name ?? '';
+    // `［estado］` con corchetes de ancho completo: uno normal cerraría el nodo (y las entidades `#91;` llevan `;`).
+    if (kind === 'ObjectNode' && typeof el?.fields['state'] === 'string' && el.fields['state'].trim()) label = `${label} ［${el.fields['state'].trim()}］`;
+    if (containers.has(kind) || kidsOf(n.id).length) {
+      out.push(`${indent}subgraph ${id}[${q(label || ' ')}]`);
+      for (const k of kidsOf(n.id)) write(k, `${indent}  `);
+      out.push(`${indent}end`);
+      return;
+    }
+    if (kind === 'Initial' || kind === 'ActivityFinal' || kind === 'Fork') label = ' ';
+    if (kind === 'FlowFinal') label = '✕';
+    const [o, c] = shapes[kind] ?? ['[', ']'];
+    if (!kind) warnings.push(tr('«{name}» no es de esta notación: se exporta como caja', { name: label || id }));
+    out.push(`${indent}${id}${o}${q(label || ' ')}${c}`);
+  };
+  for (const n of kidsOf(undefined)) write(n, '    ');
+  for (const e of edges) {
+    const rel = e.relationId ? ws.relations[e.relationId] : undefined;
+    const rt = rel?.typeId ?? '';
+    const a = mid(byId.get(e.fromNodeId)!), b = mid(byId.get(e.toNodeId)!);
+    const str = (k: string) => (typeof rel?.fields[k] === 'string' ? (rel.fields[k] as string).trim() : '');
+    let arrow: string, label = '';
+    if (flavor === 'activity') { arrow = '-->'; label = str('guard') || e.label || rel?.name || ''; }
+    else if (rt === 'usecase:Include') { arrow = '-.->'; label = '«include»'; }
+    else if (rt === 'usecase:Extend') { arrow = '-.->'; label = ['«extend»', str('extensionPoint'), str('condition')].filter(Boolean).join(' '); }
+    else if (rt === 'usecase:Generalization') arrow = '-->';
+    else if (rt === 'usecase:Dependency') arrow = '-.->';
+    else { arrow = '---'; label = e.label || rel?.name || ''; }
+    out.push(`    ${a} ${arrow}${label ? `|${q(label)}|` : ''} ${b}`);
+  }
+  const defs = flavor === 'activity' ? ACTIVITY_CLASSDEFS : USECASE_CLASSDEFS;
+  for (const [kind, ids] of classes) { if (defs[kind]) out.push(`    classDef ${kind} ${defs[kind]}`); out.push(`    class ${ids.join(',')} ${kind}`); }
+  return { text: out.join('\n') + '\n', warnings };
+}
+
+/** Clases de un flowchart (`class a,b Nombre` y `a[…]:::Nombre`) por id de nodo. */
+function flowchartClasses(text: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/%%.*$/, '').trim();
+    const m = /^class\s+([\w.,\s-]+?)\s+([\w-]+)\s*;?$/.exec(line);
+    if (m) { for (const id of m[1]!.split(',').map(s => s.trim()).filter(Boolean)) out.set(id, m[2]!); continue; }
+    for (const mm of line.matchAll(/([\w.-]+)\s*(?:\(\(\(.*?\)\)\)|\(\[.*?\]\)|\[\[.*?\]\]|\[\(.*?\)\]|\(\(.*?\)\)|\{\{.*?\}\}|\[\/.*?[/\\]\]|\[\\.*?[/\\]\]|\{.*?\}|\(.*?\)|\[.*?\]|>.*?\])?:::([\w-]+)/g)) out.set(mm[1]!, mm[2]!);
+  }
+  return out;
+}
+
+/** Convierte el resultado genérico de un flowchart marcado en actividad o casos de uso (tipos, relaciones, tamaños). */
+function asFlavor(r: MermaidImport, flavor: 'activity' | 'usecase', text: string): MermaidImport {
+  const ws = r.workspace;
+  const cls = flowchartClasses(text);
+  const known = new Set(flavor === 'activity'
+    ? ['Action', 'Initial', 'ActivityFinal', 'FlowFinal', 'Decision', 'Fork', 'ObjectNode', 'SendSignal', 'AcceptEvent', 'Partition']
+    : ['Actor', 'UseCase', 'System', 'Package']);
+  const byShape = (typeId: string): string => {
+    if (flavor === 'activity') return typeId === 'freeform:group' ? 'Partition' : typeId === 'freeform:diamond' ? 'Decision' : typeId === 'freeform:note' ? 'AcceptEvent' : typeId.endsWith(':parallelogram') ? 'SendSignal' : 'Action';
+    return typeId === 'freeform:group' ? 'System' : typeId === 'freeform:ellipse' ? 'UseCase' : 'Actor';
+  };
+  const SIZE: Record<string, [number, number]> = { Initial: [30, 30], ActivityFinal: [30, 30], FlowFinal: [30, 30], Decision: [50, 50], Fork: [120, 10], Actor: [60, 90], UseCase: [160, 70] };
+  const entities = (t: string) => t.replace(/#quot;/g, '"');
+  for (const el of Object.values(ws.elements)) {
+    el.name = entities(el.name);
+    const c = cls.get(el.id);
+    const kind = c && known.has(c) ? c : byShape(el.typeId);
+    el.typeId = `${flavor}:${kind}`;
+    delete el.libraryId;
+    if (kind === 'Initial' || kind === 'ActivityFinal' || kind === 'Fork' || (kind === 'FlowFinal' && el.name === '✕')) el.name = '';
+    if (kind === 'ObjectNode') { const m = /^(.*?)\s*[[［]([^\]］]+)[\]］]$/.exec(el.name); if (m) { el.name = m[1]!; el.fields = { ...el.fields, state: m[2]! }; } }
+    const size = SIZE[kind];
+    if (size) for (const n of Object.values(ws.nodes)) if (n.elementId === el.id) { n.x += (n.w - size[0]) / 2; n.y += (n.h - size[1]) / 2; n.w = size[0]; n.h = size[1]; }
+  }
+  delete ws.libraries['lib_mermaid'];
+  for (const rel of Object.values(ws.relations)) {
+    const a = ws.elements[rel.from.elementId ?? '']?.typeId, b = ws.elements[rel.to.elementId ?? '']?.typeId;
+    const label = rel.name.trim();
+    if (flavor === 'activity') {
+      rel.typeId = a === 'activity:ObjectNode' || b === 'activity:ObjectNode' ? 'activity:ObjectFlow' : 'activity:ControlFlow';
+      rel.fields = label ? { guard: label } : {};
+    } else if (label.startsWith('«include»')) { rel.typeId = 'usecase:Include'; rel.fields = {}; }
+    else if (label.startsWith('«extend»')) {
+      rel.typeId = 'usecase:Extend';
+      const rest = label.slice('«extend»'.length).trim(), cond = /\[[^\]]*\]$/.exec(rest)?.[0];
+      rel.fields = { ...(rest.replace(cond ?? '', '').trim() ? { extensionPoint: rest.replace(cond ?? '', '').trim() } : {}), ...(cond ? { condition: cond } : {}) };
+    } else rel.typeId = rel.typeId === 'freeform:arrow' ? 'usecase:Generalization' : rel.typeId === 'freeform:dashed' ? 'usecase:Dependency' : 'usecase:Association';
+    rel.name = flavor === 'usecase' && rel.typeId === 'usecase:Association' ? label : '';
+  }
+  for (const e of Object.values(ws.edges)) { const rel = e.relationId ? ws.relations[e.relationId] : undefined; if (!rel?.name) delete e.label; }
+  const view = ws.views[MERMAID_VIEW_ID];
+  if (view) view.notationId = flavor;
+  return { workspace: parseWorkspace(ws), warnings: r.warnings };
+}
+
+/** `gantt` de Mermaid desde una vista de Gantt. */
+function exportGanttMermaid(ws: Workspace, viewId: string, warnings: string[]): TextExport {
+  const view = ws.views[viewId]!;
+  const store = new MemoryStore(ws);
+  const g = ganttGeometry(store, view);
+  const mapper = idMapper();
+  const idOf = (r: GanttRowGeo) => mapper(r.node.id, r.el.name);
+  const rowByNode = new Map(g.rows.map(r => [r.node.id, r] as const));
+  const preds = new Map<string, { row: GanttRowGeo; kind: string; lag: number }[]>();
+  for (const e of Object.values(ws.edges)) {
+    if (e.viewId !== viewId) continue;
+    const rel = e.relationId ? ws.relations[e.relationId] : undefined;
+    const a = rowByNode.get(e.fromNodeId), b = rowByNode.get(e.toNodeId);
+    if (!a || !b || rel?.typeId !== GANTT_DEPENDENCY) continue;
+    const kind = typeof rel.fields['kind'] === 'string' && ['SS', 'FF', 'SF'].includes(rel.fields['kind']) ? rel.fields['kind'] : 'FS';
+    const lag = Number(rel.fields['lag'] ?? 0) || 0;
+    preds.set(b.node.id, [...(preds.get(b.node.id) ?? []), { row: a, kind, lag }]);
+    if (kind !== 'FS' || lag) warnings.push(tr('La dependencia {kind} de «{from}» a «{to}» se exporta como fechas fijas (Mermaid solo tiene «after»)', { kind: `${kind}${lag ? ` ${lag > 0 ? '+' : ''}${lag}d` : ''}`, from: a.el.name, to: b.el.name }));
+  }
+  const line = (r: GanttRowGeo): string => {
+    const tags: string[] = [];
+    if (r.el.fields['critical'] === true) tags.push('crit');
+    const progress = Number(r.el.fields['progress'] ?? 0) || 0;
+    if (progress >= 100) tags.push('done'); else if (progress > 0) tags.push('active');
+    if (r.kind === 'milestone') tags.push('milestone');
+    const ps = preds.get(r.node.id) ?? [];
+    const fs = ps.filter(p => p.kind === 'FS' && !p.lag && p.row.kind !== 'group');
+    const after = fs.length && fs.length === ps.length && Math.max(...fs.map(p => p.row.end)) + 1 === r.start ? `after ${fs.map(p => idOf(p.row)).join(' ')}` : isoOf(r.start);
+    const len = r.kind === 'milestone' ? '0d' : `${r.end - r.start + 1}d`;
+    return `    ${gtext(r.node.text ?? r.el.name) || idOf(r)} :${[...tags, idOf(r), after, len].join(', ')}`;
+  };
+  const out = ['gantt', `    title ${gtext(view.name) || 'Gantt'}`, '    dateFormat YYYY-MM-DD'];
+  const parentRow = (r: GanttRowGeo) => (r.node.parentNodeId ? rowByNode.get(r.node.parentNodeId) : undefined);
+  for (const r of g.rows) if (r.kind !== 'group' && !parentRow(r)) out.push(line(r));
+  const path = (r: GanttRowGeo): string => { const p = parentRow(r); return p ? `${path(p)} › ${gtext(p.el.name)}` : ''; };
+  for (const grp of g.rows.filter(r => r.kind === 'group')) {
+    const kids = g.rows.filter(r => r.kind !== 'group' && parentRow(r) === grp);
+    if (!kids.length) continue;
+    out.push(`    section ${(path(grp) ? `${path(grp).slice(3)} › ` : '') + (gtext(grp.el.name) || idOf(grp))}`);
+    for (const k of kids) out.push(line(k));
+  }
+  return { text: out.join('\n') + '\n', warnings };
+}
+
+/** Fecha según `dateFormat` (YYYY, MM, DD y separadores; si no, ISO). */
+function parseGanttDate(s: string, format: string): number | undefined {
+  const iso = dayOf(s);
+  if (/^YYYY-MM-DD$/i.test(format) || !/YYYY/.test(format)) return iso;
+  const order = [...format.matchAll(/YYYY|MM|DD/g)].map(m => m[0]);
+  const parts = s.match(/\d+/g);
+  if (!parts || parts.length < 3 || order.length < 3) return iso;
+  const v: Record<string, number> = {};
+  order.forEach((k, i) => { v[k] = Number(parts[i]); });
+  return dayOf(`${String(v.YYYY).padStart(4, '0')}-${String(v.MM).padStart(2, '0')}-${String(v.DD).padStart(2, '0')}`);
+}
+/** `3d`, `2w`, `36h` → días (al menos 1; `0d` = 0, para hitos). */
+function parseGanttDuration(s: string): number | undefined {
+  const m = /^(\d+(?:\.\d+)?)\s*(ms|s|m|h|d|w|M|y)$/.exec(s.trim());
+  if (!m) return undefined;
+  const n = Number(m[1]);
+  const days = m[2] === 'w' ? n * 7 : m[2] === 'd' ? n : m[2] === 'M' ? n * 30 : m[2] === 'y' ? n * 365 : m[2] === 'h' ? n / 24 : 0;
+  return n === 0 ? 0 : Math.max(1, Math.ceil(days));
+}
+
+/** Mermaid `gantt` → vista de Gantt: secciones como fases, `after` y tareas encadenadas como dependencias FS. */
+function importGanttMermaid(lines: string[], warn: (s: string) => void): Workspace {
+  const ws = emptyWs('Gantt');
+  let format = 'YYYY-MM-DD', inclusive = false;
+  const view = { id: MERMAID_VIEW_ID, kind: 'gantt' as const, notationId: 'gantt', name: 'Gantt', doc: '', style: {}, props: {} };
+  ws.views[view.id] = view;
+  interface T { el: Element; group?: string; start?: number; end?: number; dur?: number; after: string[]; milestone: boolean }
+  const tasks: T[] = [], byMid = new Map<string, T>(), groups: Element[] = [];
+  let group: string | undefined, prev: T | undefined, n = 0;
+  for (const raw of lines) {
+    let m: RegExpExecArray | null;
+    if ((m = /^title\s+(.*)$/.exec(raw))) { view.name = m[1]!.trim(); ws.meta.name = view.name; continue; }
+    if ((m = /^dateFormat\s+(.*)$/.exec(raw))) { format = m[1]!.trim(); continue; }
+    if (/^inclusiveEndDates\b/.test(raw)) { inclusive = true; continue; }
+    if (/^excludes\b/.test(raw)) { warn(tr('Los días excluidos ({line}) no se importan: las duraciones cuentan días naturales', { line: raw.slice(9).trim() })); continue; }
+    if (/^(axisFormat|tickInterval|todayMarker|weekday|weekend|click|accTitle|accDescr|displayMode|topAxis)\b/.test(raw)) continue;
+    if ((m = /^section\s+(.*)$/.exec(raw))) { const el = makeEl(`s${++n}`, GANTT_GROUP, m[1]!.trim()); ws.elements[el.id] = el; groups.push(el); group = el.id; continue; }
+    const colon = raw.indexOf(':');
+    if (colon < 0) { warn(tr('Línea no reconocida: {line}', { line: raw })); continue; }
+    const name = raw.slice(0, colon).trim();
+    const parts = raw.slice(colon + 1).split(',').map(s => s.trim()).filter(Boolean);
+    const tags = new Set<string>();
+    while (parts.length && /^(done|active|crit|milestone)$/.test(parts[0]!)) tags.add(parts.shift()!);
+    let id: string | undefined, startTok: string | undefined, endTok: string | undefined;
+    if (parts.length >= 3) [id, startTok, endTok] = parts;
+    else if (parts.length === 2) [startTok, endTok] = parts;
+    else endTok = parts[0];
+    const milestone = tags.has('milestone');
+    const el = makeEl(`t${++n}`, milestone ? GANTT_MILESTONE : GANTT_TASK, name);
+    const t: T = { el, group, after: [], milestone };
+    if (tags.has('crit') && !milestone) el.fields.critical = true;
+    if (!milestone && tags.has('done')) el.fields.progress = 100; else if (!milestone && tags.has('active')) el.fields.progress = 50;
+    if (startTok) {
+      const a = /^after\s+(.+)$/.exec(startTok);
+      if (a) t.after = a[1]!.split(/\s+/).filter(Boolean);
+      else { t.start = parseGanttDate(startTok, format); if (t.start === undefined) warn(tr('Fecha no reconocida en «{name}»: {value}', { name, value: startTok })); }
+    } else if (prev) t.after = ['\u0000prev'];
+    if (endTok) {
+      const d = parseGanttDuration(endTok);
+      if (d !== undefined) t.dur = d;
+      else if (/^until\s/.test(endTok)) warn(tr('«until» no se importa en «{name}»: dura un día', { name }));
+      else { const e = parseGanttDate(endTok, format); if (e !== undefined) t.end = inclusive ? e : e - 1; else warn(tr('Fecha no reconocida en «{name}»: {value}', { name, value: endTok })); }
+    }
+    if (t.after[0] === '\u0000prev') t.after = [prev!.el.id];
+    ws.elements[el.id] = el; tasks.push(t); if (id) byMid.set(id, t); prev = t;
+  }
+  // Fechas y dependencias
+  for (const t of tasks) {
+    const f = t.el.fields;
+    if (t.milestone) { if (t.start !== undefined) f.start = isoOf(t.start); }
+    else {
+      if (t.start !== undefined) f.start = isoOf(t.start);
+      if (t.end !== undefined && t.start !== undefined) f.end = isoOf(Math.max(t.start, t.end));
+      else if (t.dur !== undefined) f.duration = Math.max(1, t.dur);
+      else if (t.end !== undefined) f.end = isoOf(t.end);
+      else f.duration = 1;
+    }
+    for (const a of t.after) {
+      const p = byMid.get(a) ?? tasks.find(x => x.el.id === a);
+      if (!p) { warn(tr('«after {id}» no corresponde a ninguna tarea', { id: a })); continue; }
+      const rel = makeRel(`d${Object.keys(ws.relations).length + 1}`, GANTT_DEPENDENCY, { elementId: p.el.id }, { elementId: t.el.id });
+      rel.fields = { kind: 'FS' };
+      ws.relations[rel.id] = rel;
+    }
+    if (t.after.length && t.end !== undefined && t.start === undefined) warn(tr('«{name}» tiene fecha de fin y empieza tras otra tarea: se importa con su duración calculada', { name: t.el.name }));
+  }
+  // Nodos: esquema por filas (la vista de Gantt solo usa el orden; el resto de vistas ven una lista ordenada)
+  let y = 0;
+  const node = (el: Element, x: number, yy: number, w: number, h: number, parentNodeId?: string) => {
+    const vn: ViewNode = { id: `n:${el.id}`, viewId: MERMAID_VIEW_ID, elementId: el.id, x, y: yy, w, h, style: {} };
+    if (parentNodeId) vn.parentNodeId = parentNodeId;
+    ws.nodes[vn.id] = vn;
+    return vn;
+  };
+  for (const t of tasks.filter(t => !t.group)) { node(t.el, 0, y, 220, 40); y += 48; }
+  for (const gEl of groups) {
+    const kids = tasks.filter(t => t.group === gEl.id);
+    const gn = node(gEl, 0, y, 260, 48 + kids.length * 48);
+    kids.forEach((t, i) => node(t.el, 20, 40 + i * 48, 220, 40, gn.id));
+    y += gn.h + 16;
+  }
+  for (const rel of Object.values(ws.relations)) ws.edges[`e:${rel.id}`] = { id: `e:${rel.id}`, viewId: MERMAID_VIEW_ID, relationId: rel.id, fromNodeId: `n:${rel.from.elementId}`, toNodeId: `n:${rel.to.elementId}`, bendpoints: [], style: {} };
+  return ws;
 }

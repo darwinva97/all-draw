@@ -1,6 +1,6 @@
 /** Cliente de la API del servidor (misma origen; la sesión va en cookie). */
 import { getLang, t } from '@all-draw/i18n';
-export interface User { id: string; email: string; name: string; isAdmin: boolean }
+export interface User { id: string; email: string; name: string; isAdmin: boolean; emailVerified?: boolean; locale?: 'es' | 'en'; notifyEmail?: boolean }
 export type Role = 'owner' | 'editor' | 'viewer';
 export interface WorkspaceInfo { id: string; name: string; ownerId: string; createdAt: string; updatedAt: string; role: Role }
 export interface ShareLink { token: string; url: string; role: 'editor' | 'viewer'; createdAt: string; expiresAt: string | null }
@@ -11,6 +11,12 @@ export interface AdminUser extends User { createdAt: string }
 /** Cuotas de la cuenta (`GET /api/auth/me`); `limit: null` = sin límite. */
 export interface Quotas { workspaces: { used: number; limit: number | null }; docBytes: { limit: number | null } }
 export interface DeleteAccountResult { ok: true; deleted: string[]; transferred: { id: string; to: string }[] }
+/** `GET /api/auth/config`: registro y si el servidor tiene correo (recuperar contraseña, verificar el correo). */
+export interface AuthInfo { registration: RegistrationMode; email: boolean; emailVerificationRequired: boolean }
+/** Sesión activa (`GET /api/auth/sessions`). */
+export interface SessionInfo { id: string; current: boolean; device: { browser: string | null; os: string | null; type: 'desktop' | 'mobile' | 'tablet' | 'cli' | 'unknown' }; ip: string | null; createdAt: string; lastUsedAt: string | null; expiresAt: string }
+export type NotificationKind = 'mention' | 'shared' | 'role' | 'restored';
+export interface NotificationInfo { id: string; kind: NotificationKind; workspaceId: string | null; payload: Record<string, unknown>; createdAt: string; readAt: string | null; href: string | null }
 
 let bearer: string | null = null;
 export function setBearer(t: string | null) { bearer = t; }
@@ -58,6 +64,11 @@ export const SERVER_ERRORS: Record<string, string> = {
   view_not_found: 'La vista no existe',
   snapshot_not_found: 'No existe esa instantánea',
   link_expired: 'Este enlace caducó el {date}: pide uno nuevo a quien te lo compartió',
+  email_disabled: 'Este servidor no tiene correo configurado: pide a un administrador que te restablezca la contraseña',
+  token_invalid: 'El enlace no es válido, ya se usó o ha caducado: pide otro',
+  email_unverified: 'Confirma tu correo para crear espacios en el servidor: abre el enlace que te enviamos (o pide otro en Cuenta). Los espacios de este navegador siguen funcionando.',
+  email_failed: 'No se pudo enviar el correo; inténtalo más tarde',
+  session_not_found: 'No existe esa sesión',
 };
 const ROLE_NAMES: Record<string, string> = { owner: 'propietario', editor: 'puede editar', viewer: 'solo lectura' };
 const fmtBytes = (n: number) => (n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(n % (1024 * 1024) ? 1 : 0)} MB` : `${Math.round(n / 1024)} KB`);
@@ -116,11 +127,12 @@ export const isNetworkError = (e: unknown): boolean => (e instanceof ApiError &&
 // hasta pasados `formMinMs`. Una persona tarda más en rellenar el formulario; si no, se espera lo que falte.
 let form: { token: string; minMs: number; at: number } | null = null;
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-async function loadAuthConfig(): Promise<RegistrationMode> {
-  const r = await req<{ registration: RegistrationMode; formToken?: string; formMinMs?: number }>('GET', '/api/auth/config');
+async function loadAuthInfo(): Promise<AuthInfo> {
+  const r = await req<{ registration: RegistrationMode; formToken?: string; formMinMs?: number; email?: boolean; emailVerificationRequired?: boolean }>('GET', '/api/auth/config');
   form = r.formToken ? { token: r.formToken, minMs: r.formMinMs ?? 0, at: Date.now() } : null;
-  return r.registration;
+  return { registration: r.registration, email: !!r.email, emailVerificationRequired: !!r.emailVerificationRequired };
 }
+const loadAuthConfig = async (): Promise<RegistrationMode> => (await loadAuthInfo()).registration;
 async function register(email: string, name: string, password: string, inviteCode?: string, website?: string) {
   for (let attempt = 0; ; attempt++) {
     if (!form || Date.now() - form.at > 12 * 3_600_000) await loadAuthConfig().catch(() => null);
@@ -175,6 +187,20 @@ export const api = {
   register,
   account: () => req<{ user: User; quotas: Quotas }>('GET', '/api/auth/me'),
   updateMe: (patch: { name?: string; email?: string; password?: string }) => req<{ user: User }>('PATCH', '/api/auth/me', patch).then(r => r.user),
+  /** Como `updateMe` pero dice si el correo nuevo espera confirmación (`pendingEmail`); también idioma y «recibir por correo». */
+  updateAccount: (patch: { name?: string; email?: string; password?: string; locale?: 'es' | 'en'; notifyEmail?: boolean }) => req<{ user: User; pendingEmail?: string }>('PATCH', '/api/auth/me', patch),
+  /** Registro, correo y verificación del servidor; sin servidor, registro abierto y sin correo. */
+  authInfo: () => loadAuthInfo().catch((): AuthInfo => ({ registration: 'open', email: false, emailVerificationRequired: false })),
+  /** Pide el enlace para restablecer la contraseña (la respuesta es la misma exista o no la cuenta). */
+  forgotPassword: (email: string) => req<{ ok: true }>('POST', '/api/auth/forgot', { email }, { bearer: false }),
+  resetPassword: (token: string, password: string, revokeKeys = false) => req<{ ok: true; email: string }>('POST', '/api/auth/reset', { token, password, ...(revokeKeys ? { revokeKeys: true } : {}) }, { bearer: false }),
+  verifyEmail: (token: string) => req<{ user: User; changed: boolean }>('POST', '/api/auth/verify', { token }, { bearer: false }),
+  resendVerification: () => req<{ ok: true; alreadyVerified: boolean }>('POST', '/api/auth/verify/resend', undefined, { bearer: false }),
+  sessions: () => req<{ sessions: SessionInfo[] }>('GET', '/api/auth/sessions', undefined, { bearer: false }).then(r => r.sessions),
+  closeSession: (id: string) => req<void>('DELETE', `/api/auth/sessions/${encodeURIComponent(id)}`, undefined, { bearer: false }),
+  /** Siempre con la cookie de sesión (no con el token de un enlace abierto): son las de la cuenta. */
+  notifications: (limit = 30) => req<{ notifications: NotificationInfo[]; unread: number }>('GET', `/api/notifications?limit=${limit}`, undefined, { bearer: false }),
+  markNotificationsRead: (ids?: string[]) => req<{ updated: number; unread: number }>('POST', '/api/notifications/read', ids ? { ids } : {}, { bearer: false }),
   exportData: () => download('/api/auth/export', 'alldraw-export.json'),
   deleteAccount: (password: string) => req<DeleteAccountResult>('DELETE', '/api/auth/account', { password }),
   logout: () => req<void>('POST', '/api/auth/logout').finally(forgetAccount),

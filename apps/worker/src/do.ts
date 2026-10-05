@@ -19,15 +19,19 @@
  *
  * Las instantáneas (historial de versiones) también viven en el storage del DO: `snap:<id>` (meta) +
  * `snapd:<id>:<n>` (trozos del update Yjs).
+ *
+ * Los sockets nuevos pasan por la puerta de versión de `LiveDoc` (los clientes de la app anterior al formato de
+ * registros 2 se cierran con 4426 «recarga»); la versión admitida se guarda en el adjunto del socket.
  */
 import { DurableObject } from 'cloudflare:workers';
 import type { Command, Workspace, WorkspaceMeta } from '@all-draw/core';
 import {
-  CommandError, DEFAULT_MAX_DOC_BYTES, LiveDoc, WS_DELETED, attachConnection, closeConn, matchesIdentity, opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, parseCommands, parseWorkspaceJson,
-  type ConnIdentity, type ConnMatch, type DocPersistence, type Role, type Snapshot, type SnapshotMeta, type SyncHandlers, type SyncSocket,
+  CommandError, DEFAULT_MAX_DOC_BYTES, LiveDoc, WS_DELETED, WS_EXPIRED_REASON, WS_REVOKED, attachConnection, closeConn, matchesIdentity, mentionContextOf, opCommands, opInit, opRenderSvg, opReplace, opSetMeta, opSnapshot, opValidate, parseCommands, parseWorkspaceJson,
+  type ConnIdentity, type ConnMatch, type DocPersistence, type Notifier, type Role, type Snapshot, type SnapshotMeta, type SyncHandlers, type SyncSocket,
 } from '@all-draw/server-core';
 import { newId } from '@all-draw/core';
 import { envInt, type Env } from './env';
+import { workerNotifier } from './mail-env';
 
 export const ROLE_HEADER = 'x-alldraw-role';
 /** Identidad de la conexión (sólo una de las dos): la pone el worker tras autorizar; nunca se fía de la del cliente. */
@@ -36,18 +40,27 @@ export const LINK_HEADER = 'x-alldraw-link';
 /** Con qué credencial entró el usuario: la sesión (`sessionIdOf`) o la API key (id). */
 export const SESSION_HEADER = 'x-alldraw-session';
 export const KEY_HEADER = 'x-alldraw-key';
+/** Id del espacio (el DO no conoce el nombre con que se creó su id): lo ponen el worker y `RemoteDocHost`; se guarda en `ws:id`. */
+export const WORKSPACE_HEADER = 'x-alldraw-workspace';
+/** Caducidad del enlace con el que se abre el socket (ISO): etiqueta `e:<ms>` y `alarm()` para cerrarlo a su hora. */
+export const EXPIRES_HEADER = 'x-alldraw-expires';
+const WORKSPACE_KEY = 'ws:id';
+const expiryTag = (ms: number) => `e:${ms}`;
+/** Milisegundos de caducidad de un socket (etiqueta `e:`), o `null`. */
+export const expiryOfTags = (tags: string[]): number | null => { const v = tags.find(t => t.startsWith('e:'))?.slice(2); const n = v ? Number(v) : NaN; return Number.isFinite(n) ? n : null; };
 const userTag = (id: string) => `u:${id}`;
 const linkTag = (token: string) => `l:${token}`;
 const sessionTag = (id: string) => `s:${id}`;
 const keyTag = (id: string) => `k:${id}`;
 /** Etiquetas de hibernación de un socket: el rol primero (compatibles con los aceptados antes) y la identidad. */
-export function socketTags(role: Role, identity: ConnIdentity | null): string[] {
+export function socketTags(role: Role, identity: ConnIdentity | null, expiresAtMs?: number | null): string[] {
   const tags: string[] = [role];
   if (identity?.userId) {
     tags.push(userTag(identity.userId));
     if (identity.sessionId) tags.push(sessionTag(identity.sessionId));
     else if (identity.keyId) tags.push(keyTag(identity.keyId));
   } else if (identity?.linkToken) tags.push(linkTag(identity.linkToken));
+  if (expiresAtMs != null && Number.isFinite(expiresAtMs)) tags.push(expiryTag(expiresAtMs));
   return tags;
 }
 export function identityFromTags(tags: string[]): ConnIdentity | undefined {
@@ -137,21 +150,80 @@ const json = (data: unknown, status = 200) => Response.json(data, { status });
 export class WorkspaceDO extends DurableObject<Env> {
   private live: Promise<LiveDoc> | null = null;
   private sockets = new Map<WebSocket, { conn: SyncSocket; handlers: SyncHandlers }>();
+  /** Id del espacio (cabecera `WORKSPACE_HEADER`, guardado en `ws:id`): hace falta para notificar menciones. */
+  private workspaceId: string | null = null;
+  private notifier: Notifier | null = null;
+  /** Notificaciones de menciones en curso: se esperan antes de terminar cada mensaje (el DO puede hibernar después). */
+  private notifying = new Set<Promise<unknown>>();
 
   private doc(): Promise<LiveDoc> {
     this.live ??= (async () => {
       const d = new LiveDoc(this.ctx.id.toString(), storagePersistence(this.ctx.storage));
       d.maxBytes = envInt(this.env.MAX_DOC_BYTES) ?? DEFAULT_MAX_DOC_BYTES;
+      // Comentarios nuevos con menciones → notificaciones (y correo) en el registro (`notifications.ts`).
+      d.onNewComments = cs => {
+        const p = (async () => {
+          const wid = await this.knownWorkspace();
+          if (!wid) return;
+          this.notifier ??= workerNotifier(this.env);
+          await this.notifier.mentions(wid, cs, mentionContextOf(d.doc));
+        })().catch(e => console.error('menciones', e)).finally(() => this.notifying.delete(p));
+        this.notifying.add(p);
+      };
       await d.load();
       return d;
     })();
     return this.live;
   }
 
-  /** Registra (o re-registra tras hibernar) un WebSocket aceptado en el doc. */
+  private async knownWorkspace(): Promise<string | null> {
+    this.workspaceId ??= (await this.ctx.storage.get<string>(WORKSPACE_KEY)) ?? null;
+    return this.workspaceId;
+  }
+  /** Apunta el id del espacio que trae la petición (la primera vez lo guarda). */
+  private async rememberWorkspace(request: Request) {
+    const id = request.headers.get(WORKSPACE_HEADER);
+    if (!id || id === this.workspaceId) return;
+    if ((await this.knownWorkspace()) !== id) await this.ctx.storage.put(WORKSPACE_KEY, id);
+    this.workspaceId = id;
+  }
+  private drainNotifications() { return Promise.allSettled([...this.notifying]); }
+
+  /** Programa la alarma para el socket que caduca antes (enlaces con `expiresAt`). */
+  private async scheduleExpiry() {
+    let next: number | null = null;
+    for (const ws of this.ctx.getWebSockets()) { const e = expiryOfTags(this.ctx.getTags(ws)); if (e !== null && (next === null || e < next)) next = e; }
+    if (next === null) return;
+    const cur = await this.ctx.storage.getAlarm();
+    if (cur === null || next < cur) await this.ctx.storage.setAlarm(next);
+  }
+
+  /** Alarma: cierra (4401 `expired`) los sockets abiertos con un enlace ya caducado y programa la siguiente. */
+  override async alarm() {
+    const now = Date.now();
+    const live = this.live ? await this.live : null;
+    for (const ws of this.ctx.getWebSockets()) {
+      const e = expiryOfTags(this.ctx.getTags(ws));
+      if (e === null || e > now) continue;
+      try { ws.close(WS_REVOKED, WS_EXPIRED_REASON); } catch { /* ya cerrada */ }
+      const s = this.sockets.get(ws);
+      this.sockets.delete(ws);
+      if (s && live) closeConn(live, s.conn);
+    }
+    await this.scheduleExpiry();
+  }
+
+  /**
+   * Registra (o re-registra tras hibernar) un WebSocket aceptado en el doc. La versión del protocolo con la que se
+   * admitió (puerta de versión de `LiveDoc`) se guarda en el adjunto del socket: al despertar no se vuelve a retener.
+   */
   private attach(ws: WebSocket, live: LiveDoc, role: Role, identity?: ConnIdentity) {
+    let protocol: number | undefined;
+    try { const a = ws.deserializeAttachment() as { proto?: unknown } | null; if (typeof a?.proto === 'number') protocol = a.proto; } catch { /* sin adjunto */ }
     const conn: SyncSocket = {
       ...(identity ? { identity } : {}),
+      ...(protocol !== undefined ? { protocol } : {}),
+      onAdmit: proto => { try { ws.serializeAttachment({ proto }); } catch { /* socket ya cerrado */ } },
       isOpen: () => ws.readyState === 1 /* OPEN */,
       send: buf => ws.send(buf),
       close: (code, reason) => { try { ws.close(code ?? 1000, reason); } catch { /* ya cerrada */ } },
@@ -190,6 +262,7 @@ export class WorkspaceDO extends DurableObject<Env> {
 
   override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    await this.rememberWorkspace(request);
     // Antes de cargar el doc: sin sockets abiertos no hay nada que cerrar ni motivo para leer el storage.
     if (url.pathname === '/revoke' && request.method === 'POST') {
       const b = await request.json() as ConnMatch & { code?: number; reason?: string };
@@ -215,8 +288,10 @@ export class WorkspaceDO extends DurableObject<Env> {
       const identity: ConnIdentity | null = userId
         ? { userId, linkToken: null, sessionId: sessionId || null, keyId: sessionId ? null : keyId || null }
         : linkToken ? { userId: null, linkToken } : null;
-      this.ctx.acceptWebSocket(server, socketTags(role, identity));
+      const expires = Date.parse(request.headers.get(EXPIRES_HEADER) ?? '');
+      this.ctx.acceptWebSocket(server, socketTags(role, identity, Number.isFinite(expires) ? expires : null));
       this.attach(server, live, role, identity ?? undefined);
+      if (Number.isFinite(expires)) await this.scheduleExpiry();
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -262,6 +337,7 @@ export class WorkspaceDO extends DurableObject<Env> {
           live.assertWritable();
           const inverse: Command = opCommands(live.store, commands, body.label);
           await live.flush();
+          await this.drainNotifications();
           return json({ inverse });
         }
         case 'GET /validate': return json({ diagnostics: opValidate(live.store) });
@@ -299,6 +375,7 @@ export class WorkspaceDO extends DurableObject<Env> {
     handlers.onMessage(new Uint8Array(message));
     const live = await this.doc();
     if (live.isDirty) await live.flush(); // no confiamos en que el DO siga vivo para el debounce
+    if (this.notifying.size) await this.drainNotifications();
   }
 
   override async webSocketClose(ws: WebSocket) {

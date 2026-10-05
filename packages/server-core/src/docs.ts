@@ -8,8 +8,8 @@
  */
 import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
-import { loadInto, type Workspace } from '@all-draw/core';
-import { YjsStore } from '@all-draw/sync';
+import type { Workspace } from '@all-draw/core';
+import { RECORD_FORMAT, SYNC_PROTOCOL, WS_UPGRADE_REQUIRED, YjsStore, migrateRecords, recordValue, replaceInto } from '@all-draw/sync';
 import type { SnapshotMeta, SnapshotStore, WorkspaceStore } from './store/types';
 import { docTooLarge } from './ops';
 
@@ -64,14 +64,72 @@ export function matchesIdentity(id: ConnIdentity | undefined, m: ConnMatch): boo
 export const sessionIdOf = (sessionHash: string): string => sessionHash.slice(0, 32);
 
 /** Conexión registrada en un doc: lo que `ysync` y la API necesitan poder hacer con ella. */
-export interface DocConnection { close(code?: number, reason?: string): void; identity?: ConnIdentity }
+export interface DocConnection {
+  close(code?: number, reason?: string): void;
+  identity?: ConnIdentity;
+  /**
+   * Versión del protocolo que habla el cliente (`SYNC_PROTOCOL` de `@all-draw/sync`), una vez admitida en la puerta de
+   * versión (ver `LiveDoc`); `0` = cliente sin versión (no es la app: tests, scripts). Si ya viene puesta al registrarla
+   * (p. ej. un socket del Durable Object que despierta de la hibernación), no se vuelve a pasar por la puerta.
+   */
+  protocol?: number;
+  /** Se llama al admitirla (para recordarlo, p. ej. en el adjunto del socket del DO). */
+  onAdmit?(protocol: number): void;
+}
+
+// ---------------------------------------------------------------- Puerta de versión del protocolo
+/**
+ * Los registros del documento cambiaron de formato (JSON plano → `Y.Map` por registro, ver `@all-draw/sync/ydoc`). Un
+ * cliente de la app anterior no sabe leer el formato nuevo y, al escribir, estropearía los registros: no puede
+ * sincronizar. Los clientes nuevos publican `proto` en su awareness antes de abrir el socket (`connectRemote`).
+ *
+ * Al registrar una conexión, lo que el servidor le manda se retiene hasta saber quién es:
+ * - awareness con `proto ≥ SYNC_PROTOCOL` → se admite y se le manda lo retenido (en la práctica, al momento: el
+ *   awareness llega justo detrás del primer mensaje de sync);
+ * - awareness con presencia de la app (`name`) y sin `proto`, o con un `proto` antiguo → se cierra con
+ *   `WS_UPGRADE_REQUIRED` (4426, «hay una versión nueva: recarga»), sin haberle mandado nada del documento;
+ * - sin awareness (o vacío) en `PROTOCOL_GATE_MS` → se admite igual: no es la app (tests, scripts, otros clientes
+ *   y-websocket), que no estropean nada mientras no escriban registros con la forma antigua.
+ *
+ * Lo que mande un cliente viejo antes de cerrarlo sí se aplica: son registros JSON enteros, que el formato nuevo lee
+ * (y migra al siguiente cambio).
+ */
+export const PROTOCOL_GATE_MS = 1500;
+export { WS_UPGRADE_REQUIRED };
+export const UPGRADE_REASON = 'Hay una versión nueva de all-draw: recarga la página';
+
+interface Gate { send: (buf: Uint8Array) => void; queue: Uint8Array[]; timer: ReturnType<typeof setTimeout> }
+
+/** `Map` de conexiones que avisa al registrar y al quitar una (para la puerta de versión). */
+class ConnRegistry extends Map<DocConnection, Set<number>> {
+  onAdd: ((c: DocConnection) => void) | null = null;
+  onRemove: ((c: DocConnection) => void) | null = null;
+  override set(c: DocConnection, ids: Set<number>): this {
+    const fresh = !this.has(c);
+    super.set(c, ids);
+    if (fresh) this.onAdd?.(c);
+    return this;
+  }
+  override delete(c: DocConnection): boolean {
+    const had = super.delete(c);
+    if (had) this.onRemove?.(c);
+    return had;
+  }
+  override clear(): void {
+    const all = [...this.keys()];
+    super.clear();
+    for (const c of all) this.onRemove?.(c);
+  }
+}
 
 export class LiveDoc {
   readonly doc: Y.Doc;
   readonly store: YjsStore;
   readonly awareness: awarenessProtocol.Awareness;
   /** Conexiones y los clientIds de awareness que controla cada una. */
-  readonly conns = new Map<DocConnection, Set<number>>();
+  readonly conns: Map<DocConnection, Set<number>> = new ConnRegistry();
+  /** Conexiones aún sin versión conocida (ver «Puerta de versión»). */
+  private gates = new Map<DocConnection, Gate>();
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private dirty = false;
   private saving: Promise<void> = Promise.resolve();
@@ -83,12 +141,33 @@ export class LiveDoc {
   private savedBytes = 0;
   /** Bytes de los updates llegados desde entonces (cota superior del crecimiento). */
   private pendingBytes = 0;
+  /**
+   * Comentarios recién **añadidos** al doc (clave nueva en `comments`), venga el cambio de un WebSocket o de la API. No
+   * cuentan los que entran al cargar, restaurar, reemplazar o importar (origen `load`). Lo usa el centro de
+   * notificaciones para las menciones (`Notifier.mentions`).
+   */
+  onNewComments: ((comments: Record<string, unknown>[]) => void) | null = null;
 
   constructor(readonly id: string, private persist: DocPersistence, private onIdle: () => void = () => {}, private debounceMs = SAVE_DEBOUNCE_MS, private autoSnapshotMs = AUTO_SNAPSHOT_MS) {
     this.doc = new Y.Doc({ gc: true });
     this.store = new YjsStore(this.doc);
     this.awareness = new awarenessProtocol.Awareness(this.doc);
     this.awareness.setLocalState(null);
+    const reg = this.conns as ConnRegistry;
+    reg.onAdd = c => this.gate(c);
+    reg.onRemove = c => this.ungate(c);
+    // Antes que el difusor de `ysync` (se instala al conectar el primero): clasifica según el awareness que llega.
+    this.awareness.on('update', ({ added, updated }: { added: number[]; updated: number[] }, origin: unknown) => {
+      if (!origin || typeof origin !== 'object' || !this.gates.has(origin as DocConnection)) return;
+      const conn = origin as DocConnection;
+      const ids = [...added, ...updated];
+      for (const id of ids) {
+        const st = this.awareness.getStates().get(id) as { proto?: unknown; name?: unknown } | undefined;
+        if (!st) continue;
+        if (typeof st.proto === 'number') { if (st.proto >= SYNC_PROTOCOL) this.admit(conn, st.proto); else this.reject(conn, ids); return; }
+        if (typeof st.name === 'string') { this.reject(conn, ids); return; }
+      }
+    });
     this.doc.on('update', (u: Uint8Array, origin: unknown) => {
       this.dirty = true;
       this.pendingBytes += u.byteLength;
@@ -96,6 +175,58 @@ export class LiveDoc {
       this.saveTimer = setTimeout(() => { void this.flush(); }, this.debounceMs);
       if (origin !== 'load' && Date.now() - this.lastSnapshotAt >= this.autoSnapshotMs) void this.createSnapshot(null, null).catch(e => console.error('instantánea automática', this.id, e));
     });
+    const comments = this.doc.getMap('comments');
+    comments.observe((ev, txn) => {
+      if (!this.onNewComments || txn.origin === 'load') return;
+      const added: Record<string, unknown>[] = [];
+      for (const [k, ch] of ev.changes.keys) {
+        // Registro en formato 2 (`Y.Map`) o 1 (JSON): siempre plano para quien lo reciba.
+        const v = ch.action === 'add' ? recordValue('comments', k, comments.get(k)) : undefined;
+        if (v) added.push(v);
+      }
+      if (added.length) { try { this.onNewComments(added); } catch (e) { console.error('onNewComments', this.id, e); } }
+    });
+  }
+
+  // ---------------------------------------------------------------- Puerta de versión
+  /** Retiene lo que se le manda a una conexión nueva hasta saber si habla el protocolo actual. */
+  private gate(c: DocConnection) {
+    if (c.protocol !== undefined) return;
+    const sock = c as DocConnection & { send?: (buf: Uint8Array) => void };
+    if (typeof sock.send !== 'function') return;
+    const send = sock.send;
+    const g: Gate = { send, queue: [], timer: setTimeout(() => this.admit(c, 0), PROTOCOL_GATE_MS) };
+    (g.timer as { unref?: () => void }).unref?.();
+    sock.send = buf => { g.queue.push(buf); };
+    this.gates.set(c, g);
+  }
+
+  private ungate(c: DocConnection): Gate | undefined {
+    const g = this.gates.get(c);
+    if (!g) return undefined;
+    this.gates.delete(c);
+    clearTimeout(g.timer);
+    (c as DocConnection & { send: (buf: Uint8Array) => void }).send = g.send;
+    return g;
+  }
+
+  /** Deja pasar la conexión: le manda lo retenido, en orden. */
+  private admit(c: DocConnection, protocol: number) {
+    const g = this.ungate(c);
+    if (!g) return;
+    c.protocol = protocol;
+    try { c.onAdmit?.(protocol); } catch { /* sólo es para recordarlo */ }
+    for (const buf of g.queue) { try { g.send.call(c, buf); } catch { break; } }
+  }
+
+  /** Cliente de una versión anterior de la app: fuera, sin mandarle nada del documento. */
+  private reject(c: DocConnection, clientIds: number[] = []) {
+    if (!this.ungate(c)) return;
+    const ids = new Set([...(this.conns.get(c) ?? []), ...clientIds]);
+    this.conns.delete(c);
+    if (ids.size) awarenessProtocol.removeAwarenessStates(this.awareness, [...ids], null);
+    try { c.close(WS_UPGRADE_REQUIRED, UPGRADE_REASON); } catch { /* ya cerrada */ }
+    this.touch();
   }
 
   async load(): Promise<void> {
@@ -106,6 +237,24 @@ export class LiveDoc {
     this.savedBytes = update?.byteLength ?? 0;
     this.pendingBytes = 0;
     this.lastSnapshotAt = update ? await this.lastSavedSnapshotAt() : Date.now();
+    if (update) await this.migrateFormat();
+  }
+
+  /**
+   * Migración del formato de registros (1 → 2) al cargar, de una vez y antes de que se conecte nadie: así los clientes
+   * reciben los registros ya migrados y no los migran cada uno por su lado al editarlos a la vez (la primera edición
+   * simultánea de un registro antiguo la ganaría uno). Antes guarda una instantánea automática del estado anterior.
+   * Deja la marca `recordFormat` en `meta` (el esquema del espacio la ignora).
+   */
+  private async migrateFormat(): Promise<void> {
+    if (this.store.legacyCount() === 0) return;
+    try { await this.createSnapshot(null, null); } catch (e) { console.error('instantánea antes de migrar', this.id, e); }
+    const n = migrateRecords(this.store, 'load');
+    this.doc.transact(() => this.store.metaMap.set('recordFormat', RECORD_FORMAT), 'load');
+    this.dirty = true;
+    this.savedBytes = Y.encodeStateAsUpdate(this.doc).byteLength;
+    this.pendingBytes = 0;
+    console.info?.(`espacio ${this.id}: ${n} registros migrados al formato ${RECORD_FORMAT}`);
   }
 
   /** Fecha (ms) de la instantánea más reciente del historial; 0 si no hay ninguna. Si no se puede leer, ahora (no se fuerza una). */
@@ -139,14 +288,14 @@ export class LiveDoc {
   }
 
   /**
-   * Restaura una instantánea sobre el doc vivo con `loadInto` (los clientes conectados lo ven como un
-   * cambio más y el historial Yjs se conserva). Antes guarda una instantánea automática del estado actual.
+   * Restaura una instantánea sobre el doc vivo con `replaceInto` (diff: solo cambia lo que difiere; los clientes
+   * conectados lo ven como un cambio más y el historial Yjs se conserva). Antes guarda una instantánea automática.
    */
   async restoreSnapshot(sid: string, authorId: string | null): Promise<Workspace | null> {
     const ws = await this.snapshotWorkspace(sid);
     if (!ws) return null;
     await this.createSnapshot(authorId, null);
-    loadInto(this.store, ws);
+    replaceInto(this.store, ws, 'load');
     return ws;
   }
 
@@ -199,6 +348,7 @@ export class LiveDoc {
 
   async destroy(): Promise<void> {
     if (this.idleTimer) clearTimeout(this.idleTimer);
+    for (const c of [...this.gates.keys()]) this.ungate(c);
     await this.flush();
     this.awareness.destroy();
     this.doc.destroy();
@@ -208,6 +358,8 @@ export class LiveDoc {
 export interface DocManagerOptions {
   /** Tamaño máximo de cada doc en bytes (`MAX_DOC_BYTES`); 0 o ausente = sin límite. */
   maxDocBytes?: number;
+  /** Comentarios nuevos de un espacio (ver `LiveDoc.onNewComments`): el servidor Node notifica las menciones. */
+  onNewComments?: (workspaceId: string, comments: Record<string, unknown>[], live: LiveDoc) => void;
 }
 
 export class DocManager {
@@ -230,6 +382,8 @@ export class DocManager {
       p = (async () => {
         const d = new LiveDoc(id, this.persist, () => { void this.unload(id); });
         d.maxBytes = this.opts.maxDocBytes ?? 0;
+        const hook = this.opts.onNewComments;
+        if (hook) d.onNewComments = cs => hook(id, cs, d);
         await d.load();
         d.touch();
         return d;

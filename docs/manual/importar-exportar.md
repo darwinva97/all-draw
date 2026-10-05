@@ -40,6 +40,10 @@ no importar.
 | Convertir un diagrama Mermaid que ya tienes | `.mmd` | Importar |
 | Partir del contrato de una **API** | **OpenAPI** (JSON o YAML) | Importar |
 | Seguir retocando un dibujo en **draw.io / diagrams.net** | **draw.io** | Exportar la vista |
+| Traer un diagrama de **draw.io / diagrams.net** | `.drawio` (también comprimido o `.drawio.svg`) | Importar |
+| Traer un diagrama de **Visio** | `.vsdx` | Importar |
+| Imprimir, adjuntar a un correo o archivar | **PDF** | Exportar la vista o el espacio |
+| Escribir, revisar en Git o generar el modelo **como texto** | **Texto de all-draw (DSL)** (`.alldraw.txt`) | Importar / exportar el espacio |
 | Modelos **C4** de Structurizr | **Structurizr JSON** | Importar / exportar |
 | Máquinas de estados para código (XState) | **XState JSON** | Importar / exportar la vista |
 
@@ -59,7 +63,8 @@ El procedimiento es siempre el mismo:
    primeras y "… y *N* más").
 5. Recorre las vistas y abre el [panel de problemas](editor.md#problemas) por si hay algo que revisar.
 
-El selector de ficheros admite `.drawer`, `.json`, `.archimate`, `.xml`, `.bpmn`, `.mmd`, `.yaml` y `.yml`.
+El selector de ficheros admite `.drawer`, `.json`, `.archimate`, `.xml`, `.bpmn`, `.mmd`, `.yaml`, `.yml`, `.drawio`,
+`.vsdx`, `.svg` (el SVG editable de draw.io) y `.txt` (el [lenguaje textual](dsl.md), `.alldraw.txt`).
 
 ### Desde Archi {#archi}
 
@@ -135,21 +140,51 @@ las vistas ER como `erDiagram` (con cardinalidades) y las demás como `flowchart
 4. Este importador **no crea vistas**: abre una vista, ve a la pestaña **Librerías** de la paleta y arrastra las
    operaciones desde **Componentes**.
 
+### Desde draw.io {#drawio}
+
+1. En draw.io / diagrams.net, guarda el diagrama (**Archivo → Guardar como**, `.drawio`). Da igual si está comprimido
+   (la opción por defecto) o no, y también vale el `.drawio.svg` editable.
+2. **Inicio → Importar…** y elige el fichero.
+3. Cada página se convierte en una vista, con sus posiciones, tamaños, colores, contenedores y puntos de quiebre.
+
+Las formas básicas pasan al pack **libre** (rectángulo, redondeado, elipse, rombo, cilindro, actor, nota, hexágono,
+paralelogramo). Las de las librerías de draw.io se convierten a su notación cuando no hay duda: **BPMN** (tareas,
+subprocesos, eventos, compuertas, datos, pools y carriles), **ArchiMate 3** (el tipo sale de la figura y la capa, del
+color de la paleta de draw.io; si cambiaste el color, se importa como forma libre con aviso), **clases UML** (con sus
+atributos y operaciones) y **entidades ER** (con sus atributos y la clave primaria). Las relaciones toman el tipo de
+lo que dibujan sus flechas. Las imágenes y las formas de otras librerías (AWS, Cisco…) se avisan.
+
+Un `.drawio` exportado desde all-draw vuelve con sus tipos exactos.
+
+### Desde Visio {#visio}
+
+1. En Visio, guarda el dibujo como **Dibujo de Visio (`.vsdx`)**. Los `.vsd` antiguos no se admiten: ábrelos y
+   guárdalos como `.vsdx`.
+2. **Inicio → Importar…** y elige el fichero.
+3. Cada página (salvo las de fondo) es una vista. Las formas de **diagrama de flujo** pasan al pack **Diagrama de
+   flujo** y las de **BPMN**, al pack **BPMN**; las formas básicas, al pack libre. Los conectores pegados a dos formas
+   se convierten en relaciones con su texto y sus quiebros; los datos de forma, en propiedades.
+
+No se importan los estilos del tema (solo los colores puestos a mano), las capas, los giros, las imágenes ni el formato
+del texto: la lista de avisos te dice qué se ha quedado fuera.
+
 ### Otros formatos {#otros}
 
 - **Structurizr JSON** (C4): personas, sistemas, contenedores, componentes y despliegue, con sus vistas y posiciones.
   Solo el formato JSON de Structurizr; el lenguaje DSL (`.dsl`) no se reconoce.
 - **XState JSON**: una máquina de estados. No trae posiciones, así que se colocan en rejilla al importar.
 - **JSON de all-draw**: restaura una copia de seguridad tal cual, migrando las versiones antiguas si hace falta.
+- **Texto de all-draw (DSL)**: el espacio escrito en el [lenguaje textual](dsl.md). Si una vista no trae posiciones,
+  se coloca con el layout automático.
 
 ## Exportar {#exportar}
 
 El menú **Importar / Exportar** tiene dos apartados:
 
-- **Exportar el espacio**: JSON de all-draw, HTML autocontenido (todas las vistas), Archi (.archimate), ArchiMate Open
-  Exchange, Structurizr JSON (C4) y BPMN 2.0 XML (todas las vistas BPMN).
-- **Exportar la vista «…»**: SVG (tema claro y oscuro), PNG (2×), Mermaid, draw.io y, según la notación de la vista,
-  BPMN 2.0 XML o XState JSON.
+- **Exportar el espacio**: JSON de all-draw, Texto de all-draw (DSL), PDF (todas las vistas), HTML autocontenido (todas
+  las vistas), Archi (.archimate), ArchiMate Open Exchange, Structurizr JSON (C4) y BPMN 2.0 XML (todas las vistas BPMN).
+- **Exportar la vista «…»**: SVG (tema claro y oscuro), PNG (2×), PDF, Mermaid, draw.io y, según la notación de la
+  vista, BPMN 2.0 XML o XState JSON.
 
 El fichero se descarga con el nombre del espacio o de la vista. Si algo no cabe en el formato elegido, verás una
 ventana de **Avisos** que lo explica.
@@ -177,6 +212,16 @@ Abre la vista que quieres y elige:
 Las dos se ven igual que el lienzo: formas, colores (también los de las reglas), contenedores, rejilla, pines y
 etiquetas de mapeos.
 
+### PDF {#pdf}
+
+**PDF** (en la vista) o **PDF (todas las vistas)** (en el espacio) descarga un documento vectorial: una página A4
+apaisada por vista, con el nombre de la vista, el del espacio y la notación arriba y el número de página abajo. Se ve
+igual que el SVG en tema claro, se amplía sin perder calidad y **el texto se puede seleccionar y buscar**. Cada vista
+tiene su marcador en el índice del lector de PDF. Las vistas vacías no se incluyen.
+
+La fuente del PDF es la Helvetica estándar, que solo tiene los caracteres de Europa occidental: los emojis y los
+alfabetos no latinos se omiten y se avisa.
+
 ### HTML para compartir {#html}
 
 **HTML autocontenido (todas las vistas)** descarga una sola página web que se abre en cualquier navegador, sin
@@ -195,14 +240,15 @@ Es una foto: no se puede volver a importar y no incluye todos los campos de cada
 - **BPMN 2.0 XML**: solo las vistas BPMN.
 - **Structurizr**: solo lo que es C4.
 - **draw.io**: una vista, con formas, colores, anidamiento y puntos de quiebre, para seguir dibujando en
-  diagrams.net. No incluye documentación ni pines y no se puede volver a importar en all-draw.
+  diagrams.net. No incluye documentación ni pines; al volver a importarlo en all-draw recupera los tipos.
 - **Mermaid** y **XState**: sin posiciones ni colores.
 
 ## Cómo se reconoce el formato {#deteccion}
 
-No tienes que decir qué formato es. all-draw mira la extensión (`.drawer`, `.archimate`, `.mmd`) y, si no basta, el
-contenido: los espacios de nombres del XML (Archi, Open Exchange, BPMN), las claves del JSON (all-draw, Drawer,
-Structurizr, XState, OpenAPI), la primera línea de Mermaid o `openapi:` / `swagger:` en YAML. Al importar desde el
+No tienes que decir qué formato es. all-draw mira la extensión (`.drawer`, `.archimate`, `.mmd`, `.vsdx`,
+`.alldraw.txt`) y, si no basta, el contenido: los espacios de nombres del XML (Archi, Open Exchange, BPMN), la raíz
+`<mxfile>` o `<mxGraphModel>` de draw.io (comprimido o no), las claves del JSON (all-draw, Drawer, Structurizr, XState,
+OpenAPI), la primera línea de Mermaid o del lenguaje textual, `openapi:` / `swagger:` en YAML, o el ZIP de Visio. Al importar desde el
 editor, el mensaje de confirmación te dice qué formato ha detectado.
 
 ## Tabla de formatos {#formatos}
@@ -219,7 +265,10 @@ Referencia completa de lo que se conserva y lo que se pierde en cada formato.
 | **Structurizr JSON** (C4) | importa y exporta | Personas, sistemas, contenedores, componentes, nodos de despliegue e infraestructura; `External`, `technology`, etiquetas, propiedades, descripción; jerarquía (`features.parentId`); relaciones (también de instancias); vistas landscape/contexto/contenedores/componentes/despliegue con x/y y `vertices` → puntos de quiebre; enrutado; dimensión `dim_c4`. | Vistas dinámicas y filtradas no se importan (aviso); tamaños de nodo sintéticos. Al exportar se omiten con aviso lo no C4, los `Boundary`, el nivel de código, componentes sin contenedor y elementos repetidos en una vista; contenedores sin sistema van a "Sin sistema". |
 | **XState JSON** | importa y exporta (vista de estados) | Estados por ruta (`a.b.c`), paralelos, finales, histórico; `entry`/`exit`, `description`, `meta`; pseudoestado inicial; transiciones con evento, guarda (`cond`/`guard`), acciones, `internal`, `after` (→ delay) y `always`; destinos `.hijo` y `#id`. | El fichero no tiene posiciones: al importar se aplica un layout en rejilla; al exportar se pierden posiciones, colores y puntos de quiebre. Fork/join/terminate se omiten con aviso. Solo se ofrece al exportar desde una vista de estados. |
 | **Mermaid** (`.mmd`) | importa `flowchart`/`graph` y `stateDiagram-v2`; exporta además `erDiagram` | Nodos con forma según tipo, aristas `-->`, `-.->`, `---`, `<-->` con etiqueta, `subgraph` anidados (contenedores; en rejilla, uno por capa); estados `[*]`, compuestos, regiones paralelas, `<<choice/fork/join>>`, etiquetas `evento [guarda] / acciones`. Las vistas ER se exportan como `erDiagram` con atributos y cardinalidades. | Se ignoran `classDef`, `class`, `style`, `linkStyle`, `click`, `direction`, `note`: **se pierden los colores**. Sin posiciones: layout por niveles al importar; al exportar se pierden posiciones, tamaños, puntos de quiebre y pines. Avisos por líneas no reconocidas o `end` desemparejados. |
-| **draw.io** (`.drawio`) | exporta (una vista) | `mxGraphModel` sin comprimir: formas por tipo, colores, trazo, fuente, opacidad, anidamiento (`container=1`), celdas de rejilla como contenedores, aristas ortogonales con estilo, puntas, etiqueta y puntos de quiebre; nodos con detalle como `shape=process`. | Sin documentación, propiedades ni pines. Avisos por nodos sin elemento o aristas rotas. No se reimporta. |
+| **draw.io** (`.drawio`, `.xml`, `.drawio.svg`) | importa (todas las páginas) y exporta (una vista) | **Importar**: sin comprimir y comprimido; cada página → una vista; rectángulo, redondeado, elipse, rombo, cilindro, actor, nota, hexágono, paralelogramo; `swimlane`/`group`/`container=1` → anidamiento; formas de librería con equivalente claro → su notación (BPMN `mxgraph.bpmn.*`, ArchiMate 3 `mxgraph.archimate3.*` con la capa por el color de la paleta, clases UML con filas y separadores, entidades ER `shape=table` con PK y relaciones entre atributos); aristas con puntos de quiebre, etiqueta (también `edgeLabel`), color, grosor, discontinua y puntas, y tipo de relación deducido del dibujo; etiquetas HTML → texto; colores de relleno, borde y texto; propiedades de `UserObject` y su `tooltip` (→ documentación). **Exportar**: `mxGraphModel` sin comprimir con formas, colores, anidamiento, celdas de rejilla como contenedores, aristas con estilo, puntas, etiqueta y puntos de quiebre, y el tipo exacto (`allDrawType`) para volver sin pérdidas. | Al importar: imágenes (quedan como etiqueta), aristas sueltas o unidas a otra arista, giros, estilos de texto y las figuras de librerías sin equivalente (rectángulo, con aviso). Al exportar: sin documentación, propiedades ni pines. |
+| **Visio** (`.vsdx`) | importa | Cada página (salvo las de fondo) → una vista; formas con su texto, tamaño y posición (pulgadas → píxeles, a 96 por pulgada), heredando del maestro; grupos → anidamiento; conectores pegados → relaciones con etiqueta, puntos de quiebre, flecha, línea discontinua y color; maestros de **diagrama de flujo** → pack `flow` (inicio/fin según las conexiones) y de **BPMN** → pack `bpmn`; formas básicas (rectángulo, elipse, rombo, cilindro…) → pack libre; datos de forma → propiedades; colores puestos a mano; título del documento. | No se importan (con aviso): páginas de fondo, imágenes y objetos incrustados, capas, giros, colores del tema y formato del texto; conectores sin forma en un extremo; formas de maestros desconocidos (rectángulo). Los `.vsd` antiguos no se admiten (guárdalos como `.vsdx`). |
+| **PDF** | exporta (vista o todas) | Vectorial y sin navegador: una página por vista (A4 apaisado por defecto; A3 o ajustado al dibujo), con el mismo aspecto que el SVG en tema claro; cabecera con la vista, el espacio y la notación; pie con el número de página; **texto seleccionable** (Helvetica estándar); marcadores por vista y metadatos (título, fecha, idioma, notaciones). | Es un documento: no se reimporta. La fuente estándar solo tiene Latin-1 (y €, comillas, guiones): emojis y alfabetos no latinos se omiten con aviso. |
+| **Texto de all-draw (DSL)** (`.alldraw.txt`) | importa y exporta | Todo el modelo y las vistas con sus ids: elementos con campos, documentación, etiquetas, propiedades y anidamiento; relaciones con pines y mapeos; vistas con posiciones, tamaños, anidamiento, rejilla, estilos y puntos de quiebre; librerías, dimensiones, personas, reglas y comentarios. Ida y vuelta sin pérdidas. Ver [el lenguaje](dsl.md). | Nada. Sin posiciones (escrito a mano), al importar se aplica el layout automático. |
 | **OpenAPI 2.0/3.x** (JSON/YAML) | importa | Librería `lib:apis` con una API plantilla y una operación plantilla por path+método: servidores, seguridad, versión, `externalDocs`, cabeceras, parámetros, códigos de respuesta, y cuerpos de petición/respuesta como JSON de ejemplo generado del esquema (`$ref`, `allOf/oneOf`, enum, formatos, ciclos) → cada hoja es un **pin**; etiquetas y `deprecated`. | No crea vistas (solo plantillas para arrastrar). Avisos por `$ref` externos, referencias no encontradas u operaciones repetidas. |
 | **SVG** (una vista) | exporta | Mismo aspecto que el lienzo: formas, colores por tipo y por reglas, contenedores, rejilla, aristas con puntos de quiebre y marcadores, pines visibles, etiquetas de mapeos; `<title>`/`<desc>` accesibles y atributos `data-*`; tema **dual** (`prefers-color-scheme`). | Es una imagen: no se reimporta. |
 | **PNG** (una vista, 2×) | exporta | Rasterizado del SVG con el tema actual. | Nada semántico. |
@@ -247,7 +296,7 @@ Se ejecutan sobre todas las vistas BPMN y aparecen en el [panel de problemas](ed
 
 **"No se pudo importar: No se reconoce el formato del fichero…"**
 El contenido no corresponde a ningún formato admitido. Casos típicos: un Structurizr en DSL (`.dsl`) en vez de JSON,
-un fichero de draw.io o Visio, un Excel/CSV exportado de Archi, o un `.json` cualquiera. Comprueba en la
+un Visio antiguo (`.vsd`), un Excel/CSV exportado de Archi, o un `.json` cualquiera. Comprueba en la
 [tabla de formatos](#formatos) que tu fichero es uno de ellos y, si es XML de BPMN u Open Exchange, que no lo hayas
 editado a mano quitando los espacios de nombres.
 

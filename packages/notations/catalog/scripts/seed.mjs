@@ -23,7 +23,7 @@ const SOURCE = join(ROOT, '_research/catalogo-corporativo-ti/data/catalogo.json'
 const OUT = join(PKG, 'src/generated.ts');
 
 /** Ids reales de los packs de all-draw (`NotationPack.id`). */
-const PACKS = ['archimate', 'bpmn', 'statechart', 'c4', 'sequence', 'er', 'uml', 'mindmap', 'flow', 'dfd', 'grid', 'freeform'];
+const PACKS = ['archimate', 'bpmn', 'statechart', 'c4', 'sequence', 'er', 'uml', 'mindmap', 'flow', 'dfd', 'grid', 'freeform', 'usecase', 'component', 'deployment', 'activity', 'gantt', 'ddd'];
 
 const URL = {
   archimate: 'https://pubs.opengroup.org/architecture/archimate32-doc/',
@@ -40,6 +40,7 @@ const URL = {
   wbs: 'https://www.pmi.org/pmbok-guide-standards/foundational/pmbok',
   bmc: 'https://www.strategyzer.com/library/the-business-model-canvas',
   safe: 'https://scaledagileframework.com/',
+  gantt: 'https://en.wikipedia.org/wiki/Gantt_chart',
 };
 
 /**
@@ -64,16 +65,17 @@ const SELECTION = {
   84: ['bpmn', URL.bpmn], 85: ['bpmn', URL.bpmn], 86: ['flow', URL.iso5807], 87: ['archimate', URL.archimate], 88: ['grid', null],
   90: ['grid', null], 92: ['flow', null], 96: ['statechart', URL.uml], 97: ['statechart', URL.uml],
   // UML y modelado de software
-  101: [null, URL.uml], 102: ['uml', URL.uml], 103: ['uml', URL.uml], 104: ['sequence', URL.uml], 105: [null, URL.uml], 106: ['flow', URL.uml],
-  107: ['statechart', URL.uml], 108: [null, URL.uml], 109: [null, URL.uml], 110: ['uml', URL.uml], 111: [null, URL.uml], 112: [null, URL.uml],
-  113: [null, URL.uml], 114: [null, URL.uml], 115: [null, URL.uml], 116: [null, URL.uml], 117: ['uml', URL.uml], 118: ['uml', URL.uml],
+  101: ['usecase', URL.uml], 102: ['uml', URL.uml], 103: ['uml', URL.uml], 104: ['sequence', URL.uml], 105: [null, URL.uml], 106: ['activity', URL.uml],
+  107: ['statechart', URL.uml], 108: ['component', URL.uml], 109: ['deployment', URL.uml], 110: ['uml', URL.uml], 111: [null, URL.uml], 112: [null, URL.uml],
+  113: [null, URL.uml], 114: [null, URL.uml], 115: [null, URL.uml], 116: ['usecase', URL.uml], 117: ['uml', URL.uml], 118: ['uml', URL.uml],
   119: ['uml', URL.uml], 120: ['er', URL.uml], 121: [null, URL.uml], 123: ['sequence', URL.uml], 124: ['sequence', URL.uml],
-  126: ['statechart', URL.uml], 127: ['statechart', URL.uml], 128: ['statechart', URL.uml], 134: ['uml', URL.uml], 135: ['uml', URL.uml],
-  145: ['uml', URL.uml], 150: [null, URL.uml],
+  126: ['statechart', URL.uml], 127: ['statechart', URL.uml], 128: ['statechart', URL.uml], 129: ['activity', URL.uml], 130: ['activity', URL.uml],
+  131: ['component', URL.uml], 132: ['component', URL.uml], 133: ['component', URL.uml], 134: ['uml', URL.uml], 135: ['uml', URL.uml],
+  138: ['deployment', URL.uml], 139: ['deployment', URL.uml], 145: ['uml', URL.uml], 150: [null, URL.uml],
   // C4, arquitectura y diseño
   151: ['c4', URL.c4], 152: ['c4', URL.c4], 153: ['c4', URL.c4], 154: ['c4', URL.c4], 155: ['c4', URL.c4], 156: ['c4', URL.c4],
-  157: ['dfd', URL.yourdon], 158: ['c4', URL.c4], 178: [null, URL.ddd], 179: [null, URL.ddd], 180: [null, URL.ddd], 181: ['uml', URL.ddd],
-  182: ['uml', URL.ddd], 183: [null, URL.ddd],
+  157: ['dfd', URL.yourdon], 158: ['c4', URL.c4], 178: ['ddd', URL.ddd], 179: ['ddd', URL.ddd], 180: ['ddd', URL.ddd], 181: ['ddd', URL.ddd],
+  182: ['ddd', URL.ddd], 183: ['ddd', URL.ddd], 185: ['ddd', URL.ddd],
   // APIs, integración y microservicios
   207: ['sequence', URL.uml], 219: ['sequence', null], 220: ['sequence', null], 221: ['sequence', null], 248: ['sequence', URL.uml],
   // Datos y bases de datos
@@ -88,8 +90,8 @@ const SELECTION = {
   424: ['dfd', URL.yourdon], 431: ['grid', null], 432: ['grid', null], 443: [null, null], 447: ['statechart', URL.uml],
   // Producto, proyectos, gestión y operaciones corporativas
   451: [null, null], 452: [null, null], 458: ['grid', null], 459: [null, URL.safe], 461: ['mindmap', URL.safe], 462: ['mindmap', URL.safe],
-  463: ['grid', URL.storymap], 464: ['grid', URL.storymap], 468: ['mindmap', URL.wbs], 469: ['mindmap', null], 470: [null, null],
-  471: [null, URL.wbs], 472: [null, URL.wbs], 473: [null, URL.wbs], 474: [null, URL.wbs], 475: ['grid', null], 476: ['grid', null],
+  463: ['grid', URL.storymap], 464: ['grid', URL.storymap], 468: ['mindmap', URL.wbs], 469: ['mindmap', null], 470: ['gantt', URL.gantt],
+  471: ['gantt', URL.gantt], 472: [null, URL.wbs], 473: [null, URL.wbs], 474: [null, URL.wbs], 475: ['grid', null], 476: ['grid', null],
   482: ['grid', null], 485: [null, null], 491: ['mindmap', null], 492: ['mindmap', null],
 };
 
@@ -107,6 +109,12 @@ const DESCRIPTION = {
   dfd: 'Se modela como diagrama de flujo de datos: procesos, almacenes, entidades externas y flujos.',
   grid: 'Se modela como rejilla: filas (capas) por columnas (etapas) con celdas.',
   freeform: 'Lienzo libre.',
+  usecase: 'Se modela como diagrama de casos de uso UML: actores, casos de uso, límite del sistema, «include» y «extend».',
+  component: 'Se modela como diagrama de componentes UML: componentes, interfaces proporcionadas y requeridas, puertos y artefactos.',
+  deployment: 'Se modela como diagrama de despliegue UML: nodos, dispositivos, entornos de ejecución y artefactos desplegados.',
+  activity: 'Se modela como diagrama de actividad UML: acciones, decisiones, bifurcaciones, nodos objeto y particiones.',
+  gantt: 'Se modela como diagrama de Gantt: tareas, hitos y fases en una línea de tiempo con dependencias.',
+  ddd: 'Se modela con DDD: subdominios, contextos acotados y sus patrones de relación, agregados y eventos de dominio.',
 };
 
 const slug = (text) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');

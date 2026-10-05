@@ -18,8 +18,14 @@ import { MINDMAP_PACK } from '../../notations/mindmap/src';
 import { SEQUENCE_PACK } from '../../notations/sequence/src';
 import { STATECHART_PACK } from '../../notations/statechart/src';
 import { UML_CLASS_PACK } from '../../notations/uml-class/src';
+import { USECASE_PACK } from '../../notations/usecase/src';
+import { COMPONENT_PACK } from '../../notations/component/src';
+import { DEPLOYMENT_PACK } from '../../notations/deployment/src';
+import { ACTIVITY_PACK } from '../../notations/activity/src';
+import { GANTT_PACK } from '../../notations/gantt/src';
+import { DDD_PACK } from '../../notations/ddd/src';
 
-const PACKS: NotationPack[] = [ARCHIMATE_PACK, BPMN_PACK, C4_PACK, CATALOG_PACK, DFD_PACK, ER_PACK, FLOWCHART_PACK, FREEFORM_PACK, GRID_PACK, MINDMAP_PACK, SEQUENCE_PACK, STATECHART_PACK, UML_CLASS_PACK];
+const PACKS: NotationPack[] = [ARCHIMATE_PACK, BPMN_PACK, C4_PACK, CATALOG_PACK, DFD_PACK, ER_PACK, FLOWCHART_PACK, FREEFORM_PACK, GRID_PACK, MINDMAP_PACK, SEQUENCE_PACK, STATECHART_PACK, UML_CLASS_PACK, USECASE_PACK, COMPONENT_PACK, DEPLOYMENT_PACK, ACTIVITY_PACK, GANTT_PACK, DDD_PACK];
 const ids = PACKS.map(p => p.id);
 
 describe('autoLayoutDefaults: ids de los packs reales', () => {
@@ -35,6 +41,11 @@ describe('autoLayoutDefaults: ids de los packs reales', () => {
     expect(autoLayoutDefaults(UML_CLASS_PACK.id)).toEqual({ algorithm: 'layered', direction: 'DOWN' });
     expect(autoLayoutDefaults(DFD_PACK.id).algorithm).toBe('layered');
     expect(autoLayoutDefaults(MINDMAP_PACK.id).algorithm).toBe('mrtree');
+    // Notaciones nuevas: actividad de arriba abajo; casos de uso y Gantt de izquierda a derecha
+    expect(autoLayoutDefaults(ACTIVITY_PACK.id)).toEqual({ algorithm: 'layered', direction: 'DOWN' });
+    expect(autoLayoutDefaults(USECASE_PACK.id)).toEqual({ algorithm: 'layered', direction: 'RIGHT' });
+    expect(autoLayoutDefaults(GANTT_PACK.id).direction).toBe('RIGHT');
+    for (const p of [COMPONENT_PACK, DEPLOYMENT_PACK, DDD_PACK]) expect(autoLayoutDefaults(p.id)).toEqual({ algorithm: 'layered', direction: 'DOWN' });
   });
 
   it('solo las notaciones sin dirección propia usan stress; una desconocida, como freeform', () => {

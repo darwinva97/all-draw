@@ -12,10 +12,16 @@ import { UML_CLASS_PACK } from '@all-draw/notation-uml-class';
 import { MINDMAP_PACK } from '@all-draw/notation-mindmap';
 import { FLOWCHART_PACK } from '@all-draw/notation-flowchart';
 import { DFD_PACK } from '@all-draw/notation-dfd';
+import { USECASE_PACK } from '@all-draw/notation-usecase';
+import { COMPONENT_PACK } from '@all-draw/notation-component';
+import { DEPLOYMENT_PACK } from '@all-draw/notation-deployment';
+import { ACTIVITY_PACK } from '@all-draw/notation-activity';
+import { GANTT_PACK } from '@all-draw/notation-gantt';
+import { DDD_PACK } from '@all-draw/notation-ddd';
 
-export const PACKS: NotationPack[] = [FREEFORM_PACK, GRID_PACK, ARCHIMATE_PACK, BPMN_PACK, STATECHART_PACK, C4_PACK, SEQUENCE_PACK, ER_PACK, UML_CLASS_PACK, MINDMAP_PACK, FLOWCHART_PACK, DFD_PACK];
+export const PACKS: NotationPack[] = [FREEFORM_PACK, GRID_PACK, ARCHIMATE_PACK, BPMN_PACK, STATECHART_PACK, C4_PACK, SEQUENCE_PACK, ER_PACK, UML_CLASS_PACK, MINDMAP_PACK, FLOWCHART_PACK, DFD_PACK, USECASE_PACK, COMPONENT_PACK, DEPLOYMENT_PACK, ACTIVITY_PACK, GANTT_PACK, DDD_PACK];
 /** Color de cada notación en la interfaz (chips, puntos, paleta). */
-export const PACK_COLORS: Record<string, string> = { freeform: '#64748b', grid: '#0ea5e9', archimate: '#ca8a04', bpmn: '#16a34a', statechart: '#7c3aed', c4: '#1168bd', sequence: '#db2777', er: '#0d9488', uml: '#9333ea', mindmap: '#f59e0b', flow: '#475569', dfd: '#0891b2' };
+export const PACK_COLORS: Record<string, string> = { freeform: '#64748b', grid: '#0ea5e9', archimate: '#ca8a04', bpmn: '#16a34a', statechart: '#7c3aed', c4: '#1168bd', sequence: '#db2777', er: '#0d9488', uml: '#9333ea', mindmap: '#f59e0b', flow: '#475569', dfd: '#0891b2', usecase: '#e11d48', component: '#2563eb', deployment: '#65a30d', activity: '#ea580c', gantt: '#4f46e5', ddd: '#c026d3' };
 
 /** Traduce los nombres y descripciones visibles de un pack (nombre, categorías, tipos, relaciones, viewpoints) al idioma dado. */
 export function localizePack(p: NotationPack, lang: Lang): NotationPack {

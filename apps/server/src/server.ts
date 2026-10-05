@@ -33,7 +33,9 @@ app.server.listen(config.port, config.host, () => {
   logger.info('arrancado', {
     url: `http://${config.host}:${config.port}`, version: build.version, commit: build.commit, db: storeLabel, static: config.staticDir,
     registration: config.allowRegistration ? (config.inviteCode ? 'invite' : 'open') : 'closed', node: process.version,
+    mail: app!.mailer.kind, emailVerification: config.requireEmailVerification && app!.mailer.enabled ? 'required' : 'optional',
   });
+  if (app!.mailer.kind === 'log' && config.production) logger.warn('MAIL_PROVIDER=log en producción: los enlaces de los correos quedan en el log');
 });
 
 async function shutdown(signal: string, code = 0) {

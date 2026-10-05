@@ -69,7 +69,7 @@ describe('simulacro de restauración', () => {
     await s.close();
 
     const backupDir = path.join(tmp, 'backups');
-    const b = await run('scripts/backup.mjs', { DB_PATH: dbPath, BACKUP_DIR: backupDir, KEEP_DAYS: '0' });
+    const b = await run('scripts/backup.mjs', { DB_PATH: dbPath, BACKUP_DIR: backupDir, KEEP_DAYS: '0', OFFSITE: '0' });
     expect(b.out).toMatch(/ok .*2 espacios \(0 con error\)/);
     expect(b.code).toBe(0);
     const before = fs.readFileSync(dbPath);

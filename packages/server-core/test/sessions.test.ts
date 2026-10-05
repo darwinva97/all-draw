@@ -147,8 +147,12 @@ describe('login sin fugas', () => {
     await t.register('ana@x.io');
     const c = t.client();
     await c.post('/api/auth/login', { email: 'nadie@x.io', password: 'x' }); // calienta el hash de relleno
-    const time = async (email: string) => { const t0 = performance.now(); for (let i = 0; i < 3; i++) await c.post('/api/auth/login', { email, password: `mala-${i}` }); return performance.now() - t0; };
-    const known = await time('ana@x.io'), unknown = await time('nadie@x.io');
+    // Medidas alternadas y medianas: así una racha de carga de la máquina afecta a las dos por igual.
+    const once = async (email: string, i: number) => { const t0 = performance.now(); await c.post('/api/auth/login', { email, password: `mala-${i}` }); return performance.now() - t0; };
+    const ks: number[] = [], us: number[] = [];
+    for (let i = 0; i < 7; i++) { ks.push(await once('ana@x.io', i)); us.push(await once('nadie@x.io', i)); }
+    const median = (a: number[]) => [...a].sort((x, y) => x - y)[a.length >> 1]!;
+    const known = median(ks), unknown = median(us);
     // PBKDF2 de 100 000 iteraciones domina: sin el relleno, el correo inexistente tardaría una fracción
     expect(unknown).toBeGreaterThan(known * 0.5);
     await t.close();

@@ -97,6 +97,15 @@ Tus espacios del servidor solo los ven tú, las personas a las que des acceso y,
 mantenerlo o resolver una incidencia, quien administra el servidor. No hay publicidad ni analítica de terceros. Los espacios locales no
 salen de tu navegador. Ver [privacidad](privacidad.md).
 
+### ¿El servicio no responde? ¿Dónde veo si está caído? {#estado-del-servicio}
+
+En la [página de estado](https://alldraw-monitor.darwin-sva-97.workers.dev) (también en el pie de la app,
+**Estado del servicio**): se comprueba cada 5 minutos y muestra la disponibilidad de las últimas 24 horas y 7 días y
+los últimos incidentes. Mientras el servidor principal no responde, los espacios que ya abriste en tu navegador
+siguen disponibles sin conexión, y en [alldraw.darwin-sva-97.workers.dev](https://alldraw.darwin-sva-97.workers.dev)
+hay una **copia de respaldo de solo lectura**, actualizada cada noche, donde puedes entrar con tu cuenta y consultar
+tus diagramas (no editarlos: los cambios se hacen en https://alldraw.bezenti.com).
+
 ## Editar {#editar}
 
 ### ¿Qué diferencia hay entre borrar de la vista y borrar del modelo? {#borrar-vista-o-modelo}
@@ -155,6 +164,15 @@ cambian **exactamente el mismo dato** a la vez (por ejemplo, el nombre del mismo
 uno de los dos valores, el mismo para todo el mundo. **Ctrl+Z** solo deshace tus cambios, nunca los
 de otra persona. Ver [compartir y colaborar](compartir-y-colaborar.md).
 
+### ¿Me avisan cuando me mencionan o me comparten un espacio? {#notificaciones}
+
+Sí, en los espacios del servidor: la **campana** junto a tu nombre cuenta las notificaciones sin leer
+(menciones, espacios compartidos contigo, cambios de rol y versiones restauradas en tus espacios). Para
+que una mención te llegue, tu correo tiene que estar en tu ficha de **Espacio → Personas** (o firmar
+comentarios con el mismo nombre). Si el servidor envía correos, las menciones también llegan por correo;
+lo quitas en **Cuenta → Correo y notificaciones**. Ver [notificaciones](compartir-y-colaborar.md#notificaciones)
+y [quién recibe el aviso](comentarios.md#aviso-de-mencion).
+
 ### ¿Cómo quito el acceso a alguien? {#quitar-acceso}
 
 **Compartir** → **Revocar** junto al enlace que le diste. Desde ese momento el enlace ya no abre el
@@ -192,9 +210,25 @@ etiqueta en **Historial**, por si quieres volver atrás.
 
 ### He olvidado la contraseña. ¿Qué hago? {#olvide-contrasena}
 
-all-draw **no envía correos**, así que no hay enlace de "recuperar contraseña". Pide a una persona
-administradora del servidor que la restablezca: te dará una contraseña temporal. Entra con ella y
-cámbiala en **Cuenta → Cambiar contraseña**.
+Pulsa **Entrar → ¿Olvidaste tu contraseña?**. Si el servidor envía correos, escribe tu correo y te
+llega un enlace para elegir una contraseña nueva: sirve **una vez** y caduca en **una hora**, y al
+usarlo se cierran todas tus sesiones. Si el servidor **no envía correos**, el diálogo te lo dice: pide
+a una persona administradora que la restablezca; te dará una contraseña temporal que cambias en
+**Cuenta → Cambiar contraseña**. Ver [He olvidado la contraseña](compartir-y-colaborar.md#recuperar-contrasena).
+
+### ¿Por qué tengo que confirmar mi correo? {#confirmar-correo}
+
+Para saber que la dirección es tuya: es a donde llegan los enlaces para recuperar la contraseña y los
+avisos de menciones. Al registrarte (o al cambiar el correo) te llega un enlace que caduca en 24 horas;
+si se te pasó, **Cuenta → Reenviar el enlace**. Algunos servidores no dejan crear espacios en el
+servidor hasta confirmarlo; los espacios de tu navegador funcionan siempre. Ver
+[confirmar el correo](compartir-y-colaborar.md#verificar-correo).
+
+### ¿Cómo veo dónde tengo la sesión abierta? {#sesiones-activas}
+
+En **Cuenta → Sesiones activas**: cada navegador con su sistema, la IP sin el último número, cuándo se
+abrió y su último uso. **Cerrar esta sesión** echa a ese navegador al momento. Ver
+[tu cuenta](compartir-y-colaborar.md#ajustes-cuenta).
 
 ### ¿Cómo cambio la contraseña o cierro sesión en todos mis dispositivos? {#cambiar-contrasena}
 

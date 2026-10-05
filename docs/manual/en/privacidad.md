@@ -1,6 +1,6 @@
 # Privacy policy
 
-Last updated: 3 October 2026.
+Last updated: 5 October 2026.
 
 This policy explains what data the all-draw service offered at **https://alldraw.bezenti.com**
 (the "service") processes, why, where and for how long, and how you can exercise your rights. It is
@@ -109,9 +109,19 @@ about you. We do not sell or hand over data.
   Cloudflare, Inc. is a US company; international transfers rely on
   the EU-US Data Privacy Framework, which Cloudflare has joined, and the standard contractual clauses in
   its data processing agreement.
-- **Cloudflare Workers installation**: there is also an installation of the service on Cloudflare
-  Workers (a `*.workers.dev` address). If you use that address, your account data and workspaces
-  are stored on Cloudflare's infrastructure, not on the VPS.
+- **Backup copy on Cloudflare Workers**: the address
+  [alldraw.darwin-sva-97.workers.dev](https://alldraw.darwin-sva-97.workers.dev) is a **read-only backup copy** of
+  the service, on Cloudflare's infrastructure, updated **every night** with the main server's data (accounts,
+  workspaces, members and links). It lets you look at your diagrams if the main server is down; you cannot edit
+  there. Whatever you delete on the main server disappears from the copy at the next sync.
+- **Off-site backups**: every night a copy of the database and the workspaces is sent to Backblaze B2, a storage
+  service of Backblaze, Inc. (USA), in its US East region (`us-east`). They are encrypted at rest, kept in private
+  storage that only the operator can access, and deleted automatically after **90 days**. They are only used to
+  restore the service after a serious failure. International transfers rely on the standard contractual clauses in
+  its data processing agreement.
+- **Availability monitor**: a small service on Cloudflare checks every 5 minutes whether the service responds and
+  publishes a [status page](https://alldraw-monitor.darwin-sva-97.workers.dev). It only reads the technical status
+  (version, uptime and whether the database responds): **it sees no accounts, diagrams or personal data**.
 
 ## How long we keep it {#conservacion}
 
@@ -123,12 +133,15 @@ about you. We do not sell or hand over data.
 | Workspaces and comments | Until the owner deletes them |
 | Snapshots | Up to 100 per workspace; the oldest automatic ones are deleted on their own; all are deleted with the workspace |
 | Server backups | 30 days; then they are deleted automatically |
+| Off-site backups (Backblaze) | 90 days; then they are deleted automatically |
+| Backup copy on Cloudflare | Replaced every night with the main server's content |
 | Attempt count per IP | Minutes, in memory only |
 | Final copy of workspaces deleted along with an account | 30 days, with the backups |
 | Request and error logs | In the server's system log, which deletes them only by rotation when it fills up; they contain the truncated IP and never diagram content |
 
-Bear in mind that deleted data may remain for up to 30 days in backups, which are not modified;
-after that it is gone.
+Bear in mind that deleted data may remain for up to 30 days in the server's backups and up to 90 days
+in the off-site backups, which are not modified; after that it is gone. It disappears from the backup copy
+on Cloudflare at the next nightly sync.
 
 ## No advertising or tracking {#sin-rastreo}
 
@@ -172,8 +185,8 @@ The application also stores data in your browser that is **not sent** to the ser
 ## Who it is shared with {#terceros}
 
 - With the **people you give access** to a workspace (by link or as members).
-- With our **infrastructure providers** (VPS hosting and Cloudflare), only to provide the service
-  and as processors.
+- With our **infrastructure providers** (VPS hosting, Cloudflare and Backblaze for off-site backups),
+  only to provide the service and as processors.
 - **Server administrators** can see the list of accounts (name and email) to manage them, for
   example to reset a password. Technically they can also open any workspace on the server; they only
   do so for maintenance, to fix an incident or when you ask them to.
@@ -217,7 +230,7 @@ authority of your country (in the European Union, that of your member state).
 - Passwords hashed with salted PBKDF2; sessions and API keys stored only as fingerprints.
 - `HttpOnly`, `SameSite` session cookie, with protection against requests from other sites.
 - Limits on sign-in and sign-up attempts.
-- Daily backups.
+- Daily backups, also kept off the server (encrypted at rest).
 
 If you find a security problem, report it privately at
 https://github.com/darwinva97/all-draw/security.

@@ -25,6 +25,11 @@ import {
   type Hasher, type Principal,
 } from './auth';
 import { atLeast, type Member, type Role, type ShareLink, type SnapshotMeta, type User, type WorkspaceRow, type WorkspaceStore } from './store/types';
+import { noneMailer, type Mailer } from './mail';
+import { mailLang } from './mail-templates';
+import { Notifier } from './notifications';
+import { describeUserAgent } from './devices';
+import { DEFAULT_FORGOT_MIN_MS, registerAccountRoutes } from './api-accounts';
 
 /** Tamaños máximos de cuerpo: 5 MB para Workspace JSON completos, 1 MB para el resto (comandos incluidos). */
 export const MAX_BODY_SNAPSHOT = 5 * 1024 * 1024;
@@ -54,7 +59,26 @@ export interface ApiConfig {
   maxDocBytes?: number;
   /** Tiempo mínimo del formulario de registro en ms (`REGISTER_MIN_MS`, 2000); 0 desactiva el `formToken`. */
   registerMinMs?: number;
+  /**
+   * Copia de respaldo de solo lectura (el worker con `STANDBY="true"`): toda escritura de la API responde 503
+   * `code: 'standby'` salvo `STANDBY_ALLOWED` (entrar, salir, cerrar sesiones, informes de error), y `GET /api/status`
+   * publica `standby: true` (y `primaryUrl`).
+   */
+  standby?: boolean;
+  /** URL del entorno principal que anuncia la copia de respaldo. */
+  primaryUrl?: string | null;
+  /**
+   * `REQUIRE_EMAIL_VERIFICATION`: sin verificar el correo no se pueden crear espacios en el servidor (403
+   * `code: email_unverified`; los locales siguen). Sólo tiene efecto si hay correo (`Mailer.enabled`); los admins no la necesitan.
+   */
+  requireEmailVerification?: boolean;
+  /** Tiempo mínimo de respuesta de `POST /api/auth/forgot` en ms (400; 0 en los tests). */
+  forgotMinMs?: number;
 }
+
+/** Escrituras que siguen funcionando en la copia de respaldo (`standby`): la sesión y los informes de error. */
+export const STANDBY_ALLOWED = new Set(['POST /api/auth/login', 'POST /api/auth/logout', 'DELETE /api/auth/sessions', 'POST /api/client-errors']);
+export const STANDBY_ERROR = 'Esta es una copia de respaldo de solo lectura: los cambios se hacen en el servidor principal';
 
 /** Versión desplegada (la publica `GET /api/status`). */
 export interface BuildInfo {
@@ -101,13 +125,23 @@ export interface ApiDeps {
    * `X-Forwarded-For` sin saber si quien la pone es de confianza.
    */
   clientIp?: (c: Context) => string;
+  /** Correo saliente (`mail.ts`); por defecto ninguno (`email: false`). */
+  mailer?: Mailer;
+  /** Centro de notificaciones (por defecto uno sobre `store` y `mailer`; Node lo comparte con las menciones del `DocManager`). */
+  notifier?: Notifier;
 }
 type Env = { Variables: { principal: Principal | null } };
+/** Cada cuánto, como mucho, se apunta el último uso de una sesión (lista de sesiones activas). */
+export const SESSION_TOUCH_MS = 5 * 60_000;
 
 // ---------------------------------------------------------------- Esquemas
 const RoleSchema = z.enum(['owner', 'editor', 'viewer']);
 const MemberRoleSchema = z.enum(['editor', 'viewer']);
-const UserOut = z.object({ id: z.string(), email: z.string(), name: z.string(), isAdmin: z.boolean(), createdAt: z.string() }).meta({ id: 'User' });
+const UserOut = z.object({
+  id: z.string(), email: z.string(), name: z.string(), isAdmin: z.boolean(), createdAt: z.string(),
+  emailVerified: z.boolean().describe('¿Ha confirmado su correo actual con el enlace?'), locale: z.enum(['es', 'en']).describe('Idioma de los correos'),
+  notifyEmail: z.boolean().describe('Recibir por correo las menciones (si el servidor tiene correo)'),
+}).meta({ id: 'User' });
 const AuthOut = z.object({ user: UserOut, token: z.string().describe('Token de sesión (también va en la cookie)') });
 const KeyOut = z.object({ id: z.string(), name: z.string(), prefix: z.string(), createdAt: z.string(), lastUsedAt: z.string().nullable() });
 const WorkspaceOut = z.object({ id: z.string(), name: z.string(), ownerId: z.string(), createdAt: z.string(), updatedAt: z.string(), role: RoleSchema }).meta({ id: 'WorkspaceInfo' });
@@ -174,12 +208,16 @@ const ERROR_CODES: Record<string, string> = {
   'Cambia administradores desde una sesión, no con una API key': 'session_required',
   'Restablece contraseñas desde una sesión, no con una API key': 'session_required',
   'Crea las API keys desde una sesión, no con otra API key': 'session_required',
+  [STANDBY_ERROR]: 'standby',
 };
 
 const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 429 | 500 | 501 | 503, error: string, extra: Record<string, unknown> = {}) =>
   new HTTPException(status, { res: Response.json({ error, ...(ERROR_CODES[error] ? { code: ERROR_CODES[error] } : {}), ...extra }, { status }) });
 
-const publicUser = (u: User) => ({ id: u.id, email: u.email, name: u.name, isAdmin: u.isAdmin, createdAt: u.createdAt });
+const publicUser = (u: User) => ({
+  id: u.id, email: u.email, name: u.name, isAdmin: u.isAdmin, createdAt: u.createdAt,
+  emailVerified: !!u.emailVerifiedAt, locale: mailLang(u.locale), notifyEmail: u.notifyEmail !== false,
+});
 
 const QuotasOut = z.object({
   workspaces: z.object({ used: z.number(), limit: z.number().nullable().describe('null = sin límite') }),
@@ -196,7 +234,10 @@ const ClientError = z.object({
   count: z.number().int().min(1).max(10_000).optional().describe('Veces que se repitió (deduplicado en el cliente)'),
 });
 
-export function createApi({ store, docs, hash, config, notations = ALL_PACKS, logger = jsonLogger(), build = {}, onIdentity, archiveWorkspace, clientIp: getClientIp }: ApiDeps) {
+export function createApi({ store, docs, hash, config, notations = ALL_PACKS, logger = jsonLogger(), build = {}, onIdentity, archiveWorkspace, clientIp: getClientIp, mailer = noneMailer, notifier: givenNotifier }: ApiDeps) {
+  const notifier = givenNotifier ?? new Notifier({ store, mailer, logger, publicUrl: config.publicUrl });
+  /** ¿Se exige el correo verificado para crear espacios? Sólo con correo: sin él nadie podría verificar. */
+  const requireVerified = !!config.requireEmailVerification && mailer.enabled;
   const maxWorkspaces = config.maxWorkspacesPerUser ?? DEFAULT_MAX_WORKSPACES_PER_USER;
   const maxDocBytes = config.maxDocBytes ?? DEFAULT_MAX_DOC_BYTES;
   const registerMinMs = config.registerMinMs ?? DEFAULT_REGISTER_MIN_MS;
@@ -248,6 +289,14 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     return bodyLimit({ maxSize, onError: () => { throw fail(413, 'Cuerpo demasiado grande'); } })(c, next);
   });
 
+  // Copia de respaldo de solo lectura: ninguna escritura salvo la sesión (antes de resolver identidades).
+  if (config.standby) {
+    app.use('/api/*', async (c, next) => {
+      if (SAFE_METHODS.has(c.req.method) || STANDBY_ALLOWED.has(`${c.req.method} ${c.req.path}`)) return next();
+      throw fail(503, STANDBY_ERROR, config.primaryUrl ? { primaryUrl: config.primaryUrl } : {});
+    });
+  }
+
   // Identidad + CSRF + renovación deslizante de la sesión.
   app.use('/api/*', async (c, next) => {
     const url = new URL(c.req.url);
@@ -260,6 +309,10 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
       const expires = new Date(Date.now() + SESSION_MS);
       void store.touchSession(p.sessionHash, expires.toISOString()).catch(() => { /* se reintenta en la siguiente */ });
       if (cred.source === 'cookie') setCookie(c, SESSION_COOKIE, cred.token!, { httpOnly: true, sameSite: 'Lax', secure: cookieSecure(c), path: '/', expires });
+    }
+    // Último uso e IP (truncada) de la sesión, para «Sesiones activas»: como mucho una escritura cada `SESSION_TOUCH_MS`.
+    if (p?.kind === 'user' && p.session && p.sessionHash && Date.now() - Date.parse(p.session.lastUsedAt ?? p.session.createdAt) > SESSION_TOUCH_MS) {
+      void store.markSessionUsed(p.sessionHash, new Date().toISOString(), shortIp(c)).catch(() => { /* no importa */ });
     }
     c.set('principal', p);
     onIdentity?.(c, p);
@@ -342,14 +395,26 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   const baseUrl = (c: { req: { header(n: string): string | undefined } }) => config.publicUrl ?? `${c.req.header('x-forwarded-proto') ?? 'http'}://${c.req.header('x-forwarded-host') ?? c.req.header('host') ?? 'localhost'}`;
   const linkUrl = (c: { req: { header(n: string): string | undefined } }, workspaceId: string, token: string) => `${baseUrl(c)}/#/s/${encodeURIComponent(workspaceId)}?token=${encodeURIComponent(token)}`;
 
+  /** IP truncada de la petición (`null` si no se sabe), para la lista de sesiones. */
+  const shortIp = (c: unknown): string | null => { const t = truncateIp(clientIp(c)); return t === 'unknown' ? null : t; };
   async function startSession(c: Parameters<typeof setCookie>[0], user: User) {
     const token = randomToken(SESSION_PREFIX);
     const expires = new Date(Date.now() + SESSION_MS);
-    await store.createSession(user.id, await hash(token), expires.toISOString());
+    // Para «Sesiones activas»: navegador y sistema resumidos (nunca el user-agent entero) e IP truncada.
+    await store.createSession(user.id, await hash(token), expires.toISOString(), { device: describeUserAgent(c.req.header('user-agent')), ip: shortIp(c) });
     setCookie(c, SESSION_COOKIE, token, { httpOnly: true, sameSite: 'Lax', secure: cookieSecure(c), path: '/', expires });
     void store.purgeExpiredSessions().catch(() => { /* limpieza oportunista */ });
     return token;
   }
+
+  // Recuperar la contraseña, verificar el correo, sesiones activas y notificaciones (`api-accounts.ts`).
+  const accounts = registerAccountRoutes(app, {
+    store, hash, logger, mailer, notifier, forgotMinMs: config.forgotMinMs ?? DEFAULT_FORGOT_MIN_MS,
+    fail, requireUser, requireSession, clientIp, baseUrl, publicUser, afterSessionsClosed, kickUser,
+    schemas: { Password, Email, UserOut, ErrorOut, SafeId },
+  });
+  /** Nombre de quien hace algo (para las notificaciones): la cuenta, o `null` con un enlace compartido. */
+  const actorOf = (p: Principal) => (p.kind === 'user' ? { actorId: p.user.id, actorName: p.user.name } : { actorId: null, actorName: null });
 
   // Anti-abuso del registro: `formToken` = `<emitido-ms>.<hash('register-form:<emitido-ms>')>` (HMAC con
   // `SESSION_SECRET` si está). Lo da `GET /api/auth/config` y el registro exige que tenga ≥ `registerMinMs`.
@@ -376,6 +441,8 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   const StatusOut = z.object({
     status: z.enum(['ok', 'degraded']), version: z.string(), commit: z.string().nullable(), runtime: z.string(), startedAt: z.string(), uptimeS: z.number(),
     db: z.object({ kind: z.string(), ok: z.boolean(), ms: z.number(), error: z.string().optional() }),
+    standby: z.boolean().optional().describe('`true` en la copia de respaldo de solo lectura (las escrituras responden 503 `standby`)'),
+    primaryUrl: z.string().optional().describe('Con `standby`: dirección del entorno principal'),
   });
   app.openapi(createRoute({
     method: 'get', path: '/api/status', tags: ['sistema'], summary: 'Estado público: versión, commit, tiempo en marcha y si la base de datos responde',
@@ -393,6 +460,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
       version: build.version ?? '0.0.0', commit: build.commit ?? null, runtime: build.runtime ?? 'unknown', startedAt,
       uptimeS: Math.round((Date.now() - Date.parse(startedAt)) / 1000),
       db: { kind: build.db ?? 'unknown', ok: dbOk, ms: Date.now() - t0, ...(dbError ? { error: dbError } : {}) },
+      ...(config.standby ? { standby: true, ...(config.primaryUrl ? { primaryUrl: config.primaryUrl } : {}) } : {}),
     };
     c.header('cache-control', 'no-store');
     return dbOk ? c.json(body, 200) : c.json(body, 503);
@@ -429,10 +497,12 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     responses: { 200: jsonRes(z.object({
       registration: z.enum(['open', 'invite', 'closed']), passwordMinLength: z.number(),
       formToken: z.string().describe('Mándalo en el registro; vale tras `formMinMs` y durante un día'), formMinMs: z.number(),
+      email: z.boolean().describe('¿Tiene correo el servidor? Con `true` funcionan «¿Olvidaste tu contraseña?» y la verificación del correo'),
+      emailVerificationRequired: z.boolean().describe('`REQUIRE_EMAIL_VERIFICATION`: hay que verificar el correo para crear espacios en el servidor'),
     }), 'Configuración pública') },
   }), async c => {
     c.header('cache-control', 'no-store');
-    return c.json({ registration: await registrationState(), passwordMinLength: 8, formToken: await formToken(), formMinMs: registerMinMs }, 200);
+    return c.json({ registration: await registrationState(), passwordMinLength: 8, formToken: await formToken(), formMinMs: registerMinMs, email: mailer.enabled, emailVerificationRequired: requireVerified }, 200);
   });
 
   app.openapi(createRoute({
@@ -457,8 +527,11 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     if (!config.allowRegistration && (n > 0 || !config.inviteCode)) throw fail(403, 'El registro está cerrado');
     if (config.inviteCode && !safeEqualString(body.inviteCode ?? '', config.inviteCode)) throw fail(403, 'Código de invitación incorrecto');
     if (await store.getUserByEmail(body.email)) throw fail(409, 'Ese email ya está registrado');
-    const user = await store.createUser({ email: body.email, name: body.name, passwordHash: await hashPassword(body.password), isAdmin: n === 0 });
+    // El idioma de los correos: el de la interfaz con la que se registra (la app manda `Accept-Language`).
+    const user = await store.createUser({ email: body.email, name: body.name, passwordHash: await hashPassword(body.password), isAdmin: n === 0, locale: mailLang(c.req.header('accept-language')) });
     const token = await startSession(c, user);
+    // Enlace para verificar el correo (24 h). Si el proveedor falla, la cuenta queda creada y se puede reenviar.
+    await accounts.sendVerification(c, user, user.email, false).catch(e => logger.error('registro: no se pudo enviar la verificación', { user: user.id, err: e }));
     return c.json({ user: publicUser(user), token }, 201);
   });
 
@@ -480,8 +553,11 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     loginLimiter.reset(pairKey);
     // Migración transparente de hashes heredados (scrypt) al esquema actual (PBKDF2/WebCrypto).
     if (needsRehash(user.passwordHash)) { try { await store.setPasswordHash(user.id, await hashPassword(password)); } catch (e) { console.error('no se pudo re-hashear', e); } }
-    const token = await startSession(c, user);
-    return c.json({ user: publicUser(user), token }, 200);
+    // Cuentas de antes del idioma por cuenta: se toma el de la interfaz con la que entran.
+    let current = user;
+    if (!user.locale) { try { current = (await store.updateUser(user.id, { locale: mailLang(c.req.header('accept-language')) })) ?? user; } catch { /* no importa */ } }
+    const token = await startSession(c, current);
+    return c.json({ user: publicUser(current), token }, 200);
   });
 
   app.openapi(createRoute({
@@ -526,27 +602,42 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   });
 
   app.openapi(createRoute({
-    method: 'patch', path: '/api/auth/me', tags: ['auth'], summary: 'Cambiar mi nombre o mi email (el email exige la contraseña actual y una sesión)', security: bearer,
-    request: { body: jsonBody(z.object({ name: z.string().trim().min(1).max(120).optional(), email: Email.optional(), password: z.string().max(200).optional().describe('Contraseña actual (obligatoria para cambiar el email)') })) },
-    responses: { 200: jsonRes(z.object({ user: UserOut }), 'Actualizado'), 400: errors[400], 401: errors[401], 403: errors[403], 409: jsonRes(ErrorOut, 'Email ya registrado'), 429: jsonRes(ErrorOut, 'Demasiados intentos') },
+    method: 'patch', path: '/api/auth/me', tags: ['auth'],
+    summary: 'Cambiar mi nombre, mi email (exige la contraseña actual y una sesión; con correo en el servidor no cambia hasta confirmar el enlace enviado al nuevo: `pendingEmail`), el idioma de los correos o «recibir por correo»',
+    security: bearer,
+    request: { body: jsonBody(z.object({
+      name: z.string().trim().min(1).max(120).optional(), email: Email.optional(), password: z.string().max(200).optional().describe('Contraseña actual (obligatoria para cambiar el email)'),
+      locale: z.enum(['es', 'en']).optional().describe('Idioma de los correos'), notifyEmail: z.boolean().optional().describe('Recibir por correo las menciones'),
+    })) },
+    responses: { 200: jsonRes(z.object({ user: UserOut, pendingEmail: z.string().optional().describe('Correo nuevo pendiente de confirmar (se ha enviado el enlace)') }), 'Actualizado'), 400: errors[400], 401: errors[401], 403: errors[403], 409: jsonRes(ErrorOut, 'Email ya registrado'), 429: jsonRes(ErrorOut, 'Demasiados intentos') },
   }), async c => {
     const p = requireUser(c);
     const body = c.req.valid('json');
-    const patch: { name?: string; email?: string } = {};
+    const patch: { name?: string; email?: string; emailVerifiedAt?: null; locale?: string; notifyEmail?: boolean } = {};
     if (body.name !== undefined && body.name !== p.user.name) patch.name = body.name;
+    if (body.locale !== undefined && body.locale !== p.user.locale) patch.locale = body.locale;
+    if (body.notifyEmail !== undefined && body.notifyEmail !== p.user.notifyEmail) patch.notifyEmail = body.notifyEmail;
+    let pendingEmail: string | undefined;
     if (body.email !== undefined && body.email !== p.user.email) {
       if (p.via !== 'session') throw fail(403, 'Cambia el email desde una sesión, no con una API key');
       if (!accountLimiter.check(`user:${p.user.id}`)) throw fail(429, 'Demasiados intentos; espera unos minutos');
       if (!body.password || !p.user.passwordHash || !(await verifyPassword(body.password, p.user.passwordHash))) throw fail(403, 'Para cambiar el email escribe tu contraseña actual');
       if (await store.getUserByEmail(body.email)) throw fail(409, 'Ese email ya está registrado');
-      patch.email = body.email;
+      // Con correo, el cambio espera a que el correo nuevo confirme el enlace (`POST /api/auth/verify`): una errata o
+      // alguien con la sesión abierta no se queda con la cuenta. Sin correo, se cambia ya y queda sin verificar.
+      if (mailer.enabled) pendingEmail = body.email;
+      else { patch.email = body.email; patch.emailVerifiedAt = null; }
     }
     let user = p.user;
-    if (patch.name !== undefined || patch.email !== undefined) {
+    if (Object.keys(patch).length) {
       try { user = (await store.updateUser(p.user.id, patch)) ?? user; }
       catch (e) { if (String(e).includes('email ya registrado')) throw fail(409, 'Ese email ya está registrado'); throw e; }
     }
-    return c.json({ user: publicUser(user) }, 200);
+    if (pendingEmail) {
+      try { await accounts.sendVerification(c, user, pendingEmail, true); }
+      catch (e) { logger.error('no se pudo enviar el enlace al correo nuevo', { user: user.id, err: e }); throw fail(503, 'No se pudo enviar el correo; inténtalo más tarde', { code: 'email_failed' }); }
+    }
+    return c.json({ user: publicUser(user), ...(pendingEmail ? { pendingEmail } : {}) }, 200);
   });
 
   app.openapi(createRoute({
@@ -754,6 +845,9 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   }), async c => {
     const p = requireUser(c);
     const body = c.req.valid('json');
+    if (requireVerified && !p.user.emailVerifiedAt && !p.user.isAdmin) {
+      throw fail(403, 'Confirma tu correo para crear espacios en el servidor: abre el enlace que te enviamos (o pide otro en Cuenta). Los espacios de este navegador siguen funcionando.', { code: 'email_unverified' });
+    }
     if (maxWorkspaces > 0 && !p.user.isAdmin && (await store.countOwnedWorkspaces(p.user.id)) >= maxWorkspaces) {
       throw fail(403, `Has llegado al máximo de ${maxWorkspaces} espacios por cuenta: borra los que ya no uses para crear otros.`, { code: 'quota_workspaces', limit: maxWorkspaces });
     }
@@ -794,6 +888,7 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     // Cambio de dueño: el anterior y el nuevo cambian de rol → reconectan y el servidor les da el que tengan ahora.
     if (body.ownerId !== undefined && prevOwner && prevOwner !== body.ownerId) {
       for (const uid of [prevOwner, body.ownerId]) await kick(id, { userId: uid }, WS_ROLE_CHANGED, 'rol cambiado');
+      if (principal.kind === 'user' && principal.user.id !== body.ownerId) await notifier.notify({ userId: body.ownerId, kind: 'role', workspaceId: id, payload: { workspaceName: row?.name ?? '', ...actorOf(principal), role: 'owner' } }, baseUrl(c));
     }
     return c.json({ ...row!, role }, 200);
   });
@@ -834,6 +929,11 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
     if (!u) throw fail(404, 'Usuario desconocido');
     const prev = await store.getRole(id, userId);
     await store.setRole(id, userId, role);
+    // Notificación para quien recibe el acceso o cambia de rol (no para quien se lo da a sí mismo).
+    const actor = actorOf(c.get('principal')!);
+    if (actor.actorId !== userId && prev !== role) {
+      await notifier.notify({ userId, kind: prev ? 'role' : 'shared', workspaceId: id, payload: { workspaceName: ws.name, ...actor, role, ...(prev ? { previousRole: prev } : {}) } }, baseUrl(c));
+    }
     // Si ya tenía rol y cambia, sus WebSockets se cierran con 4205: el cliente reconecta y recibe el rol nuevo
     // (un editor que pasa a viewer deja de poder escribir al momento). Un admin es dueño igualmente: no se toca.
     if (prev && prev !== role && !u.isAdmin) await kick(id, { userId }, WS_ROLE_CHANGED, 'rol cambiado');
@@ -996,9 +1096,15 @@ export function createApi({ store, docs, hash, config, notations = ALL_PACKS, lo
   }), async c => {
     const { id, sid } = c.req.valid('param');
     const { principal } = await requireRole(c, id, 'editor');
+    const meta = (await docs.listSnapshots(id).catch(() => [] as SnapshotMeta[])).find(m => m.id === sid) ?? null;
     const ws = await docs.restoreSnapshot(id, sid, principal.kind === 'user' ? principal.user.id : null);
     if (!ws) throw fail(404, 'No existe esa instantánea');
     if (ws.meta.name) await store.updateMeta(id, { name: ws.meta.name });
+    // Al dueño, si lo restaura otra persona (o un enlace de edición).
+    const row = await store.getWorkspace(id);
+    if (row && !(principal.kind === 'user' && principal.user.id === row.ownerId)) {
+      await notifier.notify({ userId: row.ownerId, kind: 'restored', workspaceId: id, payload: { workspaceName: row.name, ...actorOf(principal), snapshotId: sid, snapshotLabel: meta?.label ?? null, snapshotCreatedAt: meta?.createdAt ?? null } }, baseUrl(c));
+    }
     return c.json({ ok: true as const }, 200);
   });
 

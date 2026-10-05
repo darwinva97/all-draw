@@ -18,6 +18,7 @@
     "@all-draw/i18n": "workspace:*",
     "@all-draw/notation-archimate": "workspace:*",
     "@all-draw/notation-grid": "workspace:*",
+    "@all-draw/sim": "workspace:*",
     "@xyflow/react": "^12.12.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"

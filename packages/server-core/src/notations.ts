@@ -13,8 +13,14 @@ import MINDMAP from '@all-draw/notation-mindmap';
 import FLOWCHART from '@all-draw/notation-flowchart';
 import DFD from '@all-draw/notation-dfd';
 import CATALOG from '@all-draw/notation-catalog';
+import USECASE from '@all-draw/notation-usecase';
+import COMPONENT from '@all-draw/notation-component';
+import DEPLOYMENT from '@all-draw/notation-deployment';
+import ACTIVITY from '@all-draw/notation-activity';
+import GANTT from '@all-draw/notation-gantt';
+import DDD from '@all-draw/notation-ddd';
 
-export const ALL_PACKS: NotationPack[] = [CORE_PACK, FREEFORM, GRID, BPMN, ARCHIMATE, C4, STATECHART, SEQUENCE, ER, UML, MINDMAP, FLOWCHART, DFD, CATALOG];
+export const ALL_PACKS: NotationPack[] = [CORE_PACK, FREEFORM, GRID, BPMN, ARCHIMATE, C4, STATECHART, SEQUENCE, ER, UML, MINDMAP, FLOWCHART, DFD, USECASE, COMPONENT, DEPLOYMENT, ACTIVITY, GANTT, DDD, CATALOG];
 
 export function createRegistry(packs: NotationPack[] = ALL_PACKS): NotationRegistry {
   const reg = new NotationRegistry();

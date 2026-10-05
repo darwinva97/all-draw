@@ -28,6 +28,8 @@ import { cellRects, normalizeGrid, cellKey, cellAt } from '@all-draw/notation-gr
 import { LifelineNode, ActivationNode, FragmentNode } from './views/SequenceNodes';
 import { SequenceMessageEdge } from './views/SequenceEdges';
 import { useSequenceCanvas } from './views/useSequenceCanvas';
+import { GanttGridNode, GanttScaleNode, GanttBarNode, GanttDependencyEdge } from './views/GanttNodes';
+import { useGanttCanvas } from './views/gantt-canvas';
 import { deleteSelection } from './delete-selection';
 import { filterBpmnConnections } from './bpmn-rules';
 import { compartmentHeight } from './nodes/compartments';
@@ -39,8 +41,8 @@ import { Icon } from './icons';
 export const CELL_PREFIX = 'cell:';
 const isCellId = (id: string | undefined | null) => !!id && id.startsWith(CELL_PREFIX);
 
-const nodeTypes = { element: ElementNode, visual: VisualNode, lifeline: LifelineNode, activation: ActivationNode, fragment: FragmentNode };
-const edgeTypes = { relation: RelationEdge, sequenceMessage: SequenceMessageEdge };
+const nodeTypes = { element: ElementNode, visual: VisualNode, lifeline: LifelineNode, activation: ActivationNode, fragment: FragmentNode, ganttGrid: GanttGridNode, ganttScale: GanttScaleNode, ganttBar: GanttBarNode };
+const edgeTypes = { relation: RelationEdge, sequenceMessage: SequenceMessageEdge, ganttDep: GanttDependencyEdge };
 
 export const DND_TYPE = 'application/x-all-draw-type';
 export const DND_TEMPLATE = 'application/x-all-draw-template';
@@ -80,6 +82,8 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
   const edgesVersion = useCollection('edges');
   const elementsVersion = useCollection('elements');
   const seq = useSequenceCanvas(view, { nodes: nodesVersion, edges: edgesVersion });
+  // Gantt: barras calculadas de las fechas sobre una rejilla de tiempo (views/gantt*).
+  const gantt = useGanttCanvas(view, { nodes: nodesVersion, edges: edgesVersion });
   const rf = useReactFlow();
   const [picker, setPicker] = useState<Picker | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
@@ -155,6 +159,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
       for (const [id, r] of Object.entries(rects.groups)) { const g = grid.stageGroups.find(x => x.id === id); synthetic.push(mk(`hdr:group:${id}`, g?.name ?? '', r, 'core:header', g?.color)); }
       for (const c of Object.values(rects.cells)) { const color = grid.layers.find(x => x.id === c.layerId)?.color; synthetic.push(mk(`${CELL_PREFIX}${cellKey(c.layerId, c.stageId)}`, '', c, 'core:cell', color ? `color-mix(in srgb, ${color} 25%, ${effectiveTheme === 'dark' ? '#161a22' : 'white'})` : undefined)); }
     }
+    if (gantt.active) synthetic.push(...gantt.synthetic());
     const cellIds = new Set(synthetic.map(n => n.id));
     const selectedIds = new Set(selection.nodes);
     const out = [...synthetic, ...ordered.map(n => {
@@ -197,11 +202,11 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         // Lector de pantalla: «Nombre (Tipo)» en vez del id interno.
         ariaLabel: el ? (el.name ? (type ? `${el.name} (${type.name})` : el.name) : type?.name ?? '') : n.text ?? undefined,
       } satisfies Node;
-      return keep(seq.active ? seq.decorateNode(n, base) : base);
+      return keep(seq.active ? seq.decorateNode(n, base) : gantt.active ? gantt.decorateNode(n, base, lv) : base);
     })];
     nodeCache.current = next;
     return out;
-  }, [nodesVersion, viewId, view, store, registry, selection.nodes, readOnly, elementsVersion, live, remoteSel, effectiveTheme, seq, renaming, styleOf, portsOf, libraries]);
+  }, [nodesVersion, viewId, view, store, registry, selection.nodes, readOnly, elementsVersion, live, remoteSel, effectiveTheme, seq, gantt, renaming, styleOf, portsOf, libraries]);
 
   const rfEdges = useMemo<Edge[]>(() => {
     if (!viewId) return [];
@@ -227,13 +232,13 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         sourceHandle: e.fromPortId ?? '', targetHandle: e.toPortId ?? '',
         data: { edge: e }, selected, ariaLabel,
       };
-      const out = seq.active ? seq.decorateEdge(e, base) : base;
+      const out = seq.active ? seq.decorateEdge(e, base) : gantt.active ? gantt.decorateEdge(e, base) : base;
       next.set(e.id, out);
       return out;
     });
     edgeCache.current = next;
     return out;
-  }, [edgesVersion, store, registry, viewId, rfNodes, selection.edges, seq, elementsVersion]);
+  }, [edgesVersion, store, registry, viewId, rfNodes, selection.edges, seq, gantt, elementsVersion]);
 
   // ---------------------------------------------------------------- cambio de vista
   /**
@@ -339,6 +344,9 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
       else if (ch.type === 'dimensions' && ch.dimensions && ch.resizing === false) {
         // Fin del redimensionado: un solo patch con tamaño y, si se movió el borde superior/izquierdo, posición.
         const lv = liveOf(ch.id);
+        // Gantt: estirar una barra cambia sus fechas, no el tamaño del nodo.
+        const gc = gantt.active ? gantt.resizeEnd(ch.id, { x: lv?.x, w: ch.dimensions.width }) : undefined;
+        if (gc !== undefined) { if (gc) commits.push(gc); setLiveOf(ch.id, undefined); continue; }
         const patch: Record<string, unknown> = { w: Math.round(ch.dimensions.width), h: Math.round(ch.dimensions.height) };
         if (lv?.x !== undefined) patch.x = Math.round(lv.x);
         if (lv?.y !== undefined) patch.y = Math.round(lv.y);
@@ -350,7 +358,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     if (selChanged) select({ nodes: [...sel], edges: selection.edges });
     if (nextLive) setLive(nextLive);
     if (commits.length && !readOnly) run({ type: 'batch', label: 'redimensionar', commands: commits });
-  }, [selection, select, run, readOnly]);
+  }, [selection, select, run, readOnly, gantt]);
 
   const onNodeDragStart = useCallback((_: DragEv, __: Node, nodes: Node[]) => {
     dragStart.current = new Map(nodes.map(n => [n.id, { x: n.position.x, y: n.position.y }]));
@@ -365,6 +373,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
       const start = dragStart.current.get(n.id);
       if (start && start.x === n.position.x && start.y === n.position.y && nodes.length > 1) continue;
       if (seq.active) { const sc = seq.dragStop(n, vn); if (sc !== undefined) { if (sc) extra.push(sc); continue; } }
+      if (gantt.active) { const gc = gantt.dragStop(n, vn); if (gc !== undefined) { if (gc) extra.push(gc); continue; } }
       // ¿Se ha soltado dentro de un contenedor?
       const abs = rf.getInternalNode(n.id)?.internals.positionAbsolute ?? n.position;
       const target = findContainer(rf, store, registry, n, abs, vn);
@@ -395,7 +404,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
       run({ type: 'batch', label: 'mover', commands: cmds });
     }
     void node;
-  }, [store, registry, rf, run, readOnly, seq]);
+  }, [store, registry, rf, run, readOnly, seq, gantt]);
 
   /** Nodo desde el que se empezó a arrastrar: es siempre el origen (en modo `loose` React Flow puede darle la vuelta). */
   const connectFrom = useRef<string | null>(null);
@@ -512,12 +521,15 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     const size = defaultSize(type?.shape, !!type?.container, element.typeId);
     const seqAt = seq.active ? seq.drop(element.typeId, pos) : undefined;
     if (seqAt === null) return;
-    const at: { x: number; y: number; w?: number; h?: number; parentNodeId?: string; cell?: ViewNode['cell'] } | null = seqAt ?? placeAt(pos, size); if (!at) return;
+    // Gantt: la fila bajo el puntero da el padre y el orden, y la x el día de inicio.
+    const ganttAt = gantt.active ? gantt.drop(element.typeId, pos) : undefined;
+    if (ganttAt?.fields && isNew) element = { ...element, fields: { ...element.fields, ...ganttAt.fields } };
+    const at: { x: number; y: number; w?: number; h?: number; parentNodeId?: string; cell?: ViewNode['cell'] } | null = seqAt ?? ganttAt ?? placeAt(pos, size); if (!at) return;
     const node = makeNode(viewId, undefined, { x: at.x, y: at.y, w: at.w ?? size.w, h: at.h ?? size.h }, { parentNodeId: at.parentNodeId, cell: at.cell, style: { showPorts: false } });
     if (isNew) run({ type: 'addElementToView', element, node });
     else run({ type: 'set', collection: 'nodes', id: node.id, value: { ...node, elementId: element.id } });
     select({ nodes: [node.id], edges: [] });
-  }, [rf, run, select, store, registry, viewId, readOnly, placeAt, addVisual, seq]);
+  }, [rf, run, select, store, registry, viewId, readOnly, placeAt, addVisual, seq, gantt]);
 
   function findLibraryOfType(typeId: string): string | undefined {
     return store.list('libraries').find(l => l.elementTypes.some(t => t.id === typeId))?.id;
@@ -783,7 +795,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         minZoom={MIN_ZOOM} maxZoom={MAX_ZOOM} deleteKeyCode={null} multiSelectionKeyCode="Shift" selectionKeyCode="Shift"
         onlyRenderVisibleElements={rfNodes.length > VIRTUALIZE_FROM}
         nodesDraggable={!readOnly} nodesConnectable={!readOnly} elementsSelectable
-        snapToGrid={snap && !alt} snapGrid={SNAP_GRID}
+        snapToGrid={snap && !alt && !gantt.active} snapGrid={SNAP_GRID}
         colorMode={effectiveTheme}
         proOptions={{ hideAttribution: true }}
         connectionRadius={24}

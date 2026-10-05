@@ -24,8 +24,10 @@ export async function createServerWorkspace(ws: Workspace): Promise<string> {
  * all-draw) y avisa de lo que no tiene equivalente exacto. Lo usan el inicio y la portada.
  */
 export async function importWorkspaceFile(f: File, t: (k: string, v?: Record<string, string | number>) => string): Promise<Workspace> {
-  const [{ importAny }, { toast, noticeDialog }, { tn }] = await Promise.all([import('@all-draw/io'), import('@all-draw/editor'), import('@all-draw/i18n')]);
-  const { workspace, warnings, format } = await importAny(await f.text(), f.name);
+  const [{ importFile }, { formatLabel }, { createRegistry }, { toast, noticeDialog }, { tn }] = await Promise.all([import('./io-text'), import('@all-draw/io'), import('./registry'), import('@all-draw/editor'), import('@all-draw/i18n')]);
+  // Mismo camino que el inicio: binarios (Visio), draw.io comprimido, DSL con layout automático.
+  const { workspace, warnings, format: fmt } = await importFile(f, createRegistry());
+  const format = t(formatLabel(fmt));
   if (warnings.length) {
     toast.warning(tn('Importado desde {format} con {n} aviso', 'Importado desde {format} con {n} avisos', warnings.length, { format }), {
       description: f.name, action: { label: t('Ver avisos'), onClick: () => void noticeDialog({ title: t('Avisos de la importación'), message: t('El fichero se importó, pero algunas partes no tienen equivalente exacto.'), items: warnings }) },
@@ -35,5 +37,5 @@ export async function importWorkspaceFile(f: File, t: (k: string, v?: Record<str
 }
 
 /** Formatos que aceptan los selectores de fichero de importar. */
-export const IMPORT_ACCEPT = '.drawer,.json,.archimate,.xml,.bpmn,.mmd,.yaml,.yml';
+export { IMPORT_FILE_ACCEPT as IMPORT_ACCEPT } from './io-text';
 

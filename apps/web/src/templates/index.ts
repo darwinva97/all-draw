@@ -16,6 +16,12 @@ import { gridTemplate } from './grid';
 import { sequenceTemplate } from './sequence';
 import { mindmapTemplate } from './mindmap';
 import { flowchartTemplate } from './flowchart';
+import { usecaseTemplate } from './usecase';
+import { componentTemplate } from './component';
+import { deploymentTemplate } from './deployment';
+import { activityTemplate } from './activity';
+import { ganttTemplate } from './gantt';
+import { dddTemplate } from './ddd';
 
 export type { Tr } from './kit';
 
@@ -43,6 +49,12 @@ export const TEMPLATES: Template[] = [
   { id: 'sequence', name: 'Diagrama de secuencia', description: 'Un pago con tarjeta entre cliente, tienda, API y banco.', notations: ['sequence'], build: sequenceTemplate },
   { id: 'mindmap', name: 'Mapa mental', description: 'Una idea central con cuatro ramas para ordenar un lanzamiento.', notations: ['mindmap'], build: mindmapTemplate },
   { id: 'flowchart', name: 'Diagrama de flujo', description: 'Validar una solicitud, con una decisión y un bucle de corrección.', notations: ['flow'], build: flowchartTemplate },
+  { id: 'usecase', name: 'Casos de uso: tienda online', description: 'Clientes y pasarela de pago alrededor del sistema, con «include», «extend» y generalización.', notations: ['usecase'], build: usecaseTemplate },
+  { id: 'component', name: 'Componentes: tienda online', description: 'La web consume la interfaz de pedidos; un puerto delega en el gestor de pedidos.', notations: ['component'], build: componentTemplate },
+  { id: 'deployment', name: 'Despliegue: tienda en la nube', description: 'Móvil, servidor con un contenedor Docker y base de datos, con sus artefactos.', notations: ['deployment'], build: deploymentTemplate },
+  { id: 'activity', name: 'Actividad: tramitar un pedido', description: 'Dos calles, una decisión, una bifurcación con su unión y un nodo objeto.', notations: ['activity'], build: activityTemplate },
+  { id: 'gantt', name: 'Gantt: lanzamiento de una web', description: 'Dos fases con dependencias, ruta crítica y un hito, sobre una línea de tiempo.', notations: ['gantt'], build: ganttTemplate },
+  { id: 'ddd', name: 'DDD: mapa de contextos de una tienda', description: 'Subdominios y contextos con sus patrones de relación, y el modelo táctico de Pedidos.', notations: ['ddd'], build: dddTemplate },
 ];
 
 export const templateById = (id: string): Template | undefined => TEMPLATES.find(x => x.id === id);

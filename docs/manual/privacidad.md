@@ -1,6 +1,6 @@
 # Política de privacidad
 
-Última actualización: 3 de octubre de 2026.
+Última actualización: 5 de octubre de 2026.
 
 Esta política explica qué datos trata el servicio all-draw que se ofrece en
 **https://alldraw.bezenti.com** (en adelante, "el servicio"), para qué, dónde y durante cuánto
@@ -110,9 +110,20 @@ sobre ti. No vendemos ni cedemos datos.
   de EE. UU.; las transferencias internacionales se amparan en
   el Marco de Privacidad de Datos UE-EE. UU., al que Cloudflare está adherido, y las cláusulas contractuales
   tipo de su acuerdo de tratamiento de datos.
-- **Instalación en Cloudflare Workers**: existe además una instalación del servicio en Cloudflare
-  Workers (dirección `*.workers.dev`). Si usas esa dirección, tus datos de cuenta y tus espacios se
-  guardan en la infraestructura de Cloudflare, no en el VPS.
+- **Copia de respaldo en Cloudflare Workers**: la dirección
+  [alldraw.darwin-sva-97.workers.dev](https://alldraw.darwin-sva-97.workers.dev) es una **copia de respaldo
+  de solo lectura** del servicio, en la infraestructura de Cloudflare, que se actualiza **cada noche** con los datos
+  del servidor principal (cuentas, espacios, miembros y enlaces). Sirve para consultar tus diagramas si el servidor
+  principal cae; allí no se puede editar. Lo que borres en el servidor principal desaparece de la copia en la
+  sincronización siguiente.
+- **Copias de seguridad externas**: cada noche se envía una copia de la base de datos y de los espacios a
+  Backblaze B2, un servicio de almacenamiento de Backblaze, Inc. (EE. UU.), en su región del este de EE. UU.
+  (`us-east`). Se guardan cifradas en reposo, en un almacenamiento privado al que solo accede el titular, y se borran
+  solas a los **90 días**. Solo se usan para recuperar el servicio tras un fallo grave. Las transferencias
+  internacionales se amparan en las cláusulas contractuales tipo de su acuerdo de tratamiento de datos.
+- **Monitor de disponibilidad**: un pequeño servicio en Cloudflare comprueba cada 5 minutos si el servicio responde y
+  publica una [página de estado](https://alldraw-monitor.darwin-sva-97.workers.dev). Solo consulta el estado técnico
+  (versión, tiempo en marcha y si la base de datos responde): **no ve cuentas, diagramas ni datos personales**.
 
 ## Cuánto tiempo los guardamos {#conservacion}
 
@@ -124,12 +135,15 @@ sobre ti. No vendemos ni cedemos datos.
 | Espacios y comentarios | Hasta que su propietario los borre |
 | Instantáneas | Hasta 100 por espacio; las automáticas más antiguas se borran solas; todas se borran con el espacio |
 | Copias de seguridad del servidor | 30 días; después se borran solas |
+| Copias de seguridad externas (Backblaze) | 90 días; después se borran solas |
+| Copia de respaldo en Cloudflare | Se sustituye cada noche por el contenido del servidor principal |
 | Recuento de intentos por IP | Minutos, solo en memoria |
 | Copia final de los espacios borrados al eliminar una cuenta | 30 días, con las copias de seguridad |
 | Registros de peticiones y de errores | En el registro del sistema del servidor, que los borra solo por rotación al llenarse; contienen la IP truncada y nunca el contenido de los diagramas |
 
-Ten en cuenta que un dato borrado puede seguir hasta 30 días en las copias de seguridad, que no se
-modifican; pasado ese plazo desaparece.
+Ten en cuenta que un dato borrado puede seguir hasta 30 días en las copias de seguridad del servidor y
+hasta 90 días en las copias externas, que no se modifican; pasado ese plazo desaparece. De la copia de
+respaldo en Cloudflare desaparece en la sincronización de la noche siguiente.
 
 ## Sin publicidad ni rastreo {#sin-rastreo}
 
@@ -175,8 +189,8 @@ Además, la aplicación guarda en tu navegador datos que **no se envían** al se
 ## Con quién se comparten {#terceros}
 
 - Con las **personas a las que des acceso** a un espacio (por enlace o como miembros).
-- Con nuestros **proveedores de infraestructura** (alojamiento del VPS y Cloudflare), solo para
-  prestar el servicio y como encargados del tratamiento.
+- Con nuestros **proveedores de infraestructura** (alojamiento del VPS, Cloudflare y Backblaze para las
+  copias de seguridad externas), solo para prestar el servicio y como encargados del tratamiento.
 - Las personas **administradoras del servidor** pueden ver la lista de cuentas (nombre y correo)
   para gestionarlas, por ejemplo para restablecer una contraseña. Técnicamente también pueden abrir
   cualquier espacio del servidor; solo lo hacen para mantenimiento, para resolver una incidencia o
@@ -221,7 +235,7 @@ datos de tu país (en la Unión Europea, la de tu Estado miembro).
 - Contraseñas con hash PBKDF2 y sal; sesiones y claves API guardadas solo como huellas.
 - Cookie de sesión `HttpOnly` y `SameSite`, con protección contra peticiones de otros sitios.
 - Límite de intentos de inicio de sesión y de registro.
-- Copias de seguridad diarias.
+- Copias de seguridad diarias, también fuera del servidor (cifradas en reposo).
 
 Si encuentras un problema de seguridad, avísanos de forma privada en
 https://github.com/darwinva97/all-draw/security.

@@ -3,3 +3,4 @@ export * from './undo';
 export * from './local';
 export * from './remote';
 export * from './file';
+export * from './diff';

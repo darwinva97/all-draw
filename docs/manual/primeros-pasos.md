@@ -103,8 +103,15 @@ Con la sesión iniciada:
   **Cerrar sesión**.
 
 **Cuenta y claves API** abre la pantalla **Cuenta**, donde puedes crear claves para agentes (ver
-[Agentes y API](agentes-y-api.md)), **Cambiar contraseña** y **Cerrar todas las sesiones**. Si eres
-administrador, ahí también está la lista **Usuarios del servidor**.
+[Agentes y API](agentes-y-api.md)), **Cambiar contraseña**, ver tus **Sesiones activas** y cerrar las
+que no reconozcas, y **Cerrar todas las sesiones**. Si eres administrador, ahí también está la lista
+**Usuarios del servidor**.
+
+Junto a tu nombre aparece la **campana** de notificaciones: te avisa cuando te mencionan en un
+comentario, te comparten un espacio, cambian tu rol o restauran una versión de un espacio tuyo (ver
+[notificaciones](compartir-y-colaborar.md#notificaciones)). Si el servidor envía correos, al
+registrarte te llega un enlace para **confirmar tu correo** (ver
+[confirmar el correo](compartir-y-colaborar.md#verificar-correo)).
 
 La sesión dura 30 días y se renueva sola mientras uses la aplicación. El primer usuario que se registra en
 un servidor es su administrador.
@@ -231,9 +238,10 @@ perfil, y que no estás en una ventana privada. Si borraste los datos del sitio,
 perdieron. Por eso conviene subirlos al servidor o exportarlos.
 
 **He olvidado mi contraseña.**
-No hay recuperación por correo. Pide al administrador del servidor que la restablezca desde **Cuenta →
-Usuarios del servidor → Restablecer**: te dará una contraseña temporal que luego puedes cambiar en
-**Cambiar contraseña**.
+Pulsa **Entrar → ¿Olvidaste tu contraseña?**. Si el servidor envía correos, te manda un enlace (una hora,
+un solo uso) para elegir una nueva (ver [He olvidado la contraseña](compartir-y-colaborar.md#recuperar-contrasena)).
+Si no, pide al administrador del servidor que la restablezca desde **Cuenta → Usuarios del servidor →
+Restablecer**: te dará una contraseña temporal que luego puedes cambiar en **Cambiar contraseña**.
 
 **"Subir al servidor" dice que necesito una cuenta.**
 Inicia sesión primero en la pantalla de inicio y vuelve a pulsar **Subir al servidor**.

@@ -1,7 +1,7 @@
 /** Configuración por variables de entorno (ver README). */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_MAX_DOC_BYTES, DEFAULT_MAX_WORKSPACES_PER_USER, DEFAULT_REGISTER_MIN_MS, DEFAULT_TRUSTED_PROXIES, parseLogLevel, type ApiConfig, type LogLevel } from '@all-draw/server-core';
+import { DEFAULT_MAX_DOC_BYTES, DEFAULT_MAX_WORKSPACES_PER_USER, DEFAULT_REGISTER_MIN_MS, DEFAULT_TRUSTED_PROXIES, parseLogLevel, type ApiConfig, type LogLevel, type MailEnv } from '@all-draw/server-core';
 
 export interface Config extends ApiConfig {
   host: string;
@@ -37,7 +37,18 @@ export interface Config extends ApiConfig {
    * anti-abuso y log). IPs, redes CIDR y `loopback`, `private`, `cloudflare`; por defecto `loopback,cloudflare`; vacío = nadie.
    */
   trustedProxies: string;
+  /**
+   * ¿Es producción? (`NODE_ENV=production` o `PUBLIC_URL` con https). Decide el correo por defecto: `none` en producción
+   * (nada de enlaces de restablecimiento en el log), `log` en desarrollo.
+   */
+  production: boolean;
+  /** Variables del correo tal cual (`MAIL_PROVIDER`, `MAIL_FROM`, `MAIL_HTTP_*`, `SMTP_*`); las interpreta `mailerFromEnv`. */
+  mail: MailEnv;
+  /** `REQUIRE_EMAIL_VERIFICATION=true`: hay que verificar el correo para crear espacios en el servidor (sólo con correo). */
+  requireEmailVerification: boolean;
 }
+
+const MAIL_KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'MAIL_HTTP_URL', 'MAIL_HTTP_TOKEN', 'MAIL_HTTP_FORMAT', 'MAIL_HTTP_TEMPLATE', 'MAIL_HTTP_AUTH_HEADER', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_SECURE'] as const;
 
 const int = (v: string | undefined, fallback: number): number => {
   if (v === undefined || v.trim() === '') return fallback;
@@ -69,5 +80,8 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
     maxDocBytes: int(env.MAX_DOC_BYTES, DEFAULT_MAX_DOC_BYTES),
     registerMinMs: int(env.REGISTER_MIN_MS, DEFAULT_REGISTER_MIN_MS),
     trustedProxies: env.TRUSTED_PROXIES ?? DEFAULT_TRUSTED_PROXIES,
+    production: env.NODE_ENV === 'production' || /^https:\/\//i.test(env.PUBLIC_URL ?? ''),
+    mail: Object.fromEntries(MAIL_KEYS.filter(k => env[k] !== undefined).map(k => [k, env[k]])) as MailEnv,
+    requireEmailVerification: env.REQUIRE_EMAIL_VERIFICATION === 'true',
   };
 }

@@ -84,3 +84,4 @@ jobs:
           sleep 3
           CHROME=$(which chromium chromium-browser google-chrome 2>/dev/null | head -1); [ -n "$CHROME" ] && sed -i "s#/usr/bin/chromium#$CHROME#" e2e/*.mjs
           pnpm e2e
+          pnpm e2e:accounts

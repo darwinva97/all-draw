@@ -1,7 +1,7 @@
 /** Adaptador en memoria: tests y pruebas rápidas. Referencia de semántica para los demás adaptadores. */
 import * as Y from 'yjs';
 import { newId } from '@all-draw/core';
-import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, Snapshot, SnapshotMeta, User, WorkspaceRow, WorkspaceStore } from './types';
+import { MAX_NOTIFICATIONS_PER_USER, type AccountToken, type AccountTokenKind, type ApiKey, type Member, type MemberRole, type Notification, type NotificationKind, type Role, type Session, type SessionMeta, type ShareLink, type Snapshot, type SnapshotMeta, type User, type UserPatch, type WorkspaceRow, type WorkspaceStore } from './types';
 
 const now = () => new Date().toISOString();
 
@@ -15,11 +15,13 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
   docs = new Map<string, Uint8Array>();
   pending = new Map<string, Uint8Array[]>();
   snapshots = new Map<string, Snapshot>();
+  accountTokens = new Map<string, AccountToken>();
+  notifications = new Map<string, Notification>();
 
-  async createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string }): Promise<User> {
+  async createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string; locale?: string | null }): Promise<User> {
     const email = u.email.trim().toLowerCase();
     if ([...this.users.values()].some(x => x.email === email)) throw new Error('email ya registrado');
-    const user: User = { id: u.id ?? newId('usr'), email, name: u.name, passwordHash: u.passwordHash, isAdmin: !!u.isAdmin, createdAt: now() };
+    const user: User = { id: u.id ?? newId('usr'), email, name: u.name, passwordHash: u.passwordHash, isAdmin: !!u.isAdmin, createdAt: now(), emailVerifiedAt: null, locale: u.locale ?? null, notifyEmail: true };
     this.users.set(user.id, user);
     return user;
   }
@@ -28,7 +30,7 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
   async countUsers() { return this.users.size; }
   async listUsers() { return [...this.users.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt)); }
   async setPasswordHash(userId: string, passwordHash: string) { const u = this.users.get(userId); if (u) u.passwordHash = passwordHash; }
-  async updateUser(id: string, patch: { name?: string; email?: string; isAdmin?: boolean }) {
+  async updateUser(id: string, patch: UserPatch) {
     const u = this.users.get(id); if (!u) return null;
     if (patch.email !== undefined) {
       const email = patch.email.trim().toLowerCase();
@@ -37,6 +39,9 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     }
     if (patch.name !== undefined) u.name = patch.name;
     if (patch.isAdmin !== undefined) u.isAdmin = patch.isAdmin;
+    if (patch.emailVerifiedAt !== undefined) u.emailVerifiedAt = patch.emailVerifiedAt;
+    if (patch.locale !== undefined) u.locale = patch.locale;
+    if (patch.notifyEmail !== undefined) u.notifyEmail = patch.notifyEmail;
     return u;
   }
   async deleteUser(id: string) {
@@ -45,10 +50,13 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     for (const [k, key] of this.apiKeys) if (key.userId === id) this.apiKeys.delete(k);
     for (const [k, m] of this.members) if (m.userId === id) this.members.delete(k);
     for (const sn of this.snapshots.values()) if (sn.authorId === id) sn.authorId = null;
+    for (const [k, t] of this.accountTokens) if (t.userId === id) this.accountTokens.delete(k);
+    for (const [k, n] of this.notifications) if (n.userId === id) this.notifications.delete(k);
   }
 
-  async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
-    const s: Session = { tokenHash, userId, createdAt: now(), expiresAt };
+  async createSession(userId: string, tokenHash: string, expiresAt: string, meta: SessionMeta = {}): Promise<Session> {
+    const t = now();
+    const s: Session = { tokenHash, userId, createdAt: t, expiresAt, device: meta.device ?? null, ip: meta.ip ?? null, lastUsedAt: t };
     this.sessions.set(tokenHash, s); return s;
   }
   async getSession(tokenHash: string) {
@@ -58,6 +66,11 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     return s;
   }
   async touchSession(tokenHash: string, expiresAt: string) { const s = this.sessions.get(tokenHash); if (s) s.expiresAt = expiresAt; }
+  async markSessionUsed(tokenHash: string, at: string, ip: string | null) { const s = this.sessions.get(tokenHash); if (s) { s.lastUsedAt = at; if (ip) s.ip = ip; } }
+  async listUserSessions(userId: string) {
+    const t = now();
+    return [...this.sessions.values()].filter(s => s.userId === userId && s.expiresAt >= t).sort((a, b) => (b.lastUsedAt ?? b.createdAt).localeCompare(a.lastUsedAt ?? a.createdAt));
+  }
   async deleteSession(tokenHash: string) { this.sessions.delete(tokenHash); }
   async deleteUserSessions(userId: string, exceptTokenHash?: string) {
     for (const [k, s] of this.sessions) if (s.userId === userId && k !== exceptTokenHash) this.sessions.delete(k);
@@ -65,6 +78,41 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
   async purgeExpiredSessions() {
     const t = now(); let n = 0;
     for (const [k, s] of this.sessions) if (s.expiresAt < t) { this.sessions.delete(k); n++; }
+    for (const [k, a] of this.accountTokens) if (a.expiresAt < t) this.accountTokens.delete(k);
+    return n;
+  }
+
+  async createAccountToken(a: Omit<AccountToken, 'createdAt'>): Promise<AccountToken> {
+    const tok: AccountToken = { ...a, email: a.email.trim().toLowerCase(), createdAt: now() };
+    this.accountTokens.set(tok.tokenHash, tok); return tok;
+  }
+  async consumeAccountToken(tokenHash: string, kind: AccountTokenKind) {
+    const a = this.accountTokens.get(tokenHash);
+    if (!a || a.kind !== kind) return null;
+    this.accountTokens.delete(tokenHash);
+    return a.expiresAt < now() ? null : a;
+  }
+  async deleteAccountTokens(userId: string, kind?: AccountTokenKind) {
+    for (const [k, a] of this.accountTokens) if (a.userId === userId && (!kind || a.kind === kind)) this.accountTokens.delete(k);
+  }
+
+  async createNotification(n: { id?: string; userId: string; kind: NotificationKind; workspaceId: string | null; payload: Record<string, unknown> }): Promise<Notification | null> {
+    const id = n.id ?? newId('ntf');
+    if (this.notifications.has(id)) return null;
+    const row: Notification = { id, userId: n.userId, kind: n.kind, workspaceId: n.workspaceId, payload: structuredClone(n.payload), createdAt: now(), readAt: null };
+    this.notifications.set(id, row);
+    const mine = [...this.notifications.values()].filter(x => x.userId === n.userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+    for (const old of mine.slice(MAX_NOTIFICATIONS_PER_USER)) this.notifications.delete(old.id);
+    return { ...row, payload: structuredClone(row.payload) };
+  }
+  async listNotifications(userId: string, limit: number) {
+    return [...this.notifications.values()].filter(x => x.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)).slice(0, Math.max(0, limit)).map(x => ({ ...x, payload: structuredClone(x.payload) }));
+  }
+  async countUnreadNotifications(userId: string) { return [...this.notifications.values()].filter(x => x.userId === userId && !x.readAt).length; }
+  async markNotificationsRead(userId: string, ids?: string[]) {
+    const t = now(); let n = 0;
+    const want = ids ? new Set(ids) : null;
+    for (const x of this.notifications.values()) if (x.userId === userId && !x.readAt && (!want || want.has(x.id))) { x.readAt = t; n++; }
     return n;
   }
 
@@ -104,6 +152,7 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     for (const [k, m] of this.members) if (m.workspaceId === id) this.members.delete(k);
     for (const [k, l] of this.links) if (l.workspaceId === id) this.links.delete(k);
     for (const [k, sn] of this.snapshots) if (sn.workspaceId === id) this.snapshots.delete(k);
+    for (const [k, n] of this.notifications) if (n.workspaceId === id) this.notifications.delete(k);
   }
 
   async loadDoc(id: string) {

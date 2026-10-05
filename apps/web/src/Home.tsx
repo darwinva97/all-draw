@@ -18,10 +18,10 @@ import { createLocalWorkspace, createServerWorkspace } from './spaces';
 import { localThumb, workspaceThumb, type ThumbTheme } from './thumbs';
 import { useEffectiveTheme } from './theme';
 import { reportError } from './notify';
-import { ioErrorText } from './io-text';
+import { ioErrorText, importFile, IMPORT_FILE_ACCEPT } from './io-text';
 import './pwa';
 
-const IMPORT_ACCEPT = '.drawer,.json,.archimate,.xml,.bpmn,.mmd,.yaml,.yml';
+const IMPORT_ACCEPT = IMPORT_FILE_ACCEPT;
 type Sort = 'recent' | 'name';
 const SORT_KEY = 'alldraw:home-sort';
 
@@ -91,8 +91,9 @@ export function Home({ forceHome = false }: { forceHome?: boolean } = {}) {
   const onFile = async (f: File) => {
     setBusy('import');
     try {
-      const { importAny, formatLabel } = await import('@all-draw/io');
-      const { workspace, warnings, format: fmt } = await importAny(await f.text(), f.name);
+      const { formatLabel } = await import('@all-draw/io');
+      // Como bytes: así entra también Visio (.vsdx), que es un ZIP.
+      const { workspace, warnings, format: fmt } = await importFile(f, createRegistry());
       const format = t(formatLabel(fmt));
       if (warnings.length) {
         toast.warning(tn('Importado desde {format} con {n} aviso', 'Importado desde {format} con {n} avisos', warnings.length, { format }), {

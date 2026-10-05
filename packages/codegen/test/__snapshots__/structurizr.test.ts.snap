@@ -1,0 +1,182 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`structurizr-dsl (ArchiMate) > personas, sistemas y elementos personalizados con el tipo ArchiMate; vista custom 1`] = `
+"// Generado por all-draw a partir de «Visión general».
+workspace "Empresa" {
+
+    model {
+        cliente = person "Cliente"
+        crm = softwareSystem "CRM"
+        altaDeCliente = element "Alta de cliente" "BusinessProcess" "Registrar un cliente nuevo."
+        gestionDeClientes = element "Gestión de clientes" "ApplicationService"
+
+        cliente -> altaDeCliente "Assignment"
+        gestionDeClientes -> altaDeCliente "Serving: soporta"
+        crm -> gestionDeClientes "Realization"
+    }
+
+    views {
+        custom "vision-general" "Visión general" {
+            include *
+            autoLayout
+        }
+        systemLandscape "vision-general-personas-y-sistemas" "Visión general (personas y sistemas)" {
+            include *
+            autoLayout
+        }
+
+        styles {
+            element "Person" {
+                shape Person
+                background #08427b
+                color #ffffff
+            }
+            element "Software System" {
+                background #1168bd
+                color #ffffff
+            }
+            element "Container" {
+                background #438dd5
+                color #ffffff
+            }
+            element "Component" {
+                background #85bbf0
+                color #000000
+            }
+            element "External" {
+                background #999999
+                color #ffffff
+            }
+        }
+    }
+}
+"
+`;
+
+exports[`structurizr-dsl (C4) > con vista: solo sus elementos (más los padres necesarios) y su vista 1`] = `
+"// Generado por all-draw a partir de «Componentes de la API».
+workspace "Tienda \\"online\\"" "Arquitectura de la tienda." {
+
+    model {
+        tiendaOnline = softwareSystem "Tienda online" "Vende productos." {
+            api = container "API" "API \\"REST\\"." "Node.js" {
+                controladorDePedidos = component "Controlador de pedidos" "" "Express"
+            }
+        }
+    }
+
+    views {
+        component api "componentes-de-la-api" "Componentes de la API" {
+            include *
+            autoLayout
+        }
+
+        styles {
+            element "Person" {
+                shape Person
+                background #08427b
+                color #ffffff
+            }
+            element "Software System" {
+                background #1168bd
+                color #ffffff
+            }
+            element "Container" {
+                background #438dd5
+                color #ffffff
+            }
+            element "Component" {
+                background #85bbf0
+                color #000000
+            }
+            element "External" {
+                background #999999
+                color #ffffff
+            }
+        }
+    }
+}
+"
+`;
+
+exports[`structurizr-dsl (C4) > genera workspace.dsl 1`] = `
+"// Generado por all-draw a partir de «Tienda "online"».
+workspace "Tienda \\"online\\"" "Arquitectura de la tienda." {
+
+    model {
+        administrador = person "Administrador"
+        cliente = person "Cliente" "Compra productos."
+        pasarelaDePago = softwareSystem "Pasarela de pago" "" "External"
+        tiendaOnline = softwareSystem "Tienda online" "Vende productos." {
+            api = container "API" "API \\"REST\\"." "Node.js" {
+                controladorDePedidos = component "Controlador de pedidos" "" "Express"
+            }
+            baseDeDatos = container "Base de datos" "" "PostgreSQL" "database"
+            web = container "Web" "" "React"
+        }
+
+        cliente -> tiendaOnline "Compra en"
+        tiendaOnline -> pasarelaDePago "Cobra con" "HTTPS"
+        cliente -> web "Usa"
+        web -> api "Llama a" "JSON/HTTPS"
+        api -> baseDeDatos "Lee y escribe"
+        controladorDePedidos -> baseDeDatos "Consulta"
+
+        deploymentEnvironment "Producción" {
+            aws = deploymentNode "AWS" "" "Cloud" {
+                ec2 = deploymentNode "EC2" "" "Ubuntu" "" 2 {
+                    containerInstance api
+                }
+            }
+        }
+    }
+
+    views {
+        component api "componentes-de-la-api" "Componentes de la API" {
+            include *
+            autoLayout
+        }
+        container tiendaOnline "contenedores" "Contenedores" {
+            include *
+            autoLayout
+        }
+        systemContext tiendaOnline "contexto" "Contexto" {
+            include *
+            autoLayout
+        }
+        deployment * "Producción" "despliegue" "Despliegue" {
+            include *
+            autoLayout
+        }
+        systemLandscape "solo-personas" "Solo personas" {
+            include *
+            autoLayout
+        }
+
+        styles {
+            element "Person" {
+                shape Person
+                background #08427b
+                color #ffffff
+            }
+            element "Software System" {
+                background #1168bd
+                color #ffffff
+            }
+            element "Container" {
+                background #438dd5
+                color #ffffff
+            }
+            element "Component" {
+                background #85bbf0
+                color #000000
+            }
+            element "External" {
+                background #999999
+                color #ffffff
+            }
+        }
+    }
+}
+"
+`;

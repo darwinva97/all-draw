@@ -38,9 +38,9 @@ describe('migrate-sql', () => {
     expect(gen.sql).not.toMatch(/INSERT OR IGNORE INTO (sessions|docs|doc_updates)/);
     expect(gen.sql).not.toMatch(/^BEGIN/m);
 
-    // Se aplica sobre el esquema de D1 (mismo SQL que MIGRATIONS[0]) y se puede repetir sin duplicar.
+    // Se aplica sobre el esquema completo de D1 (las mismas migraciones que SQLite) y se puede repetir sin duplicar.
     const dst = new DatabaseSync(path.join(tmp, 'dst.sqlite'));
-    dst.exec(MIGRATIONS[0]!);
+    for (const m of MIGRATIONS) dst.exec(m);
     dst.exec(gen.sql);
     dst.exec(gen.sql);
     const users = dst.prepare('SELECT * FROM users ORDER BY email').all() as Record<string, unknown>[];

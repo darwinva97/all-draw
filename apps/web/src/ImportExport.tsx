@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useEditor, useMeta, Icon, HelpLink, confirmDialog, noticeDialog, toast } from '@all-draw/editor';
 import { COLLECTIONS, type Command, type Store, type Workspace } from '@all-draw/core';
 import { tn, useT } from '@all-draw/i18n';
-import { ioErrorText } from './io-text';
+import { ioErrorText, importFile, IMPORT_FILE_ACCEPT } from './io-text';
 const io = () => import('@all-draw/io');
+/** Diálogo «Generar código…» con `@all-draw/codegen` y fflate: se carga al abrirlo. */
+const CodegenDialog = lazy(() => import('./CodegenDialog'));
 
 
 function download(name: string, data: string | Blob, type = 'text/plain') {
@@ -49,6 +51,7 @@ export function ImportExport() {
   const meta = useMeta();
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [codegen, setCodegen] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -67,7 +70,7 @@ export function ImportExport() {
   const hasNotation = (prefix: string) => store.list('elements').some(e => e.typeId.startsWith(prefix));
   const onFile = async (f: File) => {
     try {
-      const { workspace, warnings, formatLabel: format } = await (await io()).importAny(await f.text(), f.name);
+      const { workspace, warnings, formatLabel: format } = await importFile(f, registry);
       const ok = await confirmDialog({ title: t('¿Sustituir el contenido de este espacio?'), message: t('El fichero «{name}» ({format}) reemplaza todas las vistas y el modelo actuales. Puedes deshacerlo con Ctrl+Z.', { name: f.name, format }), confirmLabel: t('Sustituir'), danger: true });
       if (!ok) return;
       const before = viewId;
@@ -101,12 +104,14 @@ export function ImportExport() {
   return (
     <span style={{ position: 'relative' }}>
       <button ref={trigger} className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>{t('Importar / Exportar')}<Icon name="chevronDown" size={14} /></button>
-      <input ref={file} type="file" aria-label={t('Fichero a importar')} accept=".drawer,.json,.archimate,.xml,.bpmn,.mmd,.yaml,.yml" hidden onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
+      <input ref={file} type="file" aria-label={t('Fichero a importar')} accept={IMPORT_FILE_ACCEPT} hidden onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
       {open && <div ref={menu} className="menu" role="menu" aria-label={t('Importar / Exportar')} onMouseLeave={() => setOpen(false)}>
         {!readOnly && <><div className="menu__title">{t('Importar (sustituye el espacio)')}</div>
-          <button role="menuitem" onClick={() => { setOpen(false); file.current?.click(); }}>.drawer, .alldraw.json, .archimate, OEF, BPMN, Structurizr, XState, Mermaid, OpenAPI…</button></>}
+          <button role="menuitem" onClick={() => { setOpen(false); file.current?.click(); }}>.drawer, .alldraw.json, .archimate, OEF, BPMN, Structurizr, XState, Mermaid, OpenAPI, draw.io, Visio, DSL…</button></>}
         <div className="menu__title">{t('Exportar el espacio')}</div>
         <button role="menuitem" onClick={act(async () => download(`${base}.alldraw.json`, (await io()).exportWorkspace(ws()), 'application/json'))}>{t('JSON de all-draw')}</button>
+        <button role="menuitem" onClick={act(async () => download(`${base}.alldraw.txt`, (await io()).serializeDsl(ws()), 'text/plain;charset=utf-8'))}>{t('Texto de all-draw (DSL)')}</button>
+        <button role="menuitem" onClick={act(async () => { if (!store.list('nodes').length) return nothing(t('El espacio no tiene vistas con contenido.')); const r = (await io()).exportPdf(store, registry, 'all', { title: meta.name }); download(`${base}.pdf`, new Blob([r.bytes as BlobPart], { type: 'application/pdf' })); warn(r.warnings, 'PDF'); })}>{t('PDF (todas las vistas)')}</button>
         <button role="menuitem" onClick={act(async () => { if (!store.list('views').length) return nothing(t('El espacio no tiene vistas.')); download(`${base}.html`, (await io()).renderStandaloneHtml(store, registry, { title: meta.name }), 'text/html'); })}>{t('HTML autocontenido (todas las vistas)')}</button>
         <button role="menuitem" onClick={act(async () => { if (!hasNotation('archimate:')) return nothing(t('El espacio no tiene elementos ArchiMate.')); const r = (await io()).exportArchimate(ws()); download(`${base}.archimate`, r.text, 'application/xml'); warn(r.warnings, 'Archi (.archimate)'); })}>Archi (.archimate)</button>
         <button role="menuitem" onClick={act(async () => { if (!hasNotation('archimate:')) return nothing(t('El espacio no tiene elementos ArchiMate.')); const r = (await io()).exportOpenExchange(ws()); download(`${base}.oef.xml`, r.text, 'application/xml'); warn(r.warnings, 'ArchiMate Open Exchange'); })}>ArchiMate Open Exchange</button>
@@ -117,14 +122,17 @@ export function ImportExport() {
           {/* Vista vacía: cada formato avisa en lugar de descargar un dibujo o un fichero vacío. */}
           <button role="menuitem" onClick={vact(async () => download(`${vbase}.svg`, (await io()).renderSvg(store, registry, view.id, { theme: 'dual' }), 'image/svg+xml'))}>{t('SVG (tema claro y oscuro)')}</button>
           <button role="menuitem" onClick={vact(async () => download(`${vbase}.png`, await (await io()).svgToPng((await io()).renderSvg(store, registry, view.id, { theme: effectiveTheme === 'dark' ? 'dark' : 'light' }), 2)))}>PNG (2×)</button>
+          <button role="menuitem" onClick={vact(async () => { const r = (await io()).exportPdf(store, registry, [view.id]); download(`${vbase}.pdf`, new Blob([r.bytes as BlobPart], { type: 'application/pdf' })); warn(r.warnings, 'PDF'); })}>PDF</button>
           <button role="menuitem" onClick={vact(async () => { const r = (await io()).exportMermaid(ws(), view.id); download(`${vbase}.mmd`, r.text); warn(r.warnings, 'Mermaid'); })}>Mermaid</button>
           <button role="menuitem" onClick={vact(async () => { const r = (await io()).exportDrawio(ws(), view.id); download(`${vbase}.drawio`, r.text, 'application/xml'); warn(r.warnings, 'draw.io'); })}>draw.io</button>
           {view.notationId === 'bpmn' && <button role="menuitem" onClick={vact(async () => { const r = await (await io()).exportBpmn(ws(), view.id); download(`${vbase}.bpmn`, typeof r === 'string' ? r : (r as { text: string }).text, 'application/xml'); })}>BPMN 2.0 XML</button>}
           {view.notationId === 'statechart' && <button role="menuitem" onClick={vact(async () => { const r = (await io()).exportXState(ws(), view.id); download(`${vbase}.xstate.json`, r.text, 'application/json'); warn(r.warnings, 'XState JSON'); })}>XState JSON</button>}
         </>}
         <div className="menu__sep" />
+        <button role="menuitem" onClick={() => { setOpen(false); setCodegen(true); }}>{t('Generar código…')}</button>
         <HelpLink slug="importar-exportar" label={t('Formatos y equivalencias')} className="menu__help" />
       </div>}
+      {codegen && <Suspense fallback={null}><CodegenDialog onClose={() => setCodegen(false)} /></Suspense>}
     </span>
   );
 }

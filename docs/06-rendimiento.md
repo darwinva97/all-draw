@@ -217,3 +217,59 @@ Probado y descartado:
 - El panel de problemas valida 300 ms después de cada cambio (en reposo): con 300 nodos son ~70 ms que
   pueden caer dentro de la interacción siguiente.
 - Con 600 nodos el cambio sigue en ~1 s.
+
+## Formato de registros 2: `Y.Map` por registro (5 de octubre de 2026)
+
+Para que dos personas puedan editar a la vez campos distintos del mismo elemento (y escribir en el mismo texto), cada
+registro del `Y.Doc` pasó de ser un objeto JSON (un elemento de Yjs por registro) a un `Y.Map` de campos, con bolsas
+`Y.Map` (`fields`, `props`, `style`…) y textos largos `Y.Text` (ver `packages/sync/src/ydoc.ts`). Más elementos de Yjs
+por registro es más trabajo al crear y al decodificar; estas medidas comparan el `YjsStore` anterior con el nuevo sobre
+el espacio grande (1.000 elementos, 3.256 relaciones, 50 vistas, 3.000 nodos, 3.675 aristas).
+
+### Cómo se mide
+
+Las dos implementaciones en el mismo proceso, alternándolas (6 rondas; cada medida es la mejor de 9 pasadas), con
+`tsx` y Node 22, en la VPS compartida con otros procesos (carga 8–11 en 8 núcleos: el ruido es grande, por eso se dan
+la mediana de las rondas y, entre paréntesis, el mínimo). El banco permanente es `packages/sync/test/bench.test.ts`
+(umbrales 10× lo medido) junto a `packages/editor/test/bench.test.ts`.
+
+| Medida (espacio grande) | Formato 1 (JSON) | Formato 2 (`Y.Map`) | Diferencia |
+|---|---|---|---|
+| `loadInto` en caliente (banco del editor: mismo store, mejor de tres) | 19 ms (9) | 24 ms (17) | +25 % |
+| `YjsStore.snapshot()` | 75 ms (53) | 54 ms (42) | −28 % |
+| `createIndex` (YjsStore) | 4,7 ms (3,3) | 3,4 ms (2,5) | −28 % |
+| Abrir: `applyUpdate` del doc completo | 102 ms (86) | 102 ms (97) | ≈ 0 % |
+| Abrir: `applyUpdate` + `list()` de todas las colecciones | 96 ms (85) | 120 ms (97) | +24 % |
+| `execute(moveNodes)` de 100 nodos | 0,5 ms (0,3) | 1,6 ms (1,2) | ×3 (+1 ms) |
+| Renombrar un elemento + `list` + `get` | 0,1 ms | 0,1 ms | = |
+| `loadInto` en un store **vacío** (crear o importar) | 17 ms (14) | 99 ms (72) | ×5–6 (+80 ms) |
+| Tamaño del doc (update completo) | 1.688 KB | 1.354 KB | −20 % |
+| Elementos de Yjs (structs) | ~11.000 | ~39.400 | ×3,6 |
+
+Lo que entra en el ±30 %: el banco del editor (`loadInto` en caliente, `snapshot`, `createIndex`, `nodesOfView`) y
+abrir un espacio. Lo que no, y por qué se acepta:
+
+- **Crear o importar en un store vacío** (×5–6): es una vez por espacio (plantilla, importación, subir al servidor) y
+  son 100 ms para 11.000 registros; el coste es inherente a tener un elemento de Yjs por campo, que es justo lo que
+  permite fusionar campo a campo.
+- **Mover 100 nodos** (×3): ~1,5 ms por comando (Yjs crea un evento por registro anidado cambiado); muy por debajo de
+  un frame, también arrastrando una selección grande.
+
+### Qué se hizo para que no costara más
+
+Una primera versión «ingenua» (todo campo, bolsa y texto como elemento de Yjs, también los vacíos) costaba al abrir
+×2,5 (`applyUpdate` 190–340 ms), cargar en frío ×8 y ocupaba un 30 % más. Lo que lo deja en lo de la tabla:
+
+- **No se guardan los vacíos por defecto** (`''`, `[]`, `{}` del esquema, `EMPTY_DEFAULTS`) ni el `id` (es la clave):
+  se reponen al leer. Excepción: `doc`, `fields` y `props` de los elementos y `doc` de las vistas se crean siempre
+  (`EAGER_KEYS`), porque es donde dos personas escriben a la vez en un elemento recién creado y, si cada una creara
+  su `Y.Text`/`Y.Map`, ganaría una. En relaciones no se crean siempre: hay 3 veces más relaciones que elementos y
+  costaban un 30 % más al abrir.
+- **Claves agrupadas** (`PACKED_KEYS`): los extremos de aristas (`viewId`, `relationId`, nodos y puertos) y relaciones
+  (`typeId`, `from`, `to`) y la vista/elemento de un nodo van en un único valor atómico `$`. Son una unidad (mezclar
+  el origen de una persona con el puerto de otra daría algo inválido) y casi nunca cambian; ahorran ~20.000 elementos.
+- **Caché de registros planos** por id (la identidad se mantiene hasta que el registro cambia, igual que antes) y
+  `list()` reconstruida desde esa caché.
+- **`set` sin cambios no escribe** (compara con el registro en caché) y, dentro de una transacción, **borrar y volver a
+  escribir el mismo registro es un diff** (los borrados se aplazan al final de `transact`): `loadInto` sobre el mismo
+  contenido no genera ningún update, y restaurar una instantánea solo toca lo que difiere.

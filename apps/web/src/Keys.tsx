@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, type AdminUser, type ApiKey, type Quotas, type User } from './api';
+import { api, type AdminUser, type ApiKey, type AuthInfo, type Quotas, type User } from './api';
 import { useT } from '@all-draw/i18n';
 import { Icon, confirmDialog, toast } from '@all-draw/editor';
 import { AppFooter, AppHeader, UserMenu } from './Chrome';
 import { formError } from './Auth';
+import { EmailPrefsSection, SessionsList, VerifyNotice } from './AccountExtras';
 import './pwa';
 
 /** Pantalla "Cuenta" (`#/keys`): claves API, cambio de contraseña y, para administradores, las cuentas del servidor. */
@@ -12,8 +13,10 @@ export function KeysScreen() {
   const [me, setMe] = useState<User | null>(null);
   const [keys, setKeys] = useState<ApiKey[]>([]); const [name, setName] = useState(''); const [created, setCreated] = useState<ApiKey | null>(null);
   const [err, setErr] = useState('');
+  /** ¿Tiene correo el servidor? (verificación, «recibir por correo»). */
+  const [info, setInfo] = useState<AuthInfo | null>(null);
   const refresh = () => api.keys().then(setKeys).catch(() => setKeys([]));
-  useEffect(() => { refresh(); api.me().then(setMe); }, []);
+  useEffect(() => { refresh(); api.me().then(setMe); api.authInfo().then(setInfo); }, []);
   const create = async (e: React.FormEvent) => {
     e.preventDefault(); setErr('');
     try { setCreated(await api.createKey(name.trim())); setName(''); refresh(); } catch (x) { setErr(formError(x, t)); }
@@ -37,7 +40,8 @@ export function KeysScreen() {
       <div className="home__list">
         {keys.map(k => <div key={k.id} className="home__item"><div>{k.name} <small>{k.prefix}…</small><br /><small>{t('creada {date}', { date: new Date(k.createdAt).toLocaleString() })}{k.lastUsedAt ? ` · ${t('usada {date}', { date: new Date(k.lastUsedAt).toLocaleString() })}` : ''}</small></div><button className="btn btn--ghost" aria-label={t('Revocar la clave {name}', { name: k.name })} onClick={async () => { if (!(await confirmDialog({ title: t('¿Revocar la clave «{name}»?', { name: k.name }), message: t('Los agentes y scripts que la usen dejarán de tener acceso.'), confirmLabel: t('Revocar'), danger: true }))) return; await api.deleteKey(k.id); toast.success(t('Clave revocada')); refresh(); }}>{t('Revocar')}</button></div>)}
       </div>
-      {me && <ProfileSection me={me} onChange={setMe} />}
+      {me && <ProfileSection me={me} onChange={setMe} emailEnabled={!!info?.email} />}
+      {me && info?.email && <EmailPrefsSection me={me} onChange={setMe} />}
       <PasswordSection onKeysChanged={refresh} />
       {me && <DataSection />}
       {me?.isAdmin && <AdminUsers meId={me.id} />}
@@ -95,6 +99,7 @@ function PasswordSection({ onKeysChanged }: { onKeysChanged: () => void }) {
         <p className="ok" role="status" aria-live="polite">{msg}</p>
       </form>
       <h2 id="sessions-title">{t('Sesiones')}</h2>
+      <SessionsList onCurrentClosed={() => { location.hash = '#/'; location.reload(); }} />
       <p className="lead">{t('Cierra la sesión en todos los navegadores, incluido este, y desconecta al momento los espacios que tengan abiertos.')}</p>
       <div className="row" role="group" aria-labelledby="sessions-title">
         <label className="check"><input type="checkbox" checked={allKeys} onChange={e => setAllKeys(e.target.checked)} /> {t('Revocar también las claves API')}</label>
@@ -141,9 +146,11 @@ function AdminUsers({ meId }: { meId: string }) {
 const formatMB = (n: number) => `${Math.round((n / (1024 * 1024)) * 10) / 10} MB`;
 
 /** Nombre y email (cambiar el email pide la contraseña) y cuotas de la cuenta. */
-function ProfileSection({ me, onChange }: { me: User; onChange: (u: User) => void }) {
+function ProfileSection({ me, onChange, emailEnabled }: { me: User; onChange: (u: User) => void; emailEnabled: boolean }) {
   const t = useT();
   const [name, setName] = useState(me.name); const [email, setEmail] = useState(me.email); const [password, setPassword] = useState('');
+  /** Correo nuevo que espera a que se confirme el enlace (con correo en el servidor el cambio no es inmediato). */
+  const [pending, setPending] = useState<string | null>(null);
   const [quotas, setQuotas] = useState<Quotas | null>(null);
   const [msg, setMsg] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   useEffect(() => { api.account().then(r => setQuotas(r.quotas), () => setQuotas(null)); }, []);
@@ -151,8 +158,10 @@ function ProfileSection({ me, onChange }: { me: User; onChange: (u: User) => voi
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
     try {
-      const user = await api.updateMe({ ...(name.trim() !== me.name ? { name: name.trim() } : {}), ...(emailChanged ? { email: email.trim(), password } : {}) });
-      onChange(user); setPassword(''); setMsg(t('Datos guardados.'));
+      const { user, pendingEmail } = await api.updateAccount({ ...(name.trim() !== me.name ? { name: name.trim() } : {}), ...(emailChanged ? { email: email.trim(), password } : {}) });
+      onChange(user); setPassword('');
+      if (pendingEmail) { setPending(pendingEmail); setEmail(user.email); setMsg(t('Te hemos enviado un enlace a {email} para confirmar el cambio.', { email: pendingEmail })); }
+      else setMsg(t('Datos guardados.'));
     } catch (x) { setErr(formError(x, t)); }
     finally { setBusy(false); }
   };
@@ -169,6 +178,7 @@ function ProfileSection({ me, onChange }: { me: User; onChange: (u: User) => voi
         <p className="err" role="alert" aria-live="assertive">{err}</p>
         <p className="ok" role="status" aria-live="polite">{msg}</p>
       </form>
+      <VerifyNotice me={me} pendingEmail={pending} emailEnabled={emailEnabled} />
       {quotas && <p className="lead"><small>
         {quotas.workspaces.limit === null ? t('Espacios propios: {used} (sin límite)', { used: quotas.workspaces.used }) : t('Espacios propios: {used} de {limit}', { used: quotas.workspaces.used, limit: quotas.workspaces.limit })}
         {quotas.docBytes.limit !== null && <> · {t('Tamaño máximo por espacio: {size}', { size: formatMB(quotas.docBytes.limit) })}</>}

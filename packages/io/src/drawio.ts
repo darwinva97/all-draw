@@ -7,7 +7,8 @@
  * - En vistas de rejilla las celdas capa×etapa se dibujan como contenedores (swimlane-like) y los nodos cuelgan de su celda.
  * - Cada `ViewEdge` → `mxCell edge="1"` con `edgeStyle=orthogonalEdgeStyle`, estilo de línea y puntas según la relación,
  *   etiqueta (`value`) y `Array as="points"` con los bendpoints (absolutos, como en draw.io).
- * Solo exportación.
+ * Además escribe `allDrawType`/`allDrawRelation`/`allDrawVisual` en el estilo (draw.io conserva las claves que no
+ * conoce), para que `importDrawio` recupere los tipos exactos al volver.
  */
 import type { Workspace, Element, ViewNode, ArrowHead, LineStyle } from '@all-draw/core';
 import { cellRects, cellKey } from '@all-draw/notation-grid';
@@ -113,6 +114,8 @@ export function exportDrawio(ws: Workspace, viewId: string): TextExport {
     if (n.style.opacity !== undefined) style += `opacity=${Math.round(n.style.opacity * 100)};`;
     if (hasKids) style += 'container=1;verticalAlign=top;';
     if (n.detailViewId) style += 'shape=process;';
+    // Tipo exacto para reimportar en all-draw (draw.io conserva las claves de estilo que no conoce).
+    if (el) style += `allDrawType=${el.typeId};`; else if (n.visualType) style += `allDrawVisual=${n.visualType};`;
     const { id: parent, origin } = parentCell(n);
     abs.set(n.id, { x: origin.x + n.x, y: origin.y + n.y });
     cells.push({ ...attrs({ id: cellIdOf(n.id), value: nl(label), style, vertex: '1', parent }), mxGeometry: attrs({ x: Math.round(n.x), y: Math.round(n.y), width: Math.round(n.w), height: Math.round(n.h), as: 'geometry' }) });
@@ -137,6 +140,7 @@ export function exportDrawio(ws: Workspace, viewId: string): TextExport {
     if (HEAD_FILL[th] !== undefined) style += `endFill=${HEAD_FILL[th]};`;
     const color = e.style.color ?? rs.color; if (color) style += `strokeColor=${color};`;
     if (e.style.width) style += `strokeWidth=${e.style.width};`;
+    if (rel) style += `allDrawRelation=${rel.typeId};`;
     const label = e.label ?? rel?.name ?? '';
     const geometry: XmlNode = attrs({ relative: '1', as: 'geometry' });
     if (e.bendpoints.length) geometry.Array = { '@_as': 'points', mxPoint: e.bendpoints.map(p => attrs({ x: Math.round(p.x), y: Math.round(p.y) })) };

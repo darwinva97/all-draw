@@ -76,10 +76,25 @@ filtrar por nombre o por correo; elige con **↑ / ↓** y **Enter** o **Tab**, 
 - Si borras el texto `@Nombre`, la mención desaparece.
 - Si el espacio no tiene personas, la lista te lo indica: primero hay que crearlas.
 
+### Quién recibe el aviso {#aviso-de-mencion}
+
+En los **espacios del servidor**, una mención en un comentario **nuevo** avisa a la persona en su
+[campana de notificaciones](compartir-y-colaborar.md#notificaciones) (y por correo si el servidor
+envía correos y lo tiene activado) cuando el servidor sabe qué cuenta es. Lo decide así, por orden:
+
+1. La persona del espacio tiene un **correo** y hay una cuenta con ese correo: esa cuenta. Es la forma
+   segura: pon el correo de cada persona en **Espacio → Personas**.
+2. Si no tiene correo (o no hay cuenta con él), se busca una cuenta que haya **firmado comentarios en
+   este espacio con el mismo nombre** (sin mirar mayúsculas ni acentos). Si dos cuentas firman con ese
+   nombre, no se avisa a ninguna.
+
+Nunca se avisa al autor del comentario ni a quien **no tenga acceso** al espacio (mencionar no da
+acceso). Editar un comentario para añadir una mención no avisa, ni restaurar una versión con
+comentarios antiguos, ni los comentarios de hace más de un día que llegan al volver la conexión.
+
 > [!IMPORTANT]
-> Mencionar a alguien **no le envía ningún aviso** (all-draw no manda correos ni notificaciones).
-> La mención sirve para dejar claro a quién va dirigido el comentario. Si esa persona tiene que
-> enterarse, díselo por tu canal habitual.
+> En los **espacios locales** (del navegador) las menciones **no avisan a nadie**: no hay servidor
+> que lo haga. La mención sirve para dejar claro a quién va dirigido el comentario.
 
 ## Resolver y reabrir {#resolver}
 

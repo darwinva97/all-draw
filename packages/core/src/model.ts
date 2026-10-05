@@ -185,7 +185,7 @@ export const Relation = z.object({
 export type Relation = z.infer<typeof Relation>;
 
 // ---------------------------------------------------------------- Vistas
-export const ViewKind = z.enum(['freeform', 'grid', 'sequence', 'tree', 'matrix']);
+export const ViewKind = z.enum(['freeform', 'grid', 'sequence', 'tree', 'matrix', 'gantt']);
 export type ViewKind = z.infer<typeof ViewKind>;
 
 export const Layer = z.object({ id: z.string(), name: z.string(), color: z.string().optional(), size: z.number().optional() });

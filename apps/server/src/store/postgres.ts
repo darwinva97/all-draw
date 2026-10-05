@@ -8,7 +8,7 @@
 import pg from 'pg';
 import * as Y from 'yjs';
 import { newId } from '@all-draw/core';
-import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, Snapshot, SnapshotMeta, User, WorkspaceRow, WorkspaceStore } from '@all-draw/server-core';
+import { MAX_NOTIFICATIONS_PER_USER, applyUserPatch, type AccountToken, type AccountTokenKind, type ApiKey, type Member, type MemberRole, type Notification, type NotificationKind, type Role, type Session, type SessionMeta, type ShareLink, type Snapshot, type SnapshotMeta, type User, type UserPatch, type WorkspaceRow, type WorkspaceStore } from '@all-draw/server-core';
 
 const { Pool } = pg;
 const now = () => new Date().toISOString();
@@ -96,6 +96,34 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS snapshots_ws ON snapshots(workspace_id, created_at);
   `,
+  // v4 — cuentas (correo verificado, idioma, preferencias), sesiones activas, tokens por correo y notificaciones (= sqlite.ts v4)
+  `
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TEXT;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS locale TEXT;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_email BOOLEAN NOT NULL DEFAULT TRUE;
+  ALTER TABLE sessions ADD COLUMN IF NOT EXISTS device TEXT;
+  ALTER TABLE sessions ADD COLUMN IF NOT EXISTS ip TEXT;
+  ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_used_at TEXT;
+  CREATE TABLE IF NOT EXISTS account_tokens (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('reset','verify')),
+    email TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS account_tokens_user ON account_tokens(user_id, kind);
+  CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    workspace_id TEXT REFERENCES workspaces(id) ON DELETE CASCADE,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    read_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, created_at);
+  `,
 ];
 
 type Row = Record<string, unknown>;
@@ -129,7 +157,7 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
 
   /** Vacía todas las tablas (sólo para tests). */
   async truncateAll() {
-    await this.pool.query('TRUNCATE users, sessions, api_keys, workspaces, workspace_members, share_links, docs, doc_updates, snapshots CASCADE');
+    await this.pool.query('TRUNCATE users, sessions, api_keys, workspaces, workspace_members, share_links, docs, doc_updates, snapshots, account_tokens, notifications CASCADE');
   }
 
   private async one<T = Row>(sql: string, params: unknown[] = []): Promise<T | null> { return ((await this.pool.query(sql, params)).rows[0] as T | undefined) ?? null; }
@@ -137,7 +165,18 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
   private async run(sql: string, params: unknown[] = []): Promise<number> { return (await this.pool.query(sql, params)).rowCount ?? 0; }
 
   private user(r: Row | null): User | null {
-    return r ? { id: r.id as string, email: r.email as string, name: r.name as string, passwordHash: r.password_hash as string, isAdmin: !!r.is_admin, createdAt: r.created_at as string } : null;
+    return r ? {
+      id: r.id as string, email: r.email as string, name: r.name as string, passwordHash: r.password_hash as string, isAdmin: !!r.is_admin, createdAt: r.created_at as string,
+      emailVerifiedAt: (r.email_verified_at as string | null) ?? null, locale: (r.locale as string | null) ?? null, notifyEmail: r.notify_email === undefined || r.notify_email === null ? true : !!r.notify_email,
+    } : null;
+  }
+  private session(r: Row): Session {
+    return { tokenHash: r.token_hash as string, userId: r.user_id as string, createdAt: r.created_at as string, expiresAt: r.expires_at as string, device: (r.device as string | null) ?? null, ip: (r.ip as string | null) ?? null, lastUsedAt: (r.last_used_at as string | null) ?? null };
+  }
+  private notification(r: Row): Notification {
+    let payload: Record<string, unknown> = {};
+    try { payload = JSON.parse(String(r.payload)) as Record<string, unknown>; } catch { /* payload corrupto: vacío */ }
+    return { id: r.id as string, userId: r.user_id as string, kind: r.kind as NotificationKind, workspaceId: (r.workspace_id as string | null) ?? null, payload, createdAt: r.created_at as string, readAt: (r.read_at as string | null) ?? null };
   }
   private workspace(r: Row | null): WorkspaceRow | null {
     return r ? { id: r.id as string, ownerId: r.owner_id as string, name: r.name as string, createdAt: r.created_at as string, updatedAt: r.updated_at as string } : null;
@@ -152,10 +191,10 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
     return { id: r.id as string, workspaceId: r.workspace_id as string, createdAt: r.created_at as string, authorId: (r.author_id as string | null) ?? null, label: (r.label as string | null) ?? null, size: Number(r.size) };
   }
 
-  async createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string }): Promise<User> {
-    const user: User = { id: u.id ?? newId('usr'), email: u.email.trim().toLowerCase(), name: u.name, passwordHash: u.passwordHash, isAdmin: !!u.isAdmin, createdAt: now() };
+  async createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string; locale?: string | null }): Promise<User> {
+    const user: User = { id: u.id ?? newId('usr'), email: u.email.trim().toLowerCase(), name: u.name, passwordHash: u.passwordHash, isAdmin: !!u.isAdmin, createdAt: now(), emailVerifiedAt: null, locale: u.locale ?? null, notifyEmail: true };
     try {
-      await this.run('INSERT INTO users (id, email, name, password_hash, is_admin, created_at) VALUES ($1, $2, $3, $4, $5, $6)', [user.id, user.email, user.name, user.passwordHash, user.isAdmin, user.createdAt]);
+      await this.run('INSERT INTO users (id, email, name, password_hash, is_admin, created_at, locale) VALUES ($1, $2, $3, $4, $5, $6, $7)', [user.id, user.email, user.name, user.passwordHash, user.isAdmin, user.createdAt, user.locale]);
     } catch (e) { if ((e as { code?: string }).code === '23505') throw new Error('email ya registrado'); throw e; }
     return user;
   }
@@ -164,10 +203,10 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
   async countUsers() { return Number((await this.one<{ n: string }>('SELECT COUNT(*) AS n FROM users'))!.n); }
   async listUsers() { return (await this.all('SELECT * FROM users ORDER BY created_at')).map(r => this.user(r)!); }
   async setPasswordHash(userId: string, passwordHash: string) { await this.run('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]); }
-  async updateUser(id: string, patch: { name?: string; email?: string; isAdmin?: boolean }) {
+  async updateUser(id: string, patch: UserPatch) {
     const u = await this.getUser(id); if (!u) return null;
-    const next = { ...u, ...(patch.name !== undefined ? { name: patch.name } : {}), ...(patch.email !== undefined ? { email: patch.email.trim().toLowerCase() } : {}), ...(patch.isAdmin !== undefined ? { isAdmin: patch.isAdmin } : {}) };
-    try { await this.run('UPDATE users SET name = $1, email = $2, is_admin = $3 WHERE id = $4', [next.name, next.email, next.isAdmin, id]); }
+    const next = applyUserPatch(u, patch);
+    try { await this.run('UPDATE users SET name = $1, email = $2, is_admin = $3, email_verified_at = $4, locale = $5, notify_email = $6 WHERE id = $7', [next.name, next.email, next.isAdmin, next.emailVerifiedAt, next.locale, next.notifyEmail, id]); }
     catch (e) { if ((e as { code?: string }).code === '23505') throw new Error('email ya registrado'); throw e; }
     return next;
   }
@@ -179,29 +218,73 @@ export class PostgresWorkspaceStore implements WorkspaceStore {
       await c.query('DELETE FROM api_keys WHERE user_id = $1', [id]);
       await c.query('DELETE FROM workspace_members WHERE user_id = $1', [id]);
       await c.query('UPDATE snapshots SET author_id = NULL WHERE author_id = $1', [id]);
+      await c.query('DELETE FROM account_tokens WHERE user_id = $1', [id]);
+      await c.query('DELETE FROM notifications WHERE user_id = $1', [id]);
       await c.query('DELETE FROM users WHERE id = $1', [id]);
       await c.query('COMMIT');
     } catch (e) { await c.query('ROLLBACK').catch(() => {}); throw e; } finally { c.release(); }
   }
 
-  async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
-    const s: Session = { tokenHash, userId, createdAt: now(), expiresAt };
-    await this.run('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES ($1, $2, $3, $4)', [tokenHash, userId, s.createdAt, expiresAt]);
+  async createSession(userId: string, tokenHash: string, expiresAt: string, meta: SessionMeta = {}): Promise<Session> {
+    const t = now();
+    const s: Session = { tokenHash, userId, createdAt: t, expiresAt, device: meta.device ?? null, ip: meta.ip ?? null, lastUsedAt: t };
+    await this.run('INSERT INTO sessions (token_hash, user_id, created_at, expires_at, device, ip, last_used_at) VALUES ($1, $2, $3, $4, $5, $6, $7)', [tokenHash, userId, t, expiresAt, s.device, s.ip, t]);
     return s;
   }
   async getSession(tokenHash: string) {
     const r = await this.one('SELECT * FROM sessions WHERE token_hash = $1', [tokenHash]);
     if (!r) return null;
     if ((r.expires_at as string) < now()) { await this.run('DELETE FROM sessions WHERE token_hash = $1', [tokenHash]); return null; }
-    return { tokenHash, userId: r.user_id as string, createdAt: r.created_at as string, expiresAt: r.expires_at as string };
+    return this.session(r);
   }
   async touchSession(tokenHash: string, expiresAt: string) { await this.run('UPDATE sessions SET expires_at = $1 WHERE token_hash = $2', [expiresAt, tokenHash]); }
+  async markSessionUsed(tokenHash: string, at: string, ip: string | null) { await this.run('UPDATE sessions SET last_used_at = $1, ip = COALESCE($2, ip) WHERE token_hash = $3', [at, ip, tokenHash]); }
+  async listUserSessions(userId: string) {
+    return (await this.all('SELECT * FROM sessions WHERE user_id = $1 AND expires_at >= $2 ORDER BY COALESCE(last_used_at, created_at) DESC', [userId, now()])).map(r => this.session(r));
+  }
   async deleteSession(tokenHash: string) { await this.run('DELETE FROM sessions WHERE token_hash = $1', [tokenHash]); }
   async deleteUserSessions(userId: string, exceptTokenHash?: string) {
     if (exceptTokenHash) await this.run('DELETE FROM sessions WHERE user_id = $1 AND token_hash != $2', [userId, exceptTokenHash]);
     else await this.run('DELETE FROM sessions WHERE user_id = $1', [userId]);
   }
-  async purgeExpiredSessions() { return this.run('DELETE FROM sessions WHERE expires_at < $1', [now()]); }
+  async purgeExpiredSessions() {
+    const t = now();
+    await this.run('DELETE FROM account_tokens WHERE expires_at < $1', [t]);
+    return this.run('DELETE FROM sessions WHERE expires_at < $1', [t]);
+  }
+
+  async createAccountToken(a: Omit<AccountToken, 'createdAt'>): Promise<AccountToken> {
+    const tok: AccountToken = { ...a, email: a.email.trim().toLowerCase(), createdAt: now() };
+    await this.run('INSERT INTO account_tokens (token_hash, user_id, kind, email, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6)', [tok.tokenHash, tok.userId, tok.kind, tok.email, tok.createdAt, tok.expiresAt]);
+    return tok;
+  }
+  async consumeAccountToken(tokenHash: string, kind: AccountTokenKind): Promise<AccountToken | null> {
+    const r = await this.one('DELETE FROM account_tokens WHERE token_hash = $1 AND kind = $2 RETURNING *', [tokenHash, kind]);
+    if (!r || (r.expires_at as string) < now()) return null;
+    return { tokenHash: r.token_hash as string, userId: r.user_id as string, kind: r.kind as AccountTokenKind, email: r.email as string, createdAt: r.created_at as string, expiresAt: r.expires_at as string };
+  }
+  async deleteAccountTokens(userId: string, kind?: AccountTokenKind) {
+    if (kind) await this.run('DELETE FROM account_tokens WHERE user_id = $1 AND kind = $2', [userId, kind]);
+    else await this.run('DELETE FROM account_tokens WHERE user_id = $1', [userId]);
+  }
+
+  async createNotification(n: { id?: string; userId: string; kind: NotificationKind; workspaceId: string | null; payload: Record<string, unknown> }): Promise<Notification | null> {
+    const row: Notification = { id: n.id ?? newId('ntf'), userId: n.userId, kind: n.kind, workspaceId: n.workspaceId, payload: n.payload, createdAt: now(), readAt: null };
+    const changes = await this.run('INSERT INTO notifications (id, user_id, kind, workspace_id, payload, created_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING', [row.id, row.userId, row.kind, row.workspaceId, JSON.stringify(row.payload), row.createdAt]);
+    if (!changes) return null;
+    await this.run('DELETE FROM notifications WHERE user_id = $1 AND id NOT IN (SELECT id FROM notifications WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2)', [row.userId, MAX_NOTIFICATIONS_PER_USER]);
+    return row;
+  }
+  async listNotifications(userId: string, limit: number) {
+    return (await this.all('SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2', [userId, Math.max(0, limit)])).map(r => this.notification(r));
+  }
+  async countUnreadNotifications(userId: string) { return Number((await this.one<{ n: string }>('SELECT COUNT(*) AS n FROM notifications WHERE user_id = $1 AND read_at IS NULL', [userId]))!.n); }
+  async markNotificationsRead(userId: string, ids?: string[]) {
+    const t = now();
+    if (!ids) return this.run('UPDATE notifications SET read_at = $1 WHERE user_id = $2 AND read_at IS NULL', [t, userId]);
+    if (ids.length === 0) return 0;
+    return this.run('UPDATE notifications SET read_at = $1 WHERE user_id = $2 AND read_at IS NULL AND id = ANY($3)', [t, userId, ids]);
+  }
 
   async createApiKey(k: { userId: string; name: string; prefix: string; keyHash: string }): Promise<ApiKey> {
     const key: ApiKey = { id: newId('key'), ...k, createdAt: now(), lastUsedAt: null };

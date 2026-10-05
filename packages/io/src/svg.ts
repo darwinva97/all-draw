@@ -11,6 +11,7 @@ import { cellRects, normalizeGrid, cellKey } from '@all-draw/notation-grid';
 import { figureEntry, figureOf, figureParts, iconParts, showsIcon, textInset } from '@all-draw/notation-archimate';
 import { edgePath, floatingEndpoints, type Box, type Endpoints, type Pt, type Router } from './bendpath-svg';
 import { renderSequenceSvg } from './svg-sequence';
+import { renderGanttSvg } from './svg-gantt';
 import { tr, trn } from './i18n';
 
 export type SvgTheme = 'light' | 'dark' | 'dual';
@@ -201,11 +202,77 @@ const LABEL_BELOW = new Set<Shape>(['circle', 'double-circle', 'diamond', 'bar',
  * Figura que se pinta: la del tipo, salvo la persona de C4 (`c4:Person`, tipo `actor`) y el almacén DFD
  * (`dfd:DataStore`: dos líneas paralelas). Igual que `figureFor` del editor.
  */
-type Figure = Shape | 'person' | 'store';
+type Figure = Shape | 'person' | 'store' | ExtraFigure;
 export function figureFor(typeId: string | undefined, shape: Shape): Figure {
   if (shape === 'actor' && !!typeId && typeId.startsWith('c4:')) return 'person';
   if (shape === 'bar' && typeId === 'dfd:DataStore') return 'store';
-  return shape;
+  return (typeId && EXTRA_FIGURES[typeId]) || shape;
+}
+
+// ---------------------------------------------------------------- Figuras de las notaciones UML nuevas (réplica de shapes.tsx)
+/*
+ * Paquete (carpeta con pestaña), componente y artefacto (icono sobre la caja), nodo (caja 3D), interfaz requerida
+ * (semicírculo), puerto (cuadrado), final de flujo (círculo con aspa), enviar y recibir señal. Misma tabla y geometría que
+ * `EXTRA_FIGURES`/`figureParts` de `packages/editor/src/nodes/shapes.tsx`: si cambias algo aquí, cámbialo allí.
+ */
+type ExtraFigure = 'package' | 'component' | 'artifact' | 'node3d' | 'socket' | 'port' | 'flow-final' | 'send' | 'receive';
+const EXTRA_FIGURES: Readonly<Record<string, ExtraFigure>> = {
+  'usecase:Package': 'package', 'component:Package': 'package',
+  'component:Component': 'component', 'deployment:Component': 'component',
+  'component:Artifact': 'artifact', 'deployment:Artifact': 'artifact', 'deployment:DeploymentSpecification': 'artifact',
+  'deployment:Node': 'node3d', 'deployment:Device': 'node3d', 'deployment:ExecutionEnvironment': 'node3d',
+  'component:RequiredInterface': 'socket', 'component:Port': 'port',
+  'activity:FlowFinal': 'flow-final', 'activity:SendSignal': 'send', 'activity:AcceptEvent': 'receive',
+};
+const EXTRA_SET = new Set<string>(Object.values(EXTRA_FIGURES));
+/** Se dibujan enteras (sin caja); `component` y `artifact` solo añaden su icono a la caja. */
+const SVG_ONLY_FIGURES = new Set<string>(['package', 'node3d', 'socket', 'port', 'flow-final', 'send', 'receive']);
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const packageTab = (w: number, h: number) => ({ tw: r2(Math.min(Math.max(w * 0.4, 30), 120)), th: r2(Math.min(14, h * 0.3)) });
+const nodeDepth = (w: number, h: number) => r2(Math.max(6, Math.min(14, Math.min(w, h) * 0.12)));
+const arrowTip = (w: number, h: number) => r2(Math.min(h / 2, w * 0.25));
+function extraFigureParts(fig: Figure, w: number, h: number): { d: string; paint: 'fill' | 'shade' | 'line' }[] | undefined {
+  const a = 0.75, W = r2(w - a), H = r2(h - a);
+  switch (fig) {
+    case 'package': { const { tw, th } = packageTab(w, h); return [{ d: `M${a},${a} H${tw} V${th} H${a} Z`, paint: 'fill' }, { d: `M${a},${th} H${W} V${H} H${a} Z`, paint: 'fill' }]; }
+    case 'component': { const x = r2(w - 21), y = 6; return [{ d: `M${x + 4},${y} h12 v14 h-12 Z`, paint: 'fill' }, { d: `M${x},${y + 3} h8 v3 h-8 Z M${x},${y + 8} h8 v3 h-8 Z`, paint: 'fill' }]; }
+    case 'artifact': { const x = r2(w - 18), y = 5; return [{ d: `M${x},${y} H${x + 7} L${x + 11},${y + 4} V${y + 14} H${x} Z`, paint: 'fill' }, { d: `M${x + 7},${y} V${y + 4} H${x + 11}`, paint: 'line' }]; }
+    case 'node3d': {
+      const d = nodeDepth(w, h);
+      return [
+        { d: `M${a},${d} L${d},${a} H${W} L${r2(W - d + a)},${d} Z`, paint: 'shade' },
+        { d: `M${r2(W - d + a)},${d} L${W},${a} V${r2(H - d + a)} L${r2(W - d + a)},${H} Z`, paint: 'shade' },
+        { d: `M${a},${d} H${r2(W - d + a)} V${H} H${a} Z`, paint: 'fill' },
+      ];
+    }
+    case 'socket': { const r = r2(Math.min(w, h) / 2 - 2), cx = r2(w / 2 + r / 2), cy = r2(h / 2); return [{ d: `M${cx},${r2(cy - r)} A${r},${r} 0 0 0 ${cx},${r2(cy + r)}`, paint: 'line' }]; }
+    case 'port': { const sz = r2(Math.min(w, h) - 2), x = r2((w - sz) / 2), y = r2((h - sz) / 2); return [{ d: `M${x},${y} h${sz} v${sz} h${-sz} Z`, paint: 'fill' }]; }
+    case 'flow-final': {
+      const r = r2(Math.min(w, h) / 2 - 1), cx = r2(w / 2), cy = r2(h / 2), k = r2(r * 0.7071);
+      return [{ d: `M${r2(cx - r)},${cy} A${r},${r} 0 1 0 ${r2(cx + r)},${cy} A${r},${r} 0 1 0 ${r2(cx - r)},${cy} Z`, paint: 'fill' }, { d: `M${r2(cx - k)},${r2(cy - k)} L${r2(cx + k)},${r2(cy + k)} M${r2(cx + k)},${r2(cy - k)} L${r2(cx - k)},${r2(cy + k)}`, paint: 'line' }];
+    }
+    case 'send': { const t = arrowTip(w, h); return [{ d: `M${a},${a} H${r2(W - t)} L${W},${r2(h / 2)} L${r2(W - t)},${H} H${a} Z`, paint: 'fill' }]; }
+    case 'receive': { const t = arrowTip(w, h); return [{ d: `M${a},${a} H${W} V${H} H${a} L${r2(a + t)},${r2(h / 2)} Z`, paint: 'fill' }]; }
+    default: return undefined;
+  }
+}
+/** Margen del texto (pestaña, caras de la caja 3D, punta y muesca) en las figuras nuevas. */
+function extraFigureInset(fig: Figure, w: number, h: number): { top: number; right: number; bottom: number; left: number } {
+  const z = { top: 0, right: 0, bottom: 0, left: 0 };
+  if (fig === 'package') return { ...z, top: packageTab(w, h).th };
+  if (fig === 'node3d') { const d = nodeDepth(w, h); return { ...z, top: d, right: d }; }
+  if (fig === 'send') return { ...z, right: arrowTip(w, h) * 0.6 };
+  if (fig === 'receive') return { ...z, left: arrowTip(w, h) * 0.6 };
+  if (fig === 'component' || fig === 'artifact') return { ...z, right: 14 };
+  return z;
+}
+function extraFigureSvg(fig: Figure, b: Box, fill: string, stroke: string): string {
+  const parts = extraFigureParts(fig, b.w, b.h);
+  if (!parts) return '';
+  const f = fill === 'transparent' ? 'var(--ad-panel)' : fill;
+  const shade = /^#[0-9a-f]{6}$/i.test(f) ? darken(f, 0.12) : f;
+  const body = parts.map(p => `<path${attrs({ d: p.d, fill: p.paint === 'line' ? 'none' : p.paint === 'shade' ? shade : f, stroke, 'stroke-width': 1.5, 'stroke-linejoin': 'round' })}/>`).join('');
+  return `<g class="ad-shape"${attrs({ transform: `translate(${num(b.x)},${num(b.y)})` })}>${body}</g>`;
 }
 
 /** Negro o casi negro (pseudoestados): en tema oscuro se pinta con la tinta clara (`--ad-ink`). Igual que `isInk` del editor. */
@@ -522,8 +589,9 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
   const archi = ctx.reg.notationOf(el.typeId) === 'archimate' ? figureEntry(el.typeId) : undefined;
   const archiDef = archi ? figureOf(el.typeId, vn.style.figure === 1 ? 1 : 0) : undefined;
   // Persona C4: el texto va en el cuerpo, bajo la cabeza.
-  const inset = archiDef ? textInset(archiDef, b.w, b.h) : person ? { top: personGeometry(b.w, b.h).bodyTop - 2, right: 0, bottom: 0, left: 0 } : { top: 0, right: 0, bottom: 0, left: 0 };
-  const icon = archi || LABEL_BELOW.has(shape) ? undefined : ((rule.icon ?? type?.icon) || undefined);
+  const extra = EXTRA_SET.has(figure);
+  const inset = archiDef ? textInset(archiDef, b.w, b.h) : person ? { top: personGeometry(b.w, b.h).bodyTop - 2, right: 0, bottom: 0, left: 0 } : extraFigureInset(figure, b.w, b.h);
+  const icon = archi || LABEL_BELOW.has(shape) || (extra && !rule.icon) ? undefined : ((rule.icon ?? type?.icon) || undefined);
   // Contenedor "papel": en tema oscuro toma el panel y el texto del tema (reglas `lcRules`), si nadie fijó otros colores.
   const paper = isContainer && explicit !== undefined && rule.bg === undefined && vn.style.fill === undefined && isNeutralLight(type?.color);
   const autoText = rule.text === undefined && vn.style.text === undefined;
@@ -543,6 +611,7 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
       inset.right += 12;
     }
   }
+  else if (extra && SVG_ONLY_FIGURES.has(figure)) parts.push(extraFigureSvg(figure, b, fill, stroke));
   else if (svgShape) parts.push(shapeSvg(figure, b, fill, stroke, 1.5));
   else if (shape === 'pool' || shape === 'lane') {
     const band = shape === 'pool' ? 24 : 18;
@@ -551,6 +620,7 @@ function renderElementNode(ctx: Ctx, vn: ViewNode, el: Element, type: ElementTyp
     const cx = b.x + band / 2, cy = b.y + b.h / 2;
     parts.push(`<text${attrs({ x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'ad-node__label', fill: textColor, 'font-size': shape === 'pool' ? fontSize : Math.min(fontSize, 11), transform: `rotate(-90 ${num(cx)} ${num(cy)})` })}>${escapeXml(label)}</text>`);
   } else parts.push(boxShape(shape, b, fill, stroke, strokeWidth, dash));
+  if (extra && !SVG_ONLY_FIGURES.has(figure)) parts.push(extraFigureSvg(figure, b, fill, stroke));
   // Reglas: acento, banda superior
   if (rule.accent) parts.push(`<rect${attrs({ x: b.x, y: b.y, width: rule.accentWidth ?? 4, height: b.h, fill: rule.accent })}/>`);
   if (rule.top) parts.push(`<rect${attrs({ x: b.x, y: b.y, width: b.w, height: rule.topWidth ?? 4, fill: rule.top })}/>`);
@@ -672,7 +742,9 @@ function renderEdge(ctx: Ctx, e: ViewEdge): string {
   const ms = sh !== 'none' ? markerId(ctx, sh, color, true) : '';
   const mt = th !== 'none' ? markerId(ctx, th, color, false) : '';
   const fieldLabel = rel && type ? type.fields.filter(f => ['text', 'select'].includes(f.kind) && !END_KEYS.has(f.key)).map(f => rel.fields[f.key]).filter((v): v is string => typeof v === 'string' && !!v.trim()).join(' · ') : '';
-  const label = e.label ?? (rel?.name || fieldLabel);
+  // Palabra clave del tipo («include», «deploy»…) delante, como el lienzo.
+  const keyword = typeof type?.meta?.keyword === 'string' ? type.meta.keyword : '';
+  const label = e.label ?? ([keyword, rel?.name || fieldLabel].filter(Boolean).join(' '));
   const mappings = rel?.mappings.length ? rel.mappings.map(m => `${m.fromPath} → ${m.toPath}`).join('\n') : '';
   const parts: string[] = [];
   parts.push(`<path${attrs({ d: path, fill: 'none', stroke: color, 'stroke-width': width, 'stroke-dasharray': dash, 'marker-start': ms ? `url(#${ms})` : undefined, 'marker-end': mt ? `url(#${mt})` : undefined })}/>`);
@@ -742,7 +814,8 @@ export function renderSvgDetailed(store: Store, reg: NotationRegistry, viewId: s
   };
   nodes.forEach(n => resolve(n));
   // Secuencia: líneas de vida, activaciones, fragmentos y mensajes los pinta `svg-sequence.ts` (el resto, lo genérico).
-  const seq = renderSequenceSvg(store, reg, view, { theme, bare: ctx.bare });
+  // Gantt: rejilla de tiempo, barras y dependencias las pinta `svg-gantt.ts` (mismas piezas: fondo, frente, ids y cajas).
+  const seq = renderSequenceSvg(store, reg, view, { theme, bare: ctx.bare }) ?? renderGanttSvg(store, reg, view, { bare: ctx.bare });
   if (seq) for (const [id, b] of seq.boxes) ctx.abs.set(id, b);
 
   // Pines visibles por nodo (posición absoluta en y)

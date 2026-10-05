@@ -1,0 +1,32 @@
+/* Cuentas: «¿Olvidaste tu contraseña?», pantallas de enlaces por correo, sesiones activas y centro de notificaciones. */
+.link-btn { display: inline; padding: 0; margin: 2px 0 6px; border: none; background: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.link-btn:hover { color: var(--accent-hover); }
+
+.notice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; margin: 10px 0; border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line)); background: color-mix(in srgb, var(--warn) 8%, var(--surface)); border-radius: 8px; font-size: 13px; max-width: 60ch; }
+.notice p { margin: 0 0 6px; }
+.notice .btn { margin-top: 2px; }
+
+.sessions { list-style: none; margin: 8px 0 12px; padding: 0; max-width: 640px; }
+.sessions li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.sessions li:last-child { border-bottom: none; }
+.sessions__what { flex: 1; min-width: 0; }
+.sessions__what b { font-weight: 600; }
+.sessions__what small { display: block; color: var(--muted); }
+.sessions__tag { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 11.5px; background: var(--accent-soft); color: var(--accent); vertical-align: 1px; }
+
+.bell { position: relative; }
+.bell__btn { position: relative; }
+.bell__count { position: absolute; top: 2px; right: 1px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center; pointer-events: none; font-variant-numeric: tabular-nums; }
+.bell__panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 70; width: min(360px, calc(100vw - 24px)); max-height: min(70vh, 480px); display: flex; flex-direction: column; background: var(--ad-panel, var(--surface)); color: var(--ad-text, var(--text)); border: 1px solid var(--ad-border, var(--line)); border-radius: 10px; box-shadow: var(--shadow-md); transform-origin: top right; animation: menu-in 140ms var(--ease-out); }
+.bell__head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px; border-bottom: 1px solid var(--ad-border, var(--line)); }
+.bell__head h2 { margin: 0; font-size: 13.5px; font-weight: 600; flex: 1; }
+.bell__list { list-style: none; margin: 0; padding: 4px; overflow: auto; }
+.bell__item { display: flex; gap: 10px; width: 100%; text-align: left; padding: 8px; border: none; border-radius: 8px; background: none; color: inherit; font: inherit; font-size: 13px; cursor: pointer; text-decoration: none; }
+.bell__item:hover, .bell__item:focus-visible { background: var(--ad-bg, var(--sunk)); outline: none; }
+.bell__dot { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: transparent; }
+.bell__item.is-unread .bell__dot { background: var(--accent); }
+.bell__item.is-unread .bell__text { font-weight: 600; }
+.bell__text { display: block; }
+.bell__meta { display: block; color: var(--ad-muted, var(--muted)); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+.bell__empty { padding: 18px 12px; color: var(--ad-muted, var(--muted)); font-size: 13px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .bell__panel { animation: none; } }

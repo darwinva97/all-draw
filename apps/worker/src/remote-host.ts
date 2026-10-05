@@ -7,7 +7,9 @@ export class RemoteDocHost implements DocHost {
 
   private stub(id: string) { return this.ns.get(this.ns.idFromName(id)); }
   private async call<T>(id: string, method: string, path: string, body?: unknown): Promise<T> {
-    const res = await this.stub(id).fetch(new Request(`https://do${path}`, { method, headers: body !== undefined ? { 'content-type': 'application/json' } : {}, body: body !== undefined ? JSON.stringify(body) : undefined }));
+    // `x-alldraw-workspace`: el DO no conoce su nombre (`idFromName`); lo apunta para las notificaciones de menciones.
+    const headers: Record<string, string> = { 'x-alldraw-workspace': id, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) };
+    const res = await this.stub(id).fetch(new Request(`https://do${path}`, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined }));
     const ct = res.headers.get('content-type') ?? '';
     const data = ct.includes('application/json') ? await res.json() as Record<string, unknown> : { text: await res.text() };
     if (!res.ok) {

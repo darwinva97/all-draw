@@ -15,9 +15,10 @@ import { WebSocketServer } from 'ws';
 import { createApi } from './api';
 import { archiveWriter } from './archive';
 import {
-  SAFE_ID, SECURITY_TXT_PATH, authorizeConnection, credentialsFromRequest, isTrustedOrigin, jsonLogger, makeHasher, parseTrustedProxies, redactPath, requestHost,
-  resolveClientIp, safeEqualString, securityHeaders, securityTxt, truncateIp, type BuildInfo, type ConnIdentity, type Logger, type Principal,
+  Notifier, SAFE_ID, SECURITY_TXT_PATH, WS_EXPIRED_REASON, WS_REVOKED, authorizeConnection, closeConn, credentialsFromRequest, isTrustedOrigin, jsonLogger, mailerFromEnv, makeHasher, mentionContextOf,
+  msUntil, parseTrustedProxies, redactPath, requestHost, resolveClientIp, safeEqualString, securityHeaders, securityTxt, truncateIp, type BuildInfo, type ConnIdentity, type Logger, type Mailer, type Principal,
 } from './auth';
+import { smtpMailer } from './smtp';
 import { buildInfo } from './build';
 import type { Config } from './config';
 import { DocManager, LocalDocHost } from './docs';
@@ -34,9 +35,14 @@ export const WS_RESTART = 1012;
 /** Cierre por límite de conexiones (por IP o por espacio). */
 export const WS_TOO_MANY = 4429;
 
+/** `setTimeout` admite como mucho ~24,8 días; los enlaces que caducan más tarde se vuelven a mirar entonces. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
 export interface App {
   server: http.Server;
   docs: DocManager;
+  /** Correo saliente (`MAIL_PROVIDER`): `none`, `log`, `http` o `smtp`. */
+  mailer: Mailer;
   metrics: Metrics;
   logger: Logger;
   /** Deja de aceptar, cierra WebSockets (1012), guarda los documentos y para el servidor. */
@@ -46,6 +52,8 @@ export interface App {
 export interface AppOptions {
   logger?: Logger;
   build?: BuildInfo;
+  /** Correo (los tests lo inyectan); por defecto el de `MAIL_PROVIDER` (`mailerFromEnv`). */
+  mailer?: Mailer;
 }
 
 type SizedStore = WorkspaceStore & { dbSizeBytes?: () => number | Promise<number> };
@@ -69,12 +77,16 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
     const h = (n: string) => { const v = req.headers[n]; return (Array.isArray(v) ? v.join(',') : v) ?? null; };
     return resolveClientIp(trust, req.socket.remoteAddress, h('x-forwarded-for'), h('cf-connecting-ip'));
   };
-  const docs = new DocManager(store, { maxDocBytes: config.maxDocBytes });
+  // Correo: lanza al arrancar si falta una variable (mejor no arrancar que creer que hay correo).
+  const mailer = opts.mailer ?? mailerFromEnv(config.mail, { logger, production: config.production, makeSmtp: s => smtpMailer(s) });
+  const notifier = new Notifier({ store, mailer, logger, publicUrl: config.publicUrl ?? `http://${config.host}:${config.port}` });
+  // Menciones en los comentarios nuevos de un espacio abierto (WebSocket o API): ver `notifications.ts`.
+  const docs = new DocManager(store, { maxDocBytes: config.maxDocBytes, onNewComments: (id, cs, live) => { void notifier.mentions(id, cs, mentionContextOf(live.doc)); } });
   /** Identidad de cada petición (la resuelve la API) para el log de accesos. */
   const who = new WeakMap<http.IncomingMessage, string>();
   const userLabel = (p: Principal | null) => (p ? (p.kind === 'user' ? p.user.id : 'link') : 'anon');
   const api = createApi({
-    store, docs: new LocalDocHost(docs), hash, config, logger, build,
+    store, docs: new LocalDocHost(docs), hash, config, logger, build, mailer, notifier,
     archiveWorkspace: archiveWriter(config.backupDir),
     clientIp: c => { const inc = (c.env as { incoming?: http.IncomingMessage } | undefined)?.incoming; return inc ? ipOf(inc) : 'unknown'; },
     onIdentity: (c, p) => { const inc = (c.env as { incoming?: http.IncomingMessage } | undefined)?.incoming; if (inc) who.set(inc, userLabel(p)); },
@@ -170,7 +182,7 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
     // Identidad y doc se resuelven ANTES de aceptar el socket: el cliente manda su sync step1 nada
     // más abrirse y, si el listener de `message` se registrara tras un `await`, ese mensaje se perdería.
     void (async () => {
-      let outcome: { live: Awaited<ReturnType<DocManager['get']>>; role: Role; identity: ConnIdentity } | { close: number; reason: string; metric: string };
+      let outcome: { live: Awaited<ReturnType<DocManager['get']>>; role: Role; identity: ConnIdentity; expiresAt: string | null } | { close: number; reason: string; metric: string };
       try {
         if (draining) outcome = { close: WS_RESTART, reason: 'servidor reiniciando', metric: 'shutdown' };
         else if (!SAFE_ID.test(id)) outcome = { close: 4400, reason: 'id no válido', metric: 'bad_id' };
@@ -187,7 +199,7 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
               const live = await docs.get(id);
               outcome = config.maxWsPerWorkspace > 0 && live.conns.size >= config.maxWsPerWorkspace
                 ? { close: WS_TOO_MANY, reason: 'demasiadas conexiones a este espacio', metric: 'per_workspace' }
-                : { live, role: auth.role, identity: auth.identity };
+                : { live, role: auth.role, identity: auth.identity, expiresAt: auth.expiresAt };
             }
           }
         }
@@ -201,13 +213,31 @@ export function createApp(config: Config, store: WorkspaceStore, opts: AppOption
         }
         perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
         ws.once('close', () => { const n = (perIp.get(ip) ?? 1) - 1; if (n <= 0) perIp.delete(ip); else perIp.set(ip, n); });
-        setupConnection(ws, outcome.live, outcome.role, outcome.identity);
+        const { live } = outcome;
+        const conn = setupConnection(ws, live, outcome.role, outcome.identity);
+        // Enlace con caducidad: al llegar la hora se corta (4401 `expired`), aunque la conexión siga abierta.
+        if (outcome.expiresAt) {
+          const expiresAt = outcome.expiresAt;
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const arm = () => {
+            const ms = msUntil(expiresAt) ?? 0;
+            timer = setTimeout(() => {
+              if (ms > MAX_TIMER_MS) return arm();
+              conn.close(WS_REVOKED, WS_EXPIRED_REASON); // primero el código; el segundo `close` de abajo ya no cuenta
+              closeConn(live, conn); // fuera del doc y de la presencia ya: lo que llegue después no se aplica
+              logger.info('ws: enlace caducado', { workspace: id });
+            }, Math.min(ms, MAX_TIMER_MS));
+            timer.unref?.();
+          };
+          arm();
+          ws.once('close', () => clearTimeout(timer));
+        }
       });
     })();
   });
 
   return {
-    server, docs, metrics, logger,
+    server, docs, metrics, logger, mailer,
     async close() {
       if (draining) return;
       draining = true;

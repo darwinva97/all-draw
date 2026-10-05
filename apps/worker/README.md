@@ -15,7 +15,8 @@ src/store/sql.ts      SqlWorkspaceStore: todo el SQL del WorkspaceStore sobre un
 src/store/do-sql.ts   SqlDriver sobre ctx.storage.sql + registryStore() (cliente RPC del RegistryDO)
 src/store/d1.ts       SqlDriver sobre D1 (opcional, binding DB)
 src/store/import.ts   validación e INSERT OR IGNORE de las filas de POST /api/admin/import
-src/admin-import.ts   POST /api/admin/import (admin o X-Import-Secret con el registro vacío)
+src/admin-import.ts   POST /api/admin/import (admin, o X-Import-Secret con el registro vacío o con STANDBY; replace: true con STANDBY)
+src/ratelimit.ts      rate limit con el binding de Workers (login, registro, enlaces), antes de la API
 src/migrations.ts     migraciones del RegistryDO (= migrations/*.sql; un test lo comprueba)
 src/env.ts            bindings y variables
 migrations/           0001–0003 *.sql (mismo SQL que apps/server/src/store/sqlite.ts v1–v3); para D1
@@ -82,7 +83,9 @@ npx wrangler deploy                                       # = pnpm --filter @all
    | `MAX_WS_PER_WORKSPACE` | WebSockets por espacio (100) en el DO; al pasarse, cierre `4429`. |
    | `ALLDRAW_COMMIT` / `ALLDRAW_VERSION` | Lo que publica `GET /api/status`. `pnpm --filter @all-draw/worker deploy` pasa `--var ALLDRAW_COMMIT:$(git rev-parse --short HEAD)`. |
    | `LOG_LEVEL` | Log JSON por `console` (Workers Observability): errores internos, `client-error`, cuentas borradas. |
-   | `IMPORT_SECRET` | Opcional, sólo para migrar (`POST /api/admin/import` con `X-Import-Secret` mientras no haya usuarios). Bórralo después: `wrangler secret delete IMPORT_SECRET`. |
+   | `IMPORT_SECRET` | Con `STANDBY`: la clave de la sincronización nocturna (`wrangler secret put IMPORT_SECRET`; el VPS la lee de `~/.config/alldraw/cf-import-secret`). Sin `STANDBY`, sólo para migrar (vale mientras no haya usuarios): bórralo después con `wrangler secret delete IMPORT_SECRET`. |
+   | `STANDBY` / `PRIMARY_URL` | `"true"`: copia de respaldo de solo lectura (ver *Copia de respaldo*); `PRIMARY_URL` es el entorno principal que anuncia. |
+   | `MAIL_PROVIDER` y compañía | Correo, **apagado por defecto** (ver *Correo* abajo). |
    La cookie de sesión va siempre con `Secure` (en Cloudflare todo es https).
 4. **Dominio**: en el panel del Worker, *Custom domains* (o `routes` en `wrangler.toml`).
 5. Regístrate: el primer usuario es admin (o importa las cuentas, ver abajo).
@@ -100,6 +103,75 @@ Si prefieres D1 (consultas desde el panel, `wrangler d1 export`, Time Travel):
 4. `wrangler deploy`. Con el binding `DB` presente el worker usa D1 y el `RegistryDO` queda sin uso: sus
    datos **no** se copian solos (exporta e importa con `POST /api/admin/import` si hiciera falta).
 
+## Correo (apagado por defecto)
+
+Igual que en Node (verificar el correo, restablecer la contraseña, aviso de menciones), pero en Workers **no hay SMTP**
+(sin sockets TCP de uso general): sólo `none` (por defecto), `log` y `http`.
+
+| Variable | Uso |
+|---|---|
+| `MAIL_PROVIDER` | `none` (por defecto: `GET /api/auth/config` → `email: false`), `log` (sólo registra el mensaje en Workers Observability; pruebas) o `http`. |
+| `MAIL_FROM` | Remitente, `all-draw <no-reply@tu-dominio>` (dominio verificado en el proveedor). |
+| `MAIL_HTTP_URL` | Endpoint de envío (`https://api.resend.com/emails`, `https://api.postmarkapp.com/email`, `https://api.mailgun.net/v3/<dominio>/messages`…). |
+| `MAIL_HTTP_TOKEN` | **Secreto**: `wrangler secret put MAIL_HTTP_TOKEN`. |
+| `MAIL_HTTP_FORMAT` | `resend` (por defecto), `postmark`, `mailgun` o `json` con `MAIL_HTTP_TEMPLATE` (`{{from}}`, `{{to}}`, `{{subject}}`, `{{text}}`, `{{html}}`). |
+| `MAIL_HTTP_AUTH_HEADER` | Cabecera del token si no es `Authorization: Bearer`. |
+| `REQUIRE_EMAIL_VERIFICATION` | `"true"`: hace falta el correo verificado para crear espacios en el servidor (sólo con correo). |
+
+Para encenderlo: `[vars]` `MAIL_PROVIDER = "http"`, `MAIL_FROM` y `MAIL_HTTP_URL` en `wrangler.toml`, el token como
+secreto y desplegar. Si la configuración está mal, el worker **sigue sin correo** y registra el error (no se cae la web).
+Las menciones las detecta el `WorkspaceDO` (que tiene el doc vivo): lee el registro (D1 o `RegistryDO`) y manda el correo
+con la misma configuración. La migración `0004_accounts.sql` añade las columnas y tablas (en el `RegistryDO` se aplica sola
+al arrancar; con D1, `pnpm --filter @all-draw/worker migrate`).
+
+## Copia de respaldo de solo lectura (`STANDBY`)
+
+El entorno principal es el VPS (https://alldraw.bezenti.com). Este worker, con `STANDBY = "true"` en `wrangler.toml`,
+es una copia de respaldo que se actualiza cada noche:
+
+- **API**: toda escritura responde **503** `{ code: "standby", primaryUrl }` (middleware de `createApi` con
+  `config.standby`, `packages/server-core/src/api.ts`) salvo `POST /api/auth/login`, `POST /api/auth/logout`,
+  `DELETE /api/auth/sessions` y `POST /api/client-errors`. Las lecturas funcionan igual.
+- **WebSocket**: todos entran como `viewer` (sus cambios se rechazan con `read-only`), también los dueños.
+- **`GET /api/status`** añade `standby: true` y `primaryUrl`; la web lo lee (`apps/web/src/StandbyBanner.tsx`) y muestra
+  un aviso fijo «Copia de respaldo de solo lectura, actualizada cada noche — usa alldraw.bezenti.com».
+- **Sincronización** (`scripts/sync-standby.mjs`, cron del VPS a las 03:47): lee la SQLite del VPS en solo lectura y
+  llama a `POST /api/admin/import` con `X-Import-Secret` (con `STANDBY` vale aunque haya usuarios) y `replace: true`:
+  en una transacción borra cuentas, espacios, miembros, enlaces y API keys que ya no están en el VPS (las sesiones de
+  esas cuentas caen en cascada; el Durable Object de cada espacio borrado se vacía) y sobrescribe el resto (upsert); los
+  documentos que cambiaron se sobrescriben y los idénticos no se tocan (para no engordar el doc Yjs cada noche). Las
+  sesiones abiertas en el worker de quien sigue existiendo se conservan. `replace` sólo existe con `STANDBY` y exige
+  los cinco grupos (aunque vayan vacíos). Antes de escribir, el script comprueba que el destino publica
+  `standby: true`; si algo falla avisa por ntfy y el worker se queda con los datos de la noche anterior.
+
+  ```bash
+  node scripts/sync-standby.mjs --dry-run                       # qué mandaría
+  node scripts/sync-standby.mjs                                 # al worker de producción
+  node scripts/sync-standby.mjs --url http://127.0.0.1:8787     # a un wrangler dev local con STANDBY
+  ```
+
+  No viajan las columnas de cuenta nuevas de la migración 0004 (`email_verified_at`, `locale`, `notify_email`) ni las
+  instantáneas del historial: el worker conserva las suyas.
+
+Para volver a usarlo como entorno con escritura: `STANDBY = "false"` (o quítalo), despliega y desactiva la línea de
+cron de `sync-standby.mjs` en el VPS (si no, se niega a escribir y avisa cada noche).
+
+## Rate limit (binding de Workers)
+
+`src/ratelimit.ts`, antes de la API, con los bindings `[[ratelimits]]` de `wrangler.toml` (por IP de
+`CF-Connecting-IP`, por ubicación de Cloudflare, eventualmente consistentes):
+
+| Binding | Rutas (POST) | Límite |
+|---|---|---|
+| `RL_LOGIN` | `/api/auth/login`, `/api/admin/reset-password`, `/api/admin/import` | 10/min |
+| `RL_REGISTER` | `/api/auth/register` | 5/min |
+| `RL_LINKS` | `/api/workspaces/:id/links` | 20/min |
+
+Responde 429 con los mismos `code` que la API (`too_many_attempts`, `too_many_registrations`, `too_many_links`) y
+`Retry-After: 60`. Los bindings son opcionales: sin ellos (o si `limit()` falla) no se limita aquí y siguen los
+límites en memoria de la API; sin `CF-Connecting-IP` (sólo `wrangler dev` y tests) tampoco. Los `namespace_id`
+(1001–1003) son de la cuenta: el monitor usa el 1101. Disponible en el plan gratuito (el monitor ya se desplegó con uno).
+
 ## Cómo funciona el Durable Object
 
 - `env.WORKSPACES.idFromName(workspaceId)`: un DO por espacio; el worker autoriza el WebSocket
@@ -113,6 +185,11 @@ Si prefieres D1 (consultas desde el panel, `wrangler d1 export`, Time Travel):
   `flush()` tras cada mensaje con cambios y tras cada operación de la API, para no depender de que el
   DO siga vivo. El estado completo se trocea en claves `doc:<n>` (96 KiB) y `doc:meta` `{chunks, size}`.
 - `POST /drop` (al borrar el espacio): cierra los sockets con `4410` y `storage.deleteAll()`.
+- **Enlaces que caducan**: el worker pasa la caducidad del enlace (`x-alldraw-expires`) y el DO la guarda en la etiqueta
+  `e:<ms>` del socket y programa `alarm()` para la más próxima; al sonar cierra con `4401` `expired` los sockets ya
+  caducados y reprograma (sobrevive a la hibernación).
+- **Id del espacio**: el DO no conoce el nombre con que se creó su id; el worker y `RemoteDocHost` lo mandan en
+  `x-alldraw-workspace` y el DO lo guarda en `ws:id` (lo necesita para notificar las menciones de comentarios nuevos).
 - Las operaciones de la API son las mismas funciones `op*` de `@all-draw/server-core/ops` que usa
   Node; `CommandError` se traduce a 400/422 igual.
 
@@ -192,8 +269,8 @@ que comparar (o restaurar con `restore.mjs --into` contra el worker).
 - **Migrar desde Postgres** → Cloudflare: `scripts/migrate-from-sqlite.mjs` sólo lee SQLite. Con Postgres,
   crea las cuentas a mano y sube cada espacio con `GET /api/workspaces/:id/snapshot` en Node +
   `apps/server/scripts/restore.mjs` contra el worker.
-- **Rate limit de login** (`RateLimiter`) es por isolate: en Cloudflare es sólo orientativo. Para uno
-  real, usa el binding *Rate Limiting* del Worker.
+- **Rate limit**: el `RateLimiter` de la API es por isolate (orientativo); el real es el binding de Workers
+  (*Rate limit*, arriba), por ubicación de Cloudflare y eventualmente consistente.
 - `run_worker_first` en Assets requiere wrangler ≥ 4.20; con versiones anteriores hay que servir los
   estáticos desde el worker.
 - El bundle incluye todos los packs y `@all-draw/io` (render SVG); el gzip queda muy por debajo del

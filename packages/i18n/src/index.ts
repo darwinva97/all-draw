@@ -4,12 +4,26 @@
  * `{nombre}` interpola variables. Sin dependencias; válido en React (hook) y fuera (funciones puras).
  */
 import { useSyncExternalStore } from 'react';
-import { en } from './en';
 
 export type Lang = 'es' | 'en';
 export const LANGS: { id: Lang; name: string }[] = [{ id: 'es', name: 'Español' }, { id: 'en', name: 'English' }];
 
-const dicts: Record<Lang, Record<string, string>> = { es: {}, en };
+const dicts: Record<Lang, Record<string, string>> = { es: {}, en: {} };
+/**
+ * Los diccionarios se cargan bajo demanda (en un trozo aparte del bundle): quien usa la app en español no descarga
+ * el inglés. `ready()` antes de pintar evita ver un instante en español; en Node/tests, `import '@all-draw/i18n/en'`.
+ */
+const LOADERS: Partial<Record<Lang, () => Promise<Record<string, string>>>> = { en: () => import('./en').then(m => m.en) };
+const loading = new Map<Lang, Promise<void>>();
+export function ensureLang(l: Lang): Promise<void> {
+  const load = LOADERS[l];
+  if (!load) return Promise.resolve();
+  let p = loading.get(l);
+  if (!p) { p = load().then(d => addTranslations(l, d), () => { loading.delete(l); }); loading.set(l, p); }
+  return p;
+}
+/** Promesa que se cumple cuando el diccionario del idioma activo está cargado. */
+export function ready(): Promise<void> { return ensureLang(current); }
 const listeners = new Set<() => void>();
 let current: Lang = detect();
 
@@ -26,6 +40,7 @@ export function getLang(): Lang { return current; }
 export function setLang(l: Lang): void {
   if (l === current) return;
   current = l;
+  void ensureLang(l);
   try { localStorage.setItem('alldraw:lang', l); } catch { /* sin almacenamiento */ }
   if (typeof document !== 'undefined') document.documentElement.lang = l;
   for (const f of listeners) f();

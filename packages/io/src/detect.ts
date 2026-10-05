@@ -14,26 +14,35 @@ import { importStructurizr } from './structurizr';
 import { importXState } from './xstate';
 import { importMermaid } from './mermaid';
 import { importOpenApi } from './openapi';
+import { importDrawio, isDrawio } from './drawio-import';
+import { importVsdx, isVsdx } from './vsdx';
+import { parseDsl, isDsl } from './dsl';
+import { utf8 } from './compress';
 import { tr } from './i18n';
 import { ImportError } from './errors';
 
 export { ImportError } from './errors';
 
-export type DetectedFormat = 'drawer' | 'alldraw' | 'archimate' | 'oef' | 'structurizr' | 'xstate' | 'mermaid' | 'openapi' | 'bpmn' | 'unknown';
+export type DetectedFormat = 'drawer' | 'alldraw' | 'archimate' | 'oef' | 'structurizr' | 'xstate' | 'mermaid' | 'openapi' | 'bpmn' | 'drawio' | 'vsdx' | 'dsl' | 'unknown';
 export interface AnyImport {
   workspace: Workspace; warnings: string[]; format: DetectedFormat;
   /** Nombre legible del formato ("Archi (.archimate)", "BPMN 2.0"…), para avisos y diálogos. */
   formatLabel: string;
+  /**
+   * Vistas sin posiciones (DSL sin `at`): la aplicación debe pasarles el layout automático (`@all-draw/layout`); io no
+   * lo hace para no arrastrar ELK. Mientras tanto llevan una rejilla provisional.
+   */
+  layoutViews?: string[];
 }
 
 /** Nombre legible de cada formato (no se traduce: son nombres propios). */
 export const FORMAT_LABELS: Record<DetectedFormat, string> = {
   drawer: 'Drawer (.drawer)', alldraw: 'all-draw (JSON)', archimate: 'Archi (.archimate)', oef: 'ArchiMate Open Exchange', structurizr: 'Structurizr JSON',
-  xstate: 'XState JSON', mermaid: 'Mermaid', openapi: 'OpenAPI', bpmn: 'BPMN 2.0', unknown: '?',
+  xstate: 'XState JSON', mermaid: 'Mermaid', openapi: 'OpenAPI', bpmn: 'BPMN 2.0', drawio: 'draw.io', vsdx: 'Visio (.vsdx)', dsl: 'all-draw DSL', unknown: '?',
 };
 export const formatLabel = (f: DetectedFormat): string => FORMAT_LABELS[f] ?? f;
 
-const EXT: Record<string, DetectedFormat> = { drawer: 'drawer', archimate: 'archimate', bpmn: 'bpmn', mmd: 'mermaid', mermaid: 'mermaid' };
+const EXT: Record<string, DetectedFormat> = { drawer: 'drawer', archimate: 'archimate', bpmn: 'bpmn', mmd: 'mermaid', mermaid: 'mermaid', drawio: 'drawio', vsdx: 'vsdx' };
 const MERMAID_HEAD = /^(flowchart|graph|stateDiagram(-v2)?|sequenceDiagram|classDiagram(-v2)?|erDiagram|gantt|pie|journey|gitGraph|mindmap|timeline|quadrantChart|requirementDiagram|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment|sankey-beta|xychart-beta|block-beta|packet-beta|architecture-beta|kanban)\b/;
 
 /** Primera línea útil de un texto Mermaid (sin comentarios `%%` ni directivas `%%{init}%%`). */
@@ -42,15 +51,18 @@ const firstLine = (t: string) => t.split(/\r?\n/).map(l => l.replace(/%%.*$/, ''
 export function detectFormat(text: string, filename?: string): DetectedFormat {
   const t = text.replace(/^﻿/, '').trim();
   const ext = filename ? filename.toLowerCase().split('.').pop() ?? '' : '';
-  if (EXT[ext] && ext !== 'bpmn') return EXT[ext]!;
+  if (EXT[ext] && ext !== 'bpmn' && ext !== 'drawio') return EXT[ext]!;
+  if (filename && /\.alldraw\.txt$/i.test(filename)) return 'dsl';
 
   if (t.startsWith('<')) {
+    if (isDrawio(t)) return 'drawio';
     if (/xmlns:archimate\s*=\s*"http:\/\/www\.archimatetool\.com\/archimate"/.test(t)) return 'archimate';
     if (/xmlns\s*=\s*"http:\/\/www\.opengroup\.org\/xsd\/archimate/.test(t)) return 'oef';
     if (/http:\/\/www\.omg\.org\/spec\/BPMN\/|<(\w+:)?definitions\b/.test(t)) return 'bpmn';
     return ext === 'bpmn' ? 'bpmn' : 'unknown';
   }
   if (ext === 'bpmn') return 'bpmn';
+  if (isDsl(t)) return 'dsl';
   if (MERMAID_HEAD.test(firstLine(t))) return 'mermaid';
   if (t.startsWith('{') || t.startsWith('[')) {
     let obj: unknown;
@@ -162,7 +174,7 @@ function looksBinary(text: string): boolean {
 export function fileStem(filename: string | undefined): string {
   if (!filename) return '';
   const base = filename.split(/[\\/]/).pop() ?? filename;
-  return base.replace(/(\.(alldraw|drawer|archimate|oef|structurizr|xstate|bpmn|bpmn2|mmd|mermaid|json|xml|yaml|yml|txt))+$/i, '').replace(/[_]+/g, ' ').trim();
+  return base.replace(/(\.(alldraw|drawer|archimate|oef|structurizr|xstate|bpmn|bpmn2|mmd|mermaid|json|xml|yaml|yml|txt|drawio|vsdx|svg))+$/i, '').replace(/[_]+/g, ' ').trim();
 }
 
 /** Por qué no se reconoce un fichero: qué parece y qué le falta. */
@@ -178,12 +190,11 @@ function unknownError(text: string, filename: string | undefined): ImportError {
   }
   if (t.startsWith('<')) {
     const root = /<([\w:.-]+)[\s/>]/.exec(t.replace(/<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!DOCTYPE[^>]*>/gi, '').trim())?.[1] ?? '?';
-    if (root === 'mxfile' || root === 'mxGraphModel') return new ImportError('«{name}» es un diagrama de draw.io: all-draw puede exportar a draw.io, pero no importarlo.', { name });
     return new ImportError('«{name}» es XML con raíz <{root}>, que no es Archi, ArchiMate Open Exchange ni BPMN 2.0.', { name, root });
   }
   const head = firstLine(t);
   if (/^workspace\b/.test(head)) return new ImportError('«{name}» parece Structurizr DSL; exporta el espacio a JSON desde Structurizr e importa ese JSON.', { name });
-  return new ImportError('No se reconoce el formato de «{name}». Formatos admitidos: all-draw, Drawer, Archi, ArchiMate Open Exchange, BPMN 2.0, Structurizr JSON, XState, Mermaid y OpenAPI.', { name });
+  return new ImportError('No se reconoce el formato de «{name}». Formatos admitidos: all-draw (JSON y DSL), Drawer, Archi, ArchiMate Open Exchange, BPMN 2.0, Structurizr JSON, XState, Mermaid, OpenAPI, draw.io y Visio.', { name });
 }
 
 /**
@@ -210,7 +221,7 @@ const isPlaceholder = (name: string) => { const n = name.trim(); return !n || PL
 export async function importAny(text: string, filename?: string): Promise<AnyImport> {
   const name = filename ?? '';
   if (!text.replace(/^﻿/, '').trim()) throw new ImportError('El fichero «{name}» está vacío.', { name });
-  if (looksBinary(text)) throw new ImportError('«{name}» no es un fichero de texto (parece binario). Los formatos admitidos son JSON, XML, YAML o Mermaid.', { name });
+  if (looksBinary(text)) throw new ImportError('«{name}» no es un fichero de texto (parece binario). Los formatos admitidos son JSON, XML, YAML, Mermaid, el DSL de all-draw y Visio (.vsdx).', { name });
   const format = detectFormat(text, filename);
   if (format === 'unknown') throw unknownError(text, filename);
   const label = formatLabel(format);
@@ -230,8 +241,19 @@ export async function importAny(text: string, filename?: string): Promise<AnyImp
   }
 
   let r: { workspace: Workspace; warnings: string[] };
+  let layoutViews: string[] | undefined;
   try {
     switch (format) {
+      case 'drawio': r = importDrawio(src); break;
+      case 'vsdx': throw new ImportError('«{name}» es un fichero de Visio: se lee como binario (importAnyBinary), no como texto.', { name });
+      case 'dsl': {
+        const d = parseDsl(src);
+        const err = d.diagnostics.find(x => x.severity === 'error');
+        if (err) throw new ImportError('«{name}» parece {format}, pero tiene un error en la línea {line}, columna {col}: {detail}', { name, format: label, line: err.line, col: err.col, detail: err.message });
+        r = { workspace: d.workspace, warnings: d.diagnostics.map(x => tr('Línea {line}: {detail}', { line: x.line, detail: x.message })) };
+        if (d.unpositioned.length) layoutViews = d.unpositioned;
+        break;
+      }
       case 'drawer': r = importDrawer(src); break;
       case 'alldraw': r = { workspace: importWorkspace(src), warnings: [] }; break;
       case 'archimate': r = importArchimate(src); break;
@@ -265,5 +287,28 @@ export async function importAny(text: string, filename?: string): Promise<AnyImp
     ws.meta.name = stem;
     for (const v of Object.values(ws.views)) if (v.name === old || isPlaceholder(v.name)) v.name = stem;
   }
-  return { workspace: ws, warnings: r.warnings, format, formatLabel: label };
+  return { workspace: ws, warnings: r.warnings, format, formatLabel: label, ...(layoutViews ? { layoutViews } : {}) };
+}
+
+/**
+ * Importar un fichero leído como bytes (`File.arrayBuffer()`): Visio (`.vsdx`, un ZIP) se reconoce por su contenido;
+ * cualquier otro ZIP se rechaza con un mensaje claro y el resto se decodifica como UTF-8 y pasa a `importAny`.
+ */
+export async function importAnyBinary(bytes: Uint8Array, filename?: string): Promise<AnyImport> {
+  const name = filename ?? '';
+  const zip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 3 && bytes[3] === 4;
+  if (zip && isVsdx(bytes)) {
+    let r: { workspace: Workspace; warnings: string[] };
+    try { r = importVsdx(bytes); } catch (e) {
+      if (e instanceof ImportError) throw e;
+      throw new ImportError('«{name}» parece {format}, pero no se pudo leer: {detail}', { name, format: formatLabel('vsdx'), detail: (e as Error)?.message ?? String(e) });
+    }
+    const ws = normalizeColors(r.workspace);
+    const stem = fileStem(filename);
+    if (stem && isPlaceholder(ws.meta.name)) ws.meta.name = stem;
+    return { workspace: ws, warnings: r.warnings, format: 'vsdx', formatLabel: formatLabel('vsdx') };
+  }
+  if (zip) throw new ImportError('«{name}» es un ZIP, pero no de Visio (.vsdx). Si es un .docx, .xlsx o un ZIP con varios ficheros, extrae el diagrama e impórtalo suelto.', { name });
+  if (/\.vsd$/i.test(name)) throw new ImportError('«{name}» es un Visio antiguo (.vsd). Ábrelo en Visio y guárdalo como .vsdx para importarlo.', { name });
+  return importAny(utf8(bytes), filename);
 }

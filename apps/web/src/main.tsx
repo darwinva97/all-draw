@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { ready } from '@all-draw/i18n';
 import { z } from 'zod';
 z.config({ jitless: true }); // evita la sonda `Function('')` de zod, incompatible con la CSP sin unsafe-eval
 import './index.css';
@@ -15,4 +16,5 @@ installGlobalErrorHandlers();
   if (m && !location.hash) history.replaceState(null, '', `/#/${m[1]}${location.search}`);
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><ErrorBoundary><App /></ErrorBoundary></StrictMode>);
+// El diccionario del idioma activo se carga aparte: se espera (breve) para no pintar un instante en otro idioma.
+void ready().finally(() => createRoot(document.getElementById('root')!).render(<StrictMode><ErrorBoundary><App /></ErrorBoundary></StrictMode>));

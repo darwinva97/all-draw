@@ -3,7 +3,7 @@ import { NotationRegistry, CORE_PACK } from '@all-draw/core';
 import { CATALOG_PACK, DIAGRAM_KINDS, KNOWN_PACKS, FAMILIES, kindsFor, kindById, kindsByFamily, kindsWithoutPack } from '../src';
 
 /** Ids reales de los packs de all-draw (`NotationPack.id`). Mantener en sincronía con scripts/seed.mjs. */
-const PACK_IDS = ['archimate', 'bpmn', 'statechart', 'c4', 'sequence', 'er', 'uml', 'mindmap', 'flow', 'dfd', 'grid', 'freeform'];
+const PACK_IDS = ['archimate', 'bpmn', 'statechart', 'c4', 'sequence', 'er', 'uml', 'mindmap', 'flow', 'dfd', 'grid', 'freeform', 'usecase', 'component', 'deployment', 'activity', 'gantt', 'ddd'];
 
 describe('pack catalog', () => {
   it('es un pack vacío con nombre y se registra sin tipos', () => {
@@ -55,6 +55,17 @@ describe('pack catalog', () => {
     expect(kindById('x')).toBeUndefined();
     expect(kindsByFamily().reduce((n, f) => n + f.kinds.length, 0)).toBe(DIAGRAM_KINDS.length);
     expect(kindsWithoutPack().every(k => !k.notationId)).toBe(true);
-    expect(kindsWithoutPack().map(k => k.id)).toContain('uml-use-case-diagram');
+    expect(kindsWithoutPack().map(k => k.id)).toContain('uml-communication-diagram');
+  });
+
+  it('los diagramas UML de casos de uso, componentes, despliegue y actividad, Gantt y DDD apuntan a su pack', () => {
+    expect(kindById('uml-use-case-diagram')?.notationId).toBe('usecase');
+    expect(kindById('uml-component-diagram')?.notationId).toBe('component');
+    expect(kindById('uml-deployment-diagram')?.notationId).toBe('deployment');
+    expect(kindById('uml-activity-diagram')?.notationId).toBe('activity');
+    expect(kindById('gantt-chart')?.notationId).toBe('gantt');
+    expect(kindById('domain-driven-design-context-map')?.notationId).toBe('ddd');
+    expect(kindsFor('ddd').map(k => k.id)).toEqual(expect.arrayContaining(['bounded-context-diagram', 'aggregate-diagram', 'domain-event-diagram']));
+    expect(kindsWithoutPack().map(k => k.id)).not.toContain('uml-use-case-diagram');
   });
 });

@@ -1,0 +1,170 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`openapi > un YAML por API y openapi/api.yaml para las operaciones sin API > openapi/api.yaml 1`] = `
+"# Generado por all-draw a partir de «Plataforma».
+openapi: "3.1.0"
+info:
+  title: Plataforma
+  version: "1.0.0"
+paths:
+  "/health":
+    get:
+      operationId: salud
+      summary: Salud
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+              example:
+                ok: true
+"
+`;
+
+exports[`openapi > un YAML por API y openapi/api.yaml para las operaciones sin API > openapi/clientes-api.yaml 1`] = `
+"# Generado por all-draw a partir de «Clientes API».
+openapi: "3.1.0"
+info:
+  title: Clientes API
+  version: "2.1"
+  description: Gestión de clientes.
+servers:
+  - url: "https://api.ejemplo.com/v2"
+    description: prod
+  - url: "http://localhost:8080"
+    description: dev
+externalDocs:
+  url: "https://docs.ejemplo.com"
+paths:
+  "/clientes":
+    get:
+      operationId: listaClientes
+      summary: Lista clientes
+      description: Lista paginada de clientes
+      tags:
+        - clientes
+      parameters:
+        - name: page
+          in: query
+          description: número de página
+          schema:
+            type: integer
+        - name: q
+          in: query
+          description: texto libre
+          schema:
+            type: string
+        - name: X-Trace
+          in: header
+          required: true
+          description: traza
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    nombre:
+                      type: string
+                    alta:
+                      type: string
+                      format: date-time
+                    saldo:
+                      type: number
+                    vip:
+                      type: boolean
+                    jefe:
+                      type: "null"
+              example:
+                - id: 1
+                  nombre: Ana
+                  alta: "2026-01-01T10:00:00Z"
+                  saldo: 10.5
+                  vip: false
+                  jefe: null
+        "500":
+          description: Error interno
+    post:
+      operationId: creaCliente
+      summary: Crea cliente
+      description: Da de alta un cliente.
+      tags:
+        - clientes
+      deprecated: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                email:
+                  type: string
+                  format: email
+            example:
+              nombre: Ana
+              email: "ana@ejemplo.com"
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+              example:
+                id: 7
+        "400":
+          description: Bad Request
+  "/clientes/import":
+    put:
+      operationId: importaClientes
+      summary: Importa clientes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+            example: "{roto"
+      responses:
+        "200":
+          description: OK
+  "/clientes/{id}/{rama}":
+    delete:
+      operationId: borraCliente
+      summary: Borra cliente
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: identificador
+          schema:
+            type: integer
+        - name: rama
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Sin contenido
+        "404":
+          description: No existe
+"
+`;

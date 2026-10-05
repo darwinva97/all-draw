@@ -8,6 +8,10 @@
  *   /api/*, /healthz   → createApi (store RegistryDO o D1, docs → WorkspaceDO)
  *   /ws/<id>?token=    → autoriza aquí y reenvía el upgrade al DO con el rol y la identidad (usuario o enlace) en cabeceras
  *   resto              → ASSETS (fallback SPA)
+ *
+ * Antes de la API, el rate limit de Workers (`ratelimit.ts`, bindings opcionales). Con `STANDBY="true"` el worker es la
+ * copia de respaldo de solo lectura del VPS: la API rechaza las escrituras (`config.standby` de server-core) y los
+ * WebSocket entran como `viewer`.
  */
 import {
   SAFE_ID, SECURITY_TXT_PATH, authorizeConnection, createApi, credentialsFromRequest, isTrustedOrigin, jsonLogger, makeHasher, parseLogLevel, requestHost,
@@ -15,14 +19,19 @@ import {
 } from '@all-draw/server-core';
 import { IMPORT_PATH, handleImport } from './admin-import';
 import { RESET_PATH, handleReset } from './admin-reset';
-import { KEY_HEADER, LINK_HEADER, ROLE_HEADER, SESSION_HEADER, USER_HEADER, WorkspaceDO } from './do';
+import { EXPIRES_HEADER, KEY_HEADER, LINK_HEADER, ROLE_HEADER, SESSION_HEADER, USER_HEADER, WORKSPACE_HEADER, WorkspaceDO } from './do';
 import { envInt, type Env } from './env';
+import { workerMailer, workerNotifier } from './mail-env';
+import { checkRateLimit } from './ratelimit';
 import { RegistryDO } from './registry';
 import { RemoteDocHost } from './remote-host';
 import { D1WorkspaceStore } from './store/d1';
 import { registryStore, REGISTRY_NAME, type RegistryStub, type RegistryWorkspaceStore } from './store/do-sql';
 
 export { RegistryDO, WorkspaceDO };
+
+/** Copia de respaldo de solo lectura (`STANDBY="true"` en `wrangler.toml`). */
+export const isStandby = (env: Env) => env.STANDBY === 'true';
 
 interface Runtime { api: ReturnType<typeof createApi>; store: RegistryWorkspaceStore; hash: Hasher; docs: RemoteDocHost }
 let runtime: Runtime | null = null;
@@ -34,14 +43,19 @@ function boot(env: Env): Runtime {
   const store: RegistryWorkspaceStore = env.DB ? new D1WorkspaceStore(env.DB) : registryStore(env.REGISTRY, () => env.REGISTRY.get(env.REGISTRY.idFromName(env.REGISTRY_NAME || REGISTRY_NAME)) as unknown as RegistryStub);
   const hash = makeHasher(env.SESSION_SECRET || null);
   const docs = new RemoteDocHost(env.WORKSPACES);
+  const logger = jsonLogger({ level: parseLogLevel(env.LOG_LEVEL) });
+  // Correo apagado por defecto (`MAIL_PROVIDER` = none); sólo `log` o `http` en Workers (`mail-env.ts`).
+  const mailer = workerMailer(env, logger);
   const api = createApi({
-    store, hash, docs,
+    store, hash, docs, mailer, notifier: workerNotifier(env, store),
     config: {
       allowRegistration: env.ALLOW_REGISTRATION !== 'false', cookieSecure: true, publicUrl: env.PUBLIC_URL || null, inviteCode: env.INVITE_CODE || null,
       ...optional('maxWorkspacesPerUser', envInt(env.MAX_WORKSPACES_PER_USER)), ...optional('maxDocBytes', envInt(env.MAX_DOC_BYTES)), ...optional('registerMinMs', envInt(env.REGISTER_MIN_MS)),
+      ...(isStandby(env) ? { standby: true, primaryUrl: env.PRIMARY_URL || null } : {}),
+      requireEmailVerification: env.REQUIRE_EMAIL_VERIFICATION === 'true',
     },
     // Una línea JSON por evento en `console`: Workers Observability la indexa (`[observability] enabled`).
-    logger: jsonLogger({ level: parseLogLevel(env.LOG_LEVEL) }),
+    logger,
     // En Cloudflare la IP del cliente la pone el propio borde (`CF-Connecting-IP`); el cliente no puede falsearla.
     clientIp: c => c.req.header('cf-connecting-ip') ?? 'unknown',
     build: { version: env.ALLDRAW_VERSION || '0.1.0', commit: env.ALLDRAW_COMMIT || null, runtime: 'cloudflare', db: env.DB ? 'd1' : 'durable-object' },
@@ -72,9 +86,13 @@ export default {
       }
       const stub = env.WORKSPACES.get(env.WORKSPACES.idFromName(id));
       const headers = new Headers(request.headers);
-      headers.set(ROLE_HEADER, auth.role);
+      // En la copia de respaldo nadie escribe: todos entran como `viewer` (el DO no aplica sus cambios).
+      headers.set(ROLE_HEADER, isStandby(env) ? 'viewer' : auth.role);
       // Identidad para poder cerrar la conexión al revocar el acceso; las que mande el cliente se descartan.
-      for (const h of [USER_HEADER, LINK_HEADER, SESSION_HEADER, KEY_HEADER]) headers.delete(h);
+      for (const h of [USER_HEADER, LINK_HEADER, SESSION_HEADER, KEY_HEADER, EXPIRES_HEADER, WORKSPACE_HEADER]) headers.delete(h);
+      // El DO sabe así qué espacio es (menciones) y cuándo caduca el enlace (lo corta con `alarm()`).
+      headers.set(WORKSPACE_HEADER, id);
+      if (auth.expiresAt) headers.set(EXPIRES_HEADER, auth.expiresAt);
       if (auth.identity.userId) {
         headers.set(USER_HEADER, auth.identity.userId);
         if (auth.identity.sessionId) headers.set(SESSION_HEADER, auth.identity.sessionId);
@@ -84,9 +102,11 @@ export default {
     }
 
     const sec = { https: url.protocol === 'https:', host: requestHost(request.headers, url) };
+    const limited = await checkRateLimit(request, url.pathname, env);
+    if (limited) return withSecurityHeaders(limited, sec);
     if (url.pathname === SECURITY_TXT_PATH) return withSecurityHeaders(securityTxtResponse(env.PUBLIC_URL || url.origin), sec);
     if (url.pathname === RESET_PATH) return withSecurityHeaders(await handleReset(request, rt.store, env.RESET_CODE || null), sec);
-    if (url.pathname === IMPORT_PATH) return withSecurityHeaders(await handleImport(request, { store: rt.store, hash: rt.hash, docs: rt.docs, importSecret: env.IMPORT_SECRET || null }), sec);
+    if (url.pathname === IMPORT_PATH) return withSecurityHeaders(await handleImport(request, { store: rt.store, hash: rt.hash, docs: rt.docs, importSecret: env.IMPORT_SECRET || null, standby: isStandby(env) }), sec);
     if (url.pathname === '/healthz' || url.pathname === '/api' || url.pathname.startsWith('/api/')) return withSecurityHeaders(await rt.api.fetch(request, env, ctx), sec);
     return withSecurityHeaders(await env.ASSETS.fetch(request), sec);
   },

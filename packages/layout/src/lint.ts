@@ -205,6 +205,8 @@ interface Ctx {
   shapeOf: (n: ViewNode) => string | undefined;
   /** Vista de secuencia: las líneas de vida ocupan toda la altura aunque su nodo sea bajo. */
   isSequence: boolean;
+  /** Gantt: la posición sale de las fechas (`x`/`y` del nodo solo ordenan filas); no hay geometría que revisar. */
+  isGantt: boolean;
 }
 
 function context(store: Store, reg: NotationRegistry | undefined, viewId: string): Ctx {
@@ -232,12 +234,14 @@ function context(store: Store, reg: NotationRegistry | undefined, viewId: string
     return r;
   };
   nodes.forEach(n => resolve(n));
-  return { store, reg, nodes, edges, byId, parentOf, abs, system, isContainer, labelOf, shapeOf, isSequence: view?.kind === 'sequence' || (!!view && reg?.pack(view.notationId)?.viewKind === 'sequence') };
+  return { store, reg, nodes, edges, byId, parentOf, abs, system, isContainer, labelOf, shapeOf, isSequence: view?.kind === 'sequence' || (!!view && reg?.pack(view.notationId)?.viewKind === 'sequence'),
+    isGantt: view?.kind === 'gantt' || (!!view && reg?.pack(view.notationId)?.viewKind === 'gantt') };
 }
 
 /** Diagnósticos geométricos de una vista. */
 export function lintView(store: Store, reg: NotationRegistry | undefined, viewId: string): Diagnostic[] {
   const ctx = context(store, reg, viewId);
+  if (ctx.isGantt) return [];
   return [...overlaps(ctx), ...outsideParent(ctx), ...edgesThroughNodes(ctx), ...labelOverflow(ctx), ...tooSmall(ctx)];
 }
 

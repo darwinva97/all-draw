@@ -32,10 +32,13 @@ describe('revocar accesos cierra los WebSockets abiertos', () => {
     const id = (await a.api.post('/api/workspaces', { name: 'S' })).body.id as string;
     const link = (await a.api.post(`/api/workspaces/${id}/links`, { role: 'viewer' })).body.token as string;
     const ctx = { store: t.store, hash: makeHasher(null) };
-    expect(await authorizeConnection(ctx, a.token, id)).toEqual({ role: 'owner', identity: { userId: a.user.id, linkToken: null, sessionId: sessionIdOf(await ctx.hash(a.token)), keyId: null } });
+    expect(await authorizeConnection(ctx, a.token, id)).toEqual({ role: 'owner', identity: { userId: a.user.id, linkToken: null, sessionId: sessionIdOf(await ctx.hash(a.token)), keyId: null }, expiresAt: null });
     const key = (await a.api.post('/api/keys', { name: 'agente' })).body as { id: string; key: string };
-    expect(await authorizeConnection(ctx, key.key, id)).toEqual({ role: 'owner', identity: { userId: a.user.id, linkToken: null, sessionId: null, keyId: key.id } });
-    expect(await authorizeConnection(ctx, link, id)).toEqual({ role: 'viewer', identity: { userId: null, linkToken: link } });
+    expect(await authorizeConnection(ctx, key.key, id)).toEqual({ role: 'owner', identity: { userId: a.user.id, linkToken: null, sessionId: null, keyId: key.id }, expiresAt: null });
+    expect(await authorizeConnection(ctx, link, id)).toEqual({ role: 'viewer', identity: { userId: null, linkToken: link }, expiresAt: null });
+    const until = new Date(Date.now() + 3_600_000).toISOString();
+    const temp = (await a.api.post(`/api/workspaces/${id}/links`, { role: 'editor', expiresAt: until })).body.token as string;
+    expect(await authorizeConnection(ctx, temp, id)).toMatchObject({ role: 'editor', expiresAt: until });
     expect(await authorizeConnection(ctx, null, id)).toMatchObject({ close: 4401 });
     await t.close();
   });

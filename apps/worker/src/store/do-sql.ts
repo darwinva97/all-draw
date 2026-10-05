@@ -12,7 +12,7 @@
  * los errores vuelven como valor `{ error }` y aquí se relanzan con su mensaje (p. ej. `email ya registrado`).
  */
 import type { WorkspaceStore } from '@all-draw/server-core';
-import type { ImportResult, ImportRows } from './import';
+import type { ImportResult, ImportRows, ReplaceResult } from './import';
 import type { SqlDriver, SqlStatement } from './sql';
 
 export function sqlStorageDriver(storage: DurableObjectStorage): SqlDriver {
@@ -28,17 +28,19 @@ export function sqlStorageDriver(storage: DurableObjectStorage): SqlDriver {
   };
 }
 
-/** Métodos que el `RegistryDO` acepta por `invoke` (todo `WorkspaceStore` salvo `close`, más la importación). */
+/** Métodos que el `RegistryDO` acepta por `invoke` (todo `WorkspaceStore` salvo `close`, más la importación y su modo `replace`). */
 export const REGISTRY_METHODS = [
   'createUser', 'getUser', 'getUserByEmail', 'countUsers', 'listUsers', 'setPasswordHash', 'updateUser', 'deleteUser',
-  'createSession', 'getSession', 'touchSession', 'deleteSession', 'deleteUserSessions', 'purgeExpiredSessions',
+  'createSession', 'getSession', 'touchSession', 'markSessionUsed', 'listUserSessions', 'deleteSession', 'deleteUserSessions', 'purgeExpiredSessions',
+  'createAccountToken', 'consumeAccountToken', 'deleteAccountTokens',
+  'createNotification', 'listNotifications', 'countUnreadNotifications', 'markNotificationsRead',
   'createApiKey', 'listApiKeys', 'resolveApiKey', 'deleteApiKey', 'touchApiKey',
   'listWorkspaces', 'listAllWorkspaces', 'countOwnedWorkspaces', 'getWorkspace', 'createWorkspace', 'updateMeta', 'deleteWorkspace',
   'loadDoc', 'saveDoc', 'appendUpdate',
   'getRole', 'setRole', 'listMembers',
   'createShareLink', 'listShareLinks', 'resolveShareLink', 'deleteShareLink',
   'createSnapshot', 'listSnapshots', 'getSnapshot', 'deleteSnapshot', 'pruneSnapshots',
-  'importRows',
+  'importRows', 'replaceRows',
 ] as const;
 export type RegistryMethod = (typeof REGISTRY_METHODS)[number];
 // Falla al compilar si `WorkspaceStore` gana un método que no está en la lista.
@@ -51,7 +53,7 @@ export type RegistryReply = { value: unknown } | { error: string };
 /** Lo que el cliente necesita del stub (el tipo RPC completo de `DurableObjectStub<RegistryDO>` no aporta nada aquí). */
 export interface RegistryStub { invoke(method: RegistryMethod, args: unknown[]): Promise<RegistryReply> }
 
-export type RegistryWorkspaceStore = WorkspaceStore & { importRows(rows: ImportRows): Promise<ImportResult> };
+export type RegistryWorkspaceStore = WorkspaceStore & { importRows(rows: ImportRows): Promise<ImportResult>; replaceRows(rows: ImportRows): Promise<ReplaceResult> };
 
 /** Nombre de la única instancia del registro (`idFromName`). */
 export const REGISTRY_NAME = 'registry';

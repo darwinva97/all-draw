@@ -63,10 +63,50 @@ PORT=4002 HOST=127.0.0.1 DATA_DIR=~/.alldraw-data node src/server.mjs
 | `MAX_WS_PER_IP` / `MAX_WS_PER_WORKSPACE` | `30` / `100` | WebSockets simultáneos; al pasarse, cierre `4429` |
 | `TRUSTED_PROXIES` | `loopback,cloudflare` | de quién se creen `X-Forwarded-For` / `CF-Connecting-IP` para la IP real del cliente (IPs, CIDR, `loopback`, `private`, `cloudflare`; vacío = nadie). Ver `docs/07-seguridad.md` |
 | `BACKUP_DIR` | `~/.alldraw-backups` | Copias; el servidor deja aquí (`deleted/`) la copia final de los espacios borrados con su cuenta |
+| `MAIL_PROVIDER`, `MAIL_FROM`, `SMTP_*`, `MAIL_HTTP_*`, `REQUIRE_EMAIL_VERIFICATION` | correo apagado | Ver *Correo* abajo |
 
 Unidad systemd de usuario (`~/.config/systemd/user/alldraw.service`): sigue valiendo tal cual
 (`ExecStart=node src/server.mjs` en `apps/server`). Al primer arranque crea la BD e importa los
 `.yupdate` (ver *Migración*).
+
+### Correo (apagado por defecto)
+
+El servidor sólo manda correos de cuenta: verificar el correo, restablecer la contraseña y el aviso inmediato de las
+menciones. **Sin proveedor configurado no hay correo**: `GET /api/auth/config` anuncia `email: false`, «¿Olvidaste tu
+contraseña?» explica que se pida a un administrador y nada se intenta enviar. El proveedor por defecto es `none` en
+producción (`NODE_ENV=production` o `PUBLIC_URL` con `https://`) y `log` en desarrollo.
+
+| Variable | Por defecto | Uso |
+|---|---|---|
+| `MAIL_PROVIDER` | `none` (producción) · `log` (desarrollo) | `none`: sin correo. `log`: no envía; escribe el mensaje entero en el log (`"msg":"correo"`), para desarrollo y e2e. `smtp`: servidor SMTP. `http`: API HTTP (Resend, Postmark, Mailgun u otra). |
+| `MAIL_FROM` | *(obligatoria con `smtp`/`http`)* | Remitente, p. ej. `all-draw <no-reply@tu-dominio>` |
+| `SMTP_HOST` / `SMTP_PORT` | — / `587` (`465` con `SMTP_SECURE`) | Servidor SMTP |
+| `SMTP_SECURE` | `false` | `true`: TLS directo (465). Con `false` se exige **STARTTLS** si el servidor lo anuncia; sin STARTTLS sólo se acepta un relé en `localhost`. |
+| `SMTP_USER` / `SMTP_PASS` | *(vacío)* | `AUTH PLAIN` o `AUTH LOGIN` (la que anuncie el servidor); nunca sin cifrar salvo a `localhost`. Van juntas. |
+| `MAIL_HTTP_URL` / `MAIL_HTTP_TOKEN` | — | Con `http`: URL del endpoint de envío y token de la API |
+| `MAIL_HTTP_FORMAT` | `resend` | Cuerpo: `resend` (`{from,to:[…],subject,text,html}` + `Authorization: Bearer`), `postmark` (`X-Postmark-Server-Token`), `mailgun` (formulario + Basic `api:<token>`) o `json` (plantilla propia) |
+| `MAIL_HTTP_TEMPLATE` | — | Con `json`: cuerpo JSON en el que `{{from}}`, `{{to}}`, `{{subject}}`, `{{text}}`, `{{html}}` se sustituyen (escapados). P. ej. Brevo: `{"sender":{"email":"{{from}}"},"to":[{"email":"{{to}}"}],"subject":"{{subject}}","textContent":"{{text}}","htmlContent":"{{html}}"}` |
+| `MAIL_HTTP_AUTH_HEADER` | `Authorization` | Cabecera del token si no es `Authorization: Bearer` (p. ej. `api-key`) |
+| `REQUIRE_EMAIL_VERIFICATION` | `false` | `true`: sin el correo verificado no se pueden crear espacios en el servidor (403 `email_unverified`; los locales siguen; los admins no lo necesitan). Sólo tiene efecto con correo. |
+
+Si falta una variable o un valor no se entiende, el servidor **no arranca** y lo dice (mejor que creer que hay correo).
+El log de arranque dice el proveedor (`"mail":"smtp"`). Los correos van en el idioma de la cuenta (`users.locale`: el de
+la interfaz con la que se registró, editable en **Cuenta → Correo y notificaciones**), en texto y en HTML sencillo sin
+recursos externos. Ejemplos:
+
+```bash
+# SMTP con STARTTLS (587)
+MAIL_PROVIDER=smtp MAIL_FROM='all-draw <no-reply@ejemplo.com>' SMTP_HOST=smtp.ejemplo.com SMTP_USER=… SMTP_PASS=…
+# Resend
+MAIL_PROVIDER=http MAIL_HTTP_URL=https://api.resend.com/emails MAIL_HTTP_TOKEN=re_… MAIL_FROM='all-draw <no-reply@ejemplo.com>'
+# Postmark
+MAIL_PROVIDER=http MAIL_HTTP_FORMAT=postmark MAIL_HTTP_URL=https://api.postmarkapp.com/email MAIL_HTTP_TOKEN=… MAIL_FROM=…
+# Mailgun (región UE)
+MAIL_PROVIDER=http MAIL_HTTP_FORMAT=mailgun MAIL_HTTP_URL=https://api.eu.mailgun.net/v3/mg.ejemplo.com/messages MAIL_HTTP_TOKEN=key-… MAIL_FROM=…
+```
+
+Los secretos (`SMTP_PASS`, `MAIL_HTTP_TOKEN`) van en un `EnvironmentFile=` de la unidad systemd con permisos `600`, no en
+la línea `Environment=`.
 
 ## Identidad y permisos
 
@@ -82,6 +122,18 @@ Unidad systemd de usuario (`~/.config/systemd/user/alldraw.service`): sigue vali
   el WebSocket y en las rutas de *ese* espacio (leer meta, snapshot, validate, svg; comandos si es editor).
 - Cómo se envía: `Authorization: Bearer <token>` (cualquiera de los tres), cookie, o `?token=`
   (el WebSocket usa `?token=`; el navegador manda además la cookie).
+- **Enlaces que caducan con la conexión abierta**: al aceptar un WebSocket abierto con un enlace con `expiresAt` se
+  arma un temporizador; a esa hora se cierra con `4401` y motivo `expired` (el cliente muestra «Ya no tienes acceso»).
+- **Correo** (si hay, ver *Correo*): `POST /api/auth/forgot` → enlace `#/restablecer?token=rst_…` (1 h, un solo uso;
+  misma respuesta exista o no la cuenta, tiempo mínimo de 400 ms y límites por IP y por correo) → `POST /api/auth/reset`
+  (cierra sesiones y WebSockets como cambiar la contraseña). Al registrarse, enlace `#/verificar?token=vfy_…` (24 h) →
+  `POST /api/auth/verify`; `POST /api/auth/verify/resend` lo reenvía; cambiar el correo con correo activo no es
+  inmediato (`pendingEmail`: se confirma con el enlace enviado al nuevo y se avisa al anterior).
+- **Sesiones activas**: `GET /api/auth/sessions` (navegador y sistema resumidos, IP truncada, creada, último uso —
+  apuntado como mucho cada 5 min—, `current`) y `DELETE /api/auth/sessions/{id}` (corta sus WebSockets con `4402`).
+- **Notificaciones**: `GET /api/notifications`, `POST /api/notifications/read`. Se crean al mencionar a alguien en un
+  comentario nuevo (regla en `packages/server-core/src/notifications.ts` y en el manual, *Comentarios*), al añadir un
+  miembro, al cambiarle el rol o pasarle la propiedad y al restaurar una instantánea de un espacio ajeno.
 
 Roles por espacio: `owner` (dueño en `workspaces.owner_id`) > `editor` > `viewer`.
 
@@ -152,10 +204,16 @@ api_keys           id PK, user_id FK, name, prefix, key_hash UNIQUE, created_at,
 workspaces         id PK, owner_id FK→users, name, created_at, updated_at
 workspace_members  (workspace_id FK cascade, user_id FK cascade) PK, role ∈ {editor, viewer}, created_at
 share_links        token PK, workspace_id FK cascade, role, created_by, created_at, expires_at NULL
+account_tokens     token_hash PK, user_id FK cascade, kind ∈ {reset, verify}, email, created_at, expires_at   (v4)
+notifications      id PK, user_id FK cascade, kind, workspace_id FK cascade NULL, payload JSON, created_at, read_at   (v4)
 docs               workspace_id PK FK cascade, state BLOB, updated_at
 doc_updates        id AUTOINCREMENT, workspace_id FK cascade, data BLOB, created_at
 schema_migrations  version PK, applied_at
 ```
+
+La migración **v4** (`0004_accounts.sql` en el worker) añade además `users.email_verified_at`, `users.locale`,
+`users.notify_email` (1 por defecto) y `sessions.device` (navegador;sistema;tipo, nunca el user-agent entero),
+`sessions.ip` (truncada) y `sessions.last_used_at`. Las cuentas que ya existían quedan **sin verificar**.
 
 Todas las fechas son ISO-8601 en texto; los tokens nunca se guardan en claro (sólo los de enlace,
 que se listan). `loadDoc` funde `docs.state` con los `doc_updates` pendientes (`Y.mergeUpdates`);
@@ -229,6 +287,44 @@ Cron (instalado en el crontab de `maka`, a las 03:17):
 17 3 * * * cd /home/maka/projects/all-draw/apps/server && node scripts/backup.mjs >> ~/.alldraw-backups/backup.log 2>&1
 ```
 
+Al terminar, `backup.mjs` sube la copia fuera del servidor (siguiente apartado). Si esa subida falla, la copia local
+sigue valiendo y el código de salida no cambia: se anota `offsite ERROR: …` en `backup.log` y se avisa por ntfy.
+`OFFSITE=0` la salta.
+
+### Copias fuera del servidor (`scripts/offsite.mjs`, Backblaze B2)
+
+Bucket privado de Backblaze B2 (`us-east-005`, cifrado en reposo SSE-B2, regla de ciclo de vida: cada fichero se
+oculta a los 90 días y se borra al día siguiente). Credenciales en `~/.config/alldraw/b2.env` (`B2_KEY_ID`,
+`B2_APP_KEY`, `B2_BUCKET`, `B2_S3_ENDPOINT`, `B2_REGION`; otra ruta con `B2_ENV_FILE`); la clave sólo vale para ese
+bucket. API S3 compatible con firma SigV4 hecha con `node:crypto` (`scripts/lib/s3.mjs`, sin dependencias; probada con
+el ejemplo de la documentación de AWS).
+
+```bash
+node scripts/offsite.mjs                          # sube la última ~/.alldraw-backups/<fecha>/
+node scripts/offsite.mjs --dir <carpeta> --weekly always|never|auto --notify
+node scripts/offsite-restore.mjs --list           # copias diarias y semanales del bucket
+node scripts/offsite-restore.mjs --date latest --into /tmp/restaurada [--weekly]
+node scripts/offsite-restore.mjs --date 2026-10-05T01-17-06Z --into /tmp/restaurada
+```
+
+- **Qué sube**: todos los ficheros de la carpeta (`alldraw.sqlite.gz`, un `<id>.json.gz` por espacio y `manifest.json`)
+  a `daily/<fecha>/`; si la última copia de `weekly/` tiene 6 días o más, también a `weekly/<fecha>/`. Como la regla
+  del bucket es la misma para todo, hoy las semanales también duran 90 días (para guardarlas más tiempo basta una regla
+  propia para `weekly/` en el panel de B2).
+- **Verificación**: cada fichero va con `Content-MD5` (B2 rechaza la subida si no coincide) y metadatos `sha256` y `sha1`;
+  después un `HEAD` comprueba tamaño, ETag (= MD5) y `sha256`. Lo que ya está idéntico no se vuelve a subir. Al final se
+  sube `offsite.json` con la lista y las sumas: sin él la copia cuenta como incompleta.
+- **Restaurar**: `offsite-restore.mjs` descarga, comprueba cada fichero contra `offsite.json` (sha256, tamaño) y el ETag,
+  y pasa `PRAGMA integrity_check` a la `alldraw.sqlite.gz` descomprimida en un temporal. La carpeta tiene el formato de
+  `~/.alldraw-backups/<fecha>/`: vale para `restore.mjs`, para `restore-drill.mjs --from <carpeta>` o para restaurar
+  la instalación entera (abajo). Sale con 1 si algo no cuadra.
+- **Avisos**: `scripts/lib/ntfy.mjs` publica en el tema privado de https://ntfy.sh de `~/.config/alldraw/ntfy-topic`
+  (`NTFY_TOPIC` / `NTFY_TOPIC_FILE`); el tema no se escribe nunca en el log.
+
+Comprobado el 5 de octubre de 2026: subida real de `2026-10-05T01-17-06Z` (5 ficheros, 31,6 KiB) a `daily/` y `weekly/`,
+segunda pasada sin resubir nada, descarga verificada con `integrity_check` y `restore-drill.mjs --from` sobre la carpeta
+descargada (3/3 espacios validados).
+
 ### Restaurar un espacio (`scripts/restore.mjs`)
 
 Sube un JSON de la copia a un servidor en marcha (Node o worker) con una API key:
@@ -286,6 +382,25 @@ Apagado: SIGTERM cierra los WebSockets con 1012, guarda los docs y cierra la BD 
 ### Migrar a Cloudflare
 
 `apps/worker/scripts/migrate-from-sqlite.mjs` (ver `apps/worker/README.md`, sección *Migración*).
+
+### Copia de respaldo en Cloudflare y monitor externo
+
+El VPS es el entorno principal. El worker (`https://alldraw.darwin-sva-97.workers.dev`) es una **copia de respaldo de
+solo lectura** (`STANDBY="true"`) que `apps/worker/scripts/sync-standby.mjs` deja idéntica al VPS cada noche (ver
+`apps/worker/README.md`, *Copia de respaldo*). Cron instalado, después de la copia de las 03:17:
+
+```
+47 3 * * * cd /home/maka/projects/all-draw/apps/worker && /usr/bin/node scripts/sync-standby.mjs >> /home/maka/.alldraw-backups/sync-standby.log 2>&1
+```
+
+Lee el secreto de `~/.config/alldraw/cf-import-secret` (el mismo valor que `IMPORT_SECRET` del worker), se niega a
+escribir si el destino no publica `standby: true`, deja el resumen en `~/.alldraw-backups/sync-standby.last.json` y
+avisa por ntfy si falla.
+
+`apps/monitor` (worker `alldraw-monitor`) comprueba cada 5 minutos `/api/status` de los dos entornos, avisa por ntfy
+al caer (2 fallos seguidos) y al recuperarse, y publica la página de estado
+https://alldraw-monitor.darwin-sva-97.workers.dev (ver `apps/monitor/README.md`). Complementa al vigilante local
+(`healthcheck.mjs`), que reinicia el servicio pero no ve fallos de red, DNS, Caddy o del propio VPS.
 
 ## MCP
 

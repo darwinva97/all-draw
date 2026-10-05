@@ -187,12 +187,22 @@ export const identityOf = (p: Principal): ConnIdentity => (p.kind === 'link'
  * Identifica y autoriza una conexión (WebSocket) a un espacio; devuelve el código de cierre si no procede.
  * Con permiso, además del rol devuelve la identidad (usuario o enlace) que hay que registrar en la conexión.
  */
-export async function authorizeConnection(ctx: AuthContext, token: string | null, workspaceId: string): Promise<{ role: Role; identity: ConnIdentity } | { close: number; reason: string }> {
+export async function authorizeConnection(ctx: AuthContext, token: string | null, workspaceId: string): Promise<{ role: Role; identity: ConnIdentity; expiresAt: string | null } | { close: number; reason: string }> {
   const principal = await resolveToken(ctx, token);
   if (!(await ctx.store.getWorkspace(workspaceId))) return { close: 4404, reason: 'el espacio no existe' };
   const role = await roleFor(ctx.store, principal, workspaceId);
   if (!role || !principal) return { close: 4401, reason: 'sin permiso' };
-  return { role, identity: identityOf(principal) };
+  // Con un enlace que caduca, la conexión se cierra al llegar la hora (`WS_EXPIRED_REASON`; Node con un temporizador, el DO con `alarm()`).
+  return { role, identity: identityOf(principal), expiresAt: principal.kind === 'link' ? principal.link.expiresAt : null };
+}
+
+/** Razón del cierre 4401 cuando caduca el enlace con el que se abrió la conexión. */
+export const WS_EXPIRED_REASON = 'expired';
+/** Milisegundos hasta `expiresAt` (0 si ya pasó; `null` si no caduca o no es una fecha). */
+export function msUntil(expiresAt: string | null | undefined, now = Date.now()): number | null {
+  if (!expiresAt) return null;
+  const t = Date.parse(expiresAt);
+  return Number.isFinite(t) ? Math.max(0, t - now) : null;
 }
 export const SAFE_ID = /^[A-Za-z0-9_\-:.]{1,120}$/;
 

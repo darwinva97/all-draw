@@ -1,0 +1,39 @@
+# Monitor externo de all-draw: comprueba cada 5 minutos /api/status del VPS (principal) y del worker de Cloudflare
+# (copia de respaldo), guarda el historial en un Durable Object con SQLite (sin D1), avisa por ntfy al caer (2 fallos
+# seguidos) y al recuperarse, y publica una página de estado en su workers.dev. Ver README.md.
+name = "alldraw-monitor"
+main = "src/index.ts"
+compatibility_date = "2026-08-22"
+# fetch() sale siempre por internet público: sin esto, pedir otro worker *.workers.dev de la misma cuenta da 404 (error 1042).
+compatibility_flags = ["global_fetch_strictly_public"]
+workers_dev = true
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[durable_objects.bindings]]
+name = "MONITOR"
+class_name = "MonitorDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MonitorDO"]
+
+# Protege la página y el DO de recargas abusivas (por IP; period = 10 o 60 s). Opcional.
+[[ratelimits]]
+name = "RL_PAGE"
+namespace_id = "1101"
+simple = { limit = 60, period = 60 }
+
+[vars]
+TARGETS = '''[
+  {"id":"vps","name":"alldraw.bezenti.com","url":"https://alldraw.bezenti.com/api/status"},
+  {"id":"cloudflare","name":"alldraw.darwin-sva-97.workers.dev","url":"https://alldraw.darwin-sva-97.workers.dev/api/status"}
+]'''
+FAIL_THRESHOLD = "2"
+PAGE_URL = "https://alldraw-monitor.darwin-sva-97.workers.dev"
+APP_URL = "https://alldraw.bezenti.com"
+# NTFY_TOPIC: secreto → `wrangler secret put NTFY_TOPIC < ~/.config/alldraw/ntfy-topic`
+
+[observability]
+enabled = true

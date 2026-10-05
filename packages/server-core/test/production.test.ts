@@ -345,7 +345,8 @@ describe('cuota de tamaño en el doc vivo (WebSocket)', () => {
     const docs = new DocManager(store, { maxDocBytes: 500 });
     const live = await docs.get('w');
     const sent: Uint8Array[] = [];
-    const conn: SyncSocket = { send: b => { sent.push(b); }, isOpen: () => true, close() {} };
+    // `protocol` ya puesto: sin puerta de versión (lo retenido llegaría tarde para las comprobaciones síncronas).
+    const conn: SyncSocket = { protocol: 0, send: b => { sent.push(b); }, isOpen: () => true, close() {} };
     const h = attachConnection(conn, live, 'editor');
     const client = new Y.Doc();
     client.getMap('elements').set('big', 'z'.repeat(2000));

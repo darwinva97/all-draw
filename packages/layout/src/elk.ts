@@ -45,12 +45,19 @@ export const AUTO_LAYOUT: Readonly<Record<string, LayoutDefaults>> = {
   statechart: { algorithm: 'layered', direction: 'RIGHT' },
   sequence: { algorithm: 'layered', direction: 'RIGHT' },
   dfd: { algorithm: 'layered', direction: 'RIGHT' },
+  activity: { algorithm: 'layered', direction: 'DOWN' },
+  gantt: { algorithm: 'layered', direction: 'RIGHT' },
   // Estructuras y diagramas de flujo de arriba abajo
   archimate: { algorithm: 'layered', direction: 'DOWN' },
   c4: { algorithm: 'layered', direction: 'DOWN' },
   uml: { algorithm: 'layered', direction: 'DOWN' },
   er: { algorithm: 'layered', direction: 'DOWN' },
   flow: { algorithm: 'layered', direction: 'DOWN' },
+  component: { algorithm: 'layered', direction: 'DOWN' },
+  deployment: { algorithm: 'layered', direction: 'DOWN' },
+  ddd: { algorithm: 'layered', direction: 'DOWN' },
+  // Casos de uso: actores a la izquierda, casos de uso a la derecha
+  usecase: { algorithm: 'layered', direction: 'RIGHT' },
   // Árbol
   mindmap: { algorithm: 'mrtree', direction: 'RIGHT' },
   // Sin dirección propia

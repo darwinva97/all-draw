@@ -82,9 +82,9 @@ Comprobado con Chromium (playwright-core) contra un build en `/tmp/alldraw-dist`
 portada, demo, cambio de vista, pantalla Cuenta, registro, espacio en servidor con WebSocket «en línea», diálogo
 Historial y creación de instantánea, **sin errores de consola ni violaciones que rompan nada**. Única anotación: zod 4
 sondea una vez `Function("")` para decidir si compila validadores; con esta CSP la sonda falla (zod la captura y sigue en
-modo interpretado) y Chromium registra un `securitypolicyviolation` informativo. Para evitar hasta ese aviso basta
-`z.config({ jitless: true })` al arrancar la app (añadir `zod` a `apps/web` o exponerlo desde `@all-draw/core`;
-pendiente, fuera del alcance de esta revisión).
+modo interpretado) y Chromium registra un `securitypolicyviolation` informativo. Hecho: `apps/web/src/main.tsx` llama a
+`z.config({ jitless: true })` al arrancar (con `zod` como dependencia de `apps/web`); ver «Comprobado en Chromium», más
+abajo, sobre la otra copia de zod del bundle.
 
 ### 4. Límites y validación
 
@@ -132,8 +132,9 @@ pendiente, fuera del alcance de esta revisión).
   `TRUSTED_PROXIES` (ver «IP real del cliente»).
 - El primer usuario registrado es admin: en un despliegue nuevo, registra la cuenta admin antes de publicar el subdominio
   o usa `INVITE_CODE`.
-- Los rate limits viven en memoria del proceso (en el worker, por isolate): suficientes contra fuerza bruta casual, no
-  contra ataques distribuidos; para eso, limitar en Caddy/Cloudflare.
+- Los rate limits de la API viven en memoria del proceso (en el worker, por isolate): suficientes contra fuerza bruta
+  casual, no contra ataques distribuidos. En el worker hay además un rate limit real con el binding de Workers (ver
+  «Operaciones: copias externas, monitor y copia de respaldo», al final).
 
 ## Historial de versiones (instantáneas)
 
@@ -274,8 +275,9 @@ cuenta… → formulario con la contraseña y botón «Eliminar mi cuenta defini
 
 ### Registro: anti-abuso (el registro sigue abierto en el VPS y cerrado en el worker)
 
-- **Trampa** (`website`): campo que una persona deja vacío; si llega con algo → 400 y aviso en el log. *Pendiente*: el
-  campo oculto en `Auth.tsx` (otro agente); `api.register(…, website)` ya lo envía.
+- **Trampa** (`website`): campo que una persona deja vacío; si llega con algo → 400 y aviso en el log. El formulario de
+  registro (`Auth.tsx`) lo lleva oculto (`hp-field`, `aria-hidden`, `tabIndex={-1}`, `autoComplete="off"`) y
+  `api.register(…, website)` lo envía.
 - **Tiempo mínimo**: `GET /api/auth/config` da `formToken` = `<ms>.<HMAC('register-form:<ms>')>` (con `SESSION_SECRET`;
   sin él es SHA-256 y falsificable) y `formMinMs`. El registro exige ese token con al menos `REGISTER_MIN_MS` (2000) de
   antigüedad y como mucho un día → 400 `form_token`. La SPA lo pide al abrir el formulario y, si alguien envía antes,
@@ -463,3 +465,86 @@ misma IP. Tests: `server-core/test/net.test.ts`.
 - Una instantánea manual sin etiqueta se guarda con `label: ""` (antes `null`, como las automáticas): el historial la
   muestra como «Manual, sin etiqueta» y la poda (que sólo borra `label IS NULL`) no la toca.
 
+## Operaciones: copias externas, monitor y copia de respaldo (5 de octubre de 2026)
+
+- **Copias fuera del servidor**: `apps/server/scripts/offsite.mjs` (encadenado al final de `backup.mjs`) sube cada copia
+  diaria a un bucket **privado** de Backblaze B2 (`us-east-005`, cifrado en reposo SSE-B2, borrado a los 90 días) con
+  una clave limitada a ese bucket, firma SigV4 propia (`node:crypto`), `Content-MD5` en cada subida y verificación de
+  tamaño, MD5 y sha256 después. Las credenciales viven en `~/.config/alldraw/b2.env` (fuera del repositorio) y no se
+  escriben en el log. Si la subida falla, la copia local sigue valiendo y se avisa por ntfy. Recuperación verificada con
+  `offsite-restore.mjs` (`integrity_check` de la BD descargada). Contenido sensible de las copias: hashes PBKDF2 de
+  contraseñas y hashes de tokens (con `SESSION_SECRET` son HMAC: inútiles sin el secreto, que no va en la copia).
+- **Monitor externo** (`apps/monitor`): sólo pide `GET /api/status` (público, sin datos de nadie) de los dos entornos.
+  Página de estado con CSP `default-src 'none'` (sin scripts) y rate limit por IP. El tema de ntfy es un secreto del
+  worker (`NTFY_TOPIC`): quien lo conozca puede leer y mandar avisos, por eso no está en el código ni en el log.
+- **Cloudflare como copia de respaldo de solo lectura** (`STANDBY="true"`): la API rechaza toda escritura salvo entrar y
+  salir (503 `standby`), los WebSocket entran como `viewer` aunque seas el dueño y `IMPORT_SECRET` (64 caracteres
+  hexadecimales aleatorios) es la llave de la sincronización nocturna: con `STANDBY` vale aunque haya usuarios y permite
+  `replace` (dejar el registro idéntico al VPS). Quien tenga ese secreto puede reescribir la copia de respaldo (no el
+  VPS); se guarda con permisos 600 en `~/.config/alldraw/cf-import-secret` y nunca viaja por argumentos (se vería en
+  `ps`). Sin `STANDBY` el secreto vuelve a valer sólo con el registro vacío y `replace` no existe.
+- **Rate limit real en el worker** (`apps/worker/src/ratelimit.ts`): binding `[[ratelimits]]` de Workers, por IP
+  (`CF-Connecting-IP`, la pone el borde): login, `reset-password` e `import` 10/min, registro 5/min, enlaces 20/min, con
+  429 y los mismos `code` que la API. Es por ubicación de Cloudflare y eventualmente consistente (frena fuerza bruta,
+  no es contabilidad exacta); los bindings son opcionales y, si faltan, quedan los límites en memoria.
+
+## Cuentas: correo, sesiones activas y notificaciones (5 de octubre de 2026)
+
+Todo lo de correo está **implementado y apagado por defecto**: sin `MAIL_PROVIDER` (Node en producción y el worker) no se
+envía nada, `GET /api/auth/config` dice `email: false` y `POST /api/auth/forgot` responde 503 `email_disabled`.
+
+### Tokens de restablecimiento y de verificación
+
+- **Formato**: aleatorios de 32 caracteres (≈190 bits) con prefijo `rst_` (restablecer) o `vfy_` (verificar). En la BD
+  (`account_tokens`) sólo va su **hash** con el mismo `Hasher` que las sesiones (HMAC con `SESSION_SECRET` si está): una
+  copia de la BD no sirve para usarlos. Cada fila dice el tipo, la cuenta y el **correo al que se envió**.
+- **Un solo uso y atómicos**: `consumeAccountToken` hace `DELETE … RETURNING` (SQLite, Postgres, D1 y el SQLite del DO):
+  dos peticiones con el mismo enlace no pueden usarlo las dos. Uno de otro tipo (`vfy_` en `/reset`) no vale.
+- **Caducidad**: restablecer **1 hora**, verificar **24 horas**; los caducados se purgan con las sesiones. Pedir un enlace
+  nuevo invalida los anteriores del mismo tipo.
+- **Atados al correo**: un enlace de restablecer enviado a una dirección deja de valer si la cuenta cambia de correo; el
+  de verificar confirma exactamente el correo al que se envió (el actual o el nuevo, si se está cambiando).
+- **Sin fugas por la URL**: los enlaces son `…/#/restablecer?token=…` y `…/#/verificar?token=…`: el token va en el
+  fragmento, que el navegador no manda al servidor ni en `Referer`; la app lo borra de la barra de direcciones nada más
+  leerlo (`history.replaceState`) y lo manda en el cuerpo de un `POST`. `redactPath`/`redactTokens` también tapan
+  `rst_…`/`vfy_…` en los logs y en los informes de errores del cliente.
+- **Recuperar no delata cuentas**: `POST /api/auth/forgot` responde siempre `202 {ok:true}`; el trabajo (buscar la
+  cuenta, crear el token, enviar) va en segundo plano (`waitUntil` en Workers) y la respuesta tarda al menos 400 ms
+  (`forgotMinMs`). Límites: 10 por IP / 15 min y **3 por correo / hora contando igual exista o no** (un 429 tampoco dice
+  nada). `/reset` y `/verify` admiten 30 intentos por IP / 15 min.
+- **Restablecer = cambiar la contraseña**: cierra **todas** las sesiones y sus WebSockets (4402), con `revokeKeys` también
+  las API keys, borra la cookie y deja el correo verificado (quien lo usa ha demostrado que lee ese buzón).
+- **Cambiar el correo** con correo activo **no es inmediato**: hace falta la contraseña actual y una sesión, y el cambio
+  espera al enlace enviado a la dirección nueva (`pendingEmail`); a la anterior se le avisa. Así ni una errata ni alguien
+  con una sesión abierta se quedan con la cuenta. Sin correo, el cambio es inmediato y la cuenta queda sin verificar.
+- `REQUIRE_EMAIL_VERIFICATION=true` (sólo con correo) impide **crear** espacios en el servidor sin verificar (403
+  `email_unverified`); los admins no lo necesitan. Las cuentas anteriores a la v4 quedan sin verificar.
+- `MAIL_PROVIDER=log` escribe los enlaces en el log: sólo para desarrollo y e2e (en Node es el valor por defecto fuera de
+  producción, y el arranque avisa si se usa en producción). SMTP: STARTTLS obligatorio si se anuncia y la contraseña
+  nunca va sin cifrar salvo a `localhost`; certificados verificados; cabeceras sin saltos de línea (no se pueden
+  inyectar destinatarios).
+
+### Sesiones activas
+
+- `sessions.device` guarda **sólo** navegador, sistema y tipo (`Firefox;Linux;desktop`), nunca el user-agent entero;
+  `sessions.ip` la IP truncada (`truncateIp`); `last_used_at` se apunta como mucho cada 5 minutos.
+- El `id` que publica `GET /api/auth/sessions` es `sessionIdOf(hash)` (prefijo del hash, el mismo que llevan las
+  conexiones): no sirve para entrar. Listar y cerrar exige una **sesión** (no una API key), y sólo las propias.
+  `DELETE /api/auth/sessions/{id}` corta al momento sus WebSockets (4402).
+
+### Enlaces que caducan con la conexión abierta
+
+Antes, un enlace con `expiresAt` dejaba de abrir el espacio pero una conexión ya abierta seguía. Ahora Node arma un
+temporizador al aceptar el WebSocket y el `WorkspaceDO` guarda la caducidad en la etiqueta del socket (`e:<ms>`) y usa
+`alarm()`: a la hora se cierra con `4401` y motivo `expired`.
+
+### Notificaciones
+
+- Se guardan por cuenta (`notifications`, como mucho 200; se borran con la cuenta o con el espacio) y sólo las ve su
+  dueña (`GET /api/notifications`, con sesión o API key de esa cuenta). Los nombres y extractos se pintan como texto.
+- **Una mención no da acceso ni filtra contenido**: sólo se notifica a cuentas con acceso al espacio, nunca al autor, y
+  sólo en comentarios nuevos (no al cargar, restaurar o importar) de las últimas 24 h. El id es determinista
+  (espacio + comentario + cuenta), así que repetir o restaurar el comentario no duplica avisos ni correos. La regla
+  completa está en `packages/server-core/src/notifications.ts` y en el manual (*Comentarios → Quién recibe el aviso*).
+- El correo de una mención sólo sale si hay correo y la cuenta tiene «recibir por correo» activado (por defecto sí);
+  lleva un enlace a la preferencia para quitarlo.

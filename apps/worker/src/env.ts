@@ -33,6 +33,38 @@ export interface Env {
   ALLDRAW_COMMIT?: string;
   /** Nivel del log JSON (`console`, lo recoge Workers Observability): debug | info | warn | error. */
   LOG_LEVEL?: string;
+  /**
+   * `"true"`: copia de respaldo de solo lectura del VPS. La API rechaza las escrituras (503, `code: 'standby'`) salvo
+   * entrar y salir, los WebSocket entran como `viewer`, `GET /api/status` publica `standby: true` y `POST /api/admin/import`
+   * acepta `X-Import-Secret` aunque haya usuarios (sincronización nocturna, `scripts/sync-standby.mjs`) y `replace: true`.
+   */
+  STANDBY?: string;
+  /** URL del entorno principal que anuncia la copia de respaldo (`GET /api/status` → `primaryUrl`). */
+  PRIMARY_URL?: string;
+  /**
+   * Rate limiting de Workers (`[[ratelimits]]` en `wrangler.toml`), opcionales: sin el binding no se limita aquí (queda el
+   * `RateLimiter` en memoria de la API). Ver `src/ratelimit.ts`.
+   */
+  RL_LOGIN?: RateLimit;
+  RL_REGISTER?: RateLimit;
+  RL_LINKS?: RateLimit;
+  /**
+   * Correo (apagado por defecto): `none` (por defecto), `log` (sólo registra; pruebas) o `http` (API tipo Resend,
+   * Postmark o Mailgun; `smtp` no existe en Workers). Ver `src/mail-env.ts` y el README.
+   */
+  MAIL_PROVIDER?: string;
+  /** Remitente: `all-draw <no-reply@tu-dominio>`. */
+  MAIL_FROM?: string;
+  MAIL_HTTP_URL?: string;
+  /** Token de la API de correo: como secreto (`wrangler secret put MAIL_HTTP_TOKEN`). */
+  MAIL_HTTP_TOKEN?: string;
+  /** `resend` (por defecto), `postmark`, `mailgun` o `json` (con `MAIL_HTTP_TEMPLATE`). */
+  MAIL_HTTP_FORMAT?: string;
+  MAIL_HTTP_TEMPLATE?: string;
+  /** Cabecera del token si no es `Authorization: Bearer` (p. ej. `api-key`). */
+  MAIL_HTTP_AUTH_HEADER?: string;
+  /** `"true"`: hay que verificar el correo para crear espacios en el servidor (sólo con correo). */
+  REQUIRE_EMAIL_VERIFICATION?: string;
 }
 
 /** Entero de una variable (`undefined` si falta o no es un número ≥ 0). */

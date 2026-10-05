@@ -9,7 +9,7 @@ import {
   type Collection, type Command, type Diagnostic, type Workspace, type WorkspaceMeta, type NotationRegistry,
 } from '@all-draw/core';
 import { renderSvg as renderSvgIo } from '@all-draw/io';
-import type { YjsStore } from '@all-draw/sync';
+import { replaceInto, type YjsStore } from '@all-draw/sync';
 import { createRegistry } from './notations';
 
 /** Error de usuario al aplicar comandos (→ 400 si es de forma, 422 si no se pudo aplicar, 413 si el espacio supera `MAX_DOC_BYTES`). */
@@ -62,7 +62,8 @@ export function opInit(s: YjsStore, name: string, initial: Workspace | null): vo
   else s.setMeta({ name, createdAt: new Date().toISOString(), schemaVersion: SCHEMA_VERSION });
 }
 
-export function opReplace(s: YjsStore, ws: Workspace): void { loadInto(s, ws); }
+/** Reemplaza el contenido (diff: lo que no cambia no se toca y no pisa ediciones simultáneas en ello). */
+export function opReplace(s: YjsStore, ws: Workspace): void { replaceInto(s, ws, 'load'); }
 
 export function opSetMeta(s: YjsStore, patch: Partial<WorkspaceMeta>): void { s.setMeta({ ...patch, updatedAt: new Date().toISOString() }); }
 

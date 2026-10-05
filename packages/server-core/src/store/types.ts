@@ -23,6 +23,27 @@ export interface User {
   passwordHash: string;
   isAdmin: boolean;
   createdAt: string;
+  /** Cuándo verificó su correo actual (enlace de `POST /api/auth/verify`); `null` = sin verificar. */
+  emailVerifiedAt: string | null;
+  /** Idioma de la cuenta (`es` | `en`) para los correos; `null` = el del navegador con el que se registró no se supo. */
+  locale: string | null;
+  /** Preferencia «recibir por correo» (menciones, si el servidor tiene correo). */
+  notifyEmail: boolean;
+}
+
+/** Campos que se pueden cambiar de una cuenta (`updateUser`). */
+export interface UserPatch { name?: string; email?: string; isAdmin?: boolean; emailVerifiedAt?: string | null; locale?: string | null; notifyEmail?: boolean }
+/** Aplica un `UserPatch` (normaliza el correo). Común a los adaptadores SQL. */
+export function applyUserPatch(u: User, patch: UserPatch): User {
+  return {
+    ...u,
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.email !== undefined ? { email: patch.email.trim().toLowerCase() } : {}),
+    ...(patch.isAdmin !== undefined ? { isAdmin: patch.isAdmin } : {}),
+    ...(patch.emailVerifiedAt !== undefined ? { emailVerifiedAt: patch.emailVerifiedAt } : {}),
+    ...(patch.locale !== undefined ? { locale: patch.locale } : {}),
+    ...(patch.notifyEmail !== undefined ? { notifyEmail: patch.notifyEmail } : {}),
+  };
 }
 
 export interface Session {
@@ -31,7 +52,42 @@ export interface Session {
   userId: string;
   createdAt: string;
   expiresAt: string;
+  /** Resumen del navegador (`navegador;sistema;tipo`, ver `describeUserAgent`); nunca el user-agent entero. */
+  device?: string | null;
+  /** IP truncada (`truncateIp`) de la última petición. */
+  ip?: string | null;
+  /** Último uso (se apunta como mucho cada `SESSION_TOUCH_MS`). */
+  lastUsedAt?: string | null;
 }
+/** Datos de una sesión al crearla (para la lista de sesiones activas). */
+export interface SessionMeta { device?: string | null; ip?: string | null }
+
+/** Token de un solo uso enviado por correo: restablecer la contraseña o verificar un correo. Sólo se guarda su hash. */
+export type AccountTokenKind = 'reset' | 'verify';
+export interface AccountToken {
+  tokenHash: string;
+  userId: string;
+  kind: AccountTokenKind;
+  /** Correo al que se envió (en `verify`, el que queda verificado: el actual o el nuevo si se está cambiando). */
+  email: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** Tipos de notificación (ver `notifications.ts`). */
+export type NotificationKind = 'mention' | 'shared' | 'role' | 'restored';
+export interface Notification {
+  id: string;
+  userId: string;
+  kind: NotificationKind;
+  workspaceId: string | null;
+  /** Datos para pintarla (nombre del espacio, quién, extracto…); JSON en la BD. */
+  payload: Record<string, unknown>;
+  createdAt: string;
+  readAt: string | null;
+}
+/** Notificaciones que se guardan por cuenta; al pasarse se borran las más antiguas. */
+export const MAX_NOTIFICATIONS_PER_USER = 200;
 
 export interface ApiKey {
   id: string;
@@ -90,32 +146,52 @@ export interface SnapshotStore {
 
 export interface WorkspaceStore extends SnapshotStore {
   // Usuarios
-  createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string }): Promise<User>;
+  createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string; locale?: string | null }): Promise<User>;
   getUser(id: string): Promise<User | null>;
   getUserByEmail(email: string): Promise<User | null>;
   countUsers(): Promise<number>;
   listUsers(): Promise<User[]>;
   /** Cambia el hash de contraseña (p. ej. al migrar de scrypt a PBKDF2 tras un login correcto). */
   setPasswordHash(userId: string, passwordHash: string): Promise<void>;
-  /** Cambia nombre, email (normalizado; lanza `email ya registrado` si está cogido) o el rol de admin. `null` si no existe. */
-  updateUser(id: string, patch: { name?: string; email?: string; isAdmin?: boolean }): Promise<User | null>;
+  /** Cambia nombre, email (normalizado; lanza `email ya registrado` si está cogido), rol de admin, verificación, idioma o preferencias. `null` si no existe. */
+  updateUser(id: string, patch: UserPatch): Promise<User | null>;
   /**
-   * Borra la cuenta y lo que cuelga de ella: sesiones, API keys y membresías; las instantáneas que firmó
+   * Borra la cuenta y lo que cuelga de ella: sesiones, API keys, membresías, tokens de correo y notificaciones; las instantáneas que firmó
    * quedan con `authorId = null`. **No** toca los espacios de los que es dueño: el llamador los transfiere
    * o borra antes (la API lo hace en `DELETE /api/auth/account`).
    */
   deleteUser(id: string): Promise<void>;
 
   // Sesiones (el token en claro sólo lo ve el cliente; aquí va su hash). `getSession` no devuelve caducadas.
-  createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session>;
+  createSession(userId: string, tokenHash: string, expiresAt: string, meta?: SessionMeta): Promise<Session>;
   getSession(tokenHash: string): Promise<Session | null>;
   /** Renueva la caducidad (sesión deslizante). */
   touchSession(tokenHash: string, expiresAt: string): Promise<void>;
+  /** Apunta el último uso de una sesión y la IP (truncada) desde la que llegó. */
+  markSessionUsed(tokenHash: string, at: string, ip: string | null): Promise<void>;
+  /** Sesiones vigentes de un usuario, la más reciente primero. */
+  listUserSessions(userId: string): Promise<Session[]>;
   deleteSession(tokenHash: string): Promise<void>;
   /** Cierra todas las sesiones de un usuario (salvo `exceptTokenHash`, si se da). */
   deleteUserSessions(userId: string, exceptTokenHash?: string): Promise<void>;
-  /** Borra las sesiones caducadas; devuelve cuántas. */
+  /** Borra las sesiones caducadas (y los tokens de correo caducados); devuelve cuántas sesiones. */
   purgeExpiredSessions(): Promise<number>;
+
+  // Tokens de correo (restablecer contraseña, verificar correo): de un solo uso, sólo el hash.
+  createAccountToken(t: Omit<AccountToken, 'createdAt'>): Promise<AccountToken>;
+  /** Lo gasta: lo borra y lo devuelve si existía, era de ese tipo y no había caducado (atómico: sólo uno lo consigue). */
+  consumeAccountToken(tokenHash: string, kind: AccountTokenKind): Promise<AccountToken | null>;
+  /** Borra los tokens de un usuario (de un tipo o todos). */
+  deleteAccountTokens(userId: string, kind?: AccountTokenKind): Promise<void>;
+
+  // Notificaciones
+  /** Crea una notificación; con `id` dado y ya existente no hace nada y devuelve `null` (idempotente). Poda las de más de `MAX_NOTIFICATIONS_PER_USER`. */
+  createNotification(n: { id?: string; userId: string; kind: NotificationKind; workspaceId: string | null; payload: Record<string, unknown> }): Promise<Notification | null>;
+  /** Las más recientes primero. */
+  listNotifications(userId: string, limit: number): Promise<Notification[]>;
+  countUnreadNotifications(userId: string): Promise<number>;
+  /** Marca como leídas las indicadas (o todas si `ids` falta); devuelve cuántas cambiaron. */
+  markNotificationsRead(userId: string, ids?: string[]): Promise<number>;
 
   // API keys
   createApiKey(k: { userId: string; name: string; prefix: string; keyHash: string }): Promise<ApiKey>;

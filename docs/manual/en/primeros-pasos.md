@@ -102,8 +102,14 @@ Once signed in:
   **Sign out**.
 
 **Account and API keys** opens the **Account** screen, where you can create keys for agents (see
-[Agents and API](agentes-y-api.md)), **Change password** and **Sign out everywhere**. If you are an
-administrator, the **Server users** list is there too.
+[Agents and API](agentes-y-api.md)), **Change password**, see your **Active sessions** and close the ones
+you do not recognise, and **Sign out everywhere**. If you are an administrator, the **Server users** list
+is there too.
+
+Next to your name there is the notification **bell**: it tells you when someone mentions you in a
+comment, shares a workspace with you, changes your role or restores a version of one of your workspaces
+(see [notifications](compartir-y-colaborar.md#notificaciones)). If the server sends emails, signing up
+sends you a link to **confirm your email** (see [confirming your email](compartir-y-colaborar.md#verificar-correo)).
 
 The session lasts 30 days and renews itself while you use the app. The first user to register on a server
 becomes its administrator.
@@ -229,8 +235,10 @@ and profile, and not a private window. If you cleared the site's data, the local
 why it pays to upload them to the server or export them.
 
 **I forgot my password.**
-There is no email recovery. Ask the server administrator to reset it from **Account → Server users →
-Reset**: you will get a temporary password that you can then change in **Change password**.
+Press **Sign in → Forgot your password?**. If the server sends emails, it sends you a link (one hour,
+single use) to choose a new one (see [I forgot my password](compartir-y-colaborar.md#recuperar-contrasena)).
+If not, ask the server administrator to reset it from **Account → Server users → Reset**: you will get a
+temporary password that you can then change in **Change password**.
 
 **"Upload to server" says I need an account.**
 Sign in first on the home screen and press **Upload to server** again.

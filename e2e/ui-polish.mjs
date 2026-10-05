@@ -138,7 +138,7 @@ check(await page.locator('h1').count() === 1, 'inicio: un h1');
 const more = page.getByRole('button', { name: /Ver las \d+ plantillas/ });
 if (await more.count()) await more.click();
 const tplCount = await page.locator('.tpl').count();
-check(tplCount === 12, `inicio: ${tplCount} plantillas`);
+check(tplCount >= 18, `inicio: ${tplCount} plantillas`);
 await page.waitForSelector('.ws__thumb img', { timeout: 15000 });
 await page.waitForTimeout(1200);
 await shot(page, 'home');
@@ -159,7 +159,7 @@ for (const [i, label] of labels.entries()) {
   const blank = i === 0;
   check(blank ? n === 0 : n > 0, `plantilla «${label}»: ${n} nodos`);
   check(errors.length === errs, `plantilla «${label}»: sin errores`);
-  if (i < 12) await shot(page, `tpl-${String(i + 1).padStart(2, '0')}`);
+  await shot(page, `tpl-${String(i + 1).padStart(2, '0')}`);
 }
 
 // Importar soltando un fichero en el inicio

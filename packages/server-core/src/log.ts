@@ -65,8 +65,8 @@ export function truncateIp(ip: string | null | undefined): string {
   return 'unknown';
 }
 
-/** Tokens que pueden aparecer en una ruta (`/links/lnk_…`) o en la query (`?token=`). */
-const TOKEN_SEGMENT = /^(?:lnk|adk|ads)_[A-Za-z0-9]+$/;
+/** Tokens que pueden aparecer en una ruta (`/links/lnk_…`) o en la query (`?token=`): sesión, API key, enlace, restablecer y verificar. */
+const TOKEN_SEGMENT = /^(?:lnk|adk|ads|rst|vfy)_[A-Za-z0-9]+$/;
 
 /** Ruta sin query ni tokens: `/api/workspaces/ws_1/links/lnk_abc?token=x` → `/api/workspaces/ws_1/links/:token`. */
 export function redactPath(urlOrPath: string): string {
@@ -76,4 +76,4 @@ export function redactPath(urlOrPath: string): string {
 }
 
 /** Quita `token=…` de cualquier texto con URLs (mensajes y pilas de errores del cliente). */
-export const redactTokens = (s: string): string => s.replace(/(token=)[^&#\s"']+/gi, '$1…').replace(/\b(?:lnk|adk|ads)_[A-Za-z0-9]{8,}/g, m => `${m.slice(0, 4)}…`);
+export const redactTokens = (s: string): string => s.replace(/(token=)[^&#\s"']+/gi, '$1…').replace(/\b(?:lnk|adk|ads|rst|vfy)_[A-Za-z0-9]{8,}/g, m => `${m.slice(0, 4)}…`);

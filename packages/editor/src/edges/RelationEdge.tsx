@@ -82,7 +82,9 @@ export const RelationEdge = memo(function RelationEdge(p: EdgeProps<RelationRFEd
   }, [readOnly, run, ve]);
 
   const fieldLabel = rel && type ? type.fields.filter(f => ['text', 'select'].includes(f.kind) && !END_KEYS.has(f.key)).map(f => rel.fields[f.key]).filter(v => typeof v === 'string' && v.trim()).join(' · ') : '';
-  const label = ve.label ?? (rel?.name || fieldLabel);
+  // Palabra clave del tipo («include», «extend», «deploy»…): va siempre delante del nombre o de los campos.
+  const keyword = typeof type?.meta?.keyword === 'string' ? type.meta.keyword : '';
+  const label = ve.label ?? ([keyword, rel?.name || fieldLabel].filter(Boolean).join(' '));
   // Etiqueta en el recorrido, sin tapar nodos ni otras etiquetas (las de aristas con id menor ya están colocadas).
   const storeApi = useStoreApi();
   // `useStoreApi` da un objeto por componente; `getState` es el mismo para todo el lienzo.

@@ -9,7 +9,11 @@
  * Todo en `$BACKUP_DIR/<fecha>/` (por defecto `~/.alldraw-backups`); borra las carpetas de más de
  * `KEEP_DAYS` días (30), y también las copias finales de `deleted/` (espacios borrados con su cuenta). La BD se abre en solo lectura: no hace falta parar el servicio.
  *
- *   node scripts/backup.mjs            (DB_PATH / DATA_DIR como el servidor; BACKUP_DIR, KEEP_DAYS)
+ * Al terminar sube la copia a Backblaze B2 (`lib/offsite.mjs`, ver `offsite.mjs`): si la subida falla, la copia local
+ * sigue valiendo, se registra el error y se avisa por ntfy (`lib/ntfy.mjs`). `OFFSITE=0` la salta; sin credenciales
+ * de B2 (`B2_ENV_FILE`) sólo se anota en el log.
+ *
+ *   node scripts/backup.mjs            (DB_PATH / DATA_DIR como el servidor; BACKUP_DIR, KEEP_DAYS, OFFSITE)
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -93,4 +97,23 @@ if (keepDays > 0) {
 
 const size = fs.readdirSync(dir).reduce((n, f) => n + fs.statSync(path.join(dir, f)).size, 0);
 log(`ok ${dir}: ${manifest.users} usuarios, ${workspaces.length} espacios (${manifest.errors.length} con error), ${(size / 1024).toFixed(1)} KiB; borradas ${removed} copias de más de ${keepDays} días`);
+
+// 4. Copia fuera del servidor (B2). Un fallo aquí no invalida la copia local ni cambia el código de salida.
+if (env.OFFSITE !== '0') {
+  const { loadB2Config } = await import('./lib/s3.mjs');
+  let cfg = null;
+  try { cfg = loadB2Config(); } catch (e) { log(`copia externa desactivada: ${e.message}`); }
+  if (cfg) {
+    const { uploadBackup } = await import('./lib/offsite.mjs');
+    try {
+      const r = await uploadBackup(cfg, dir, { log: m => log(`offsite ${m}`) });
+      log(`offsite ok: daily/${r.stamp}/${r.weekly ? ` y weekly/${r.stamp}/` : ''}`);
+    } catch (e) {
+      const msg = String(e?.message ?? e);
+      log(`offsite ERROR: ${msg} (la copia local ${dir} sigue valiendo)`);
+      const { notify } = await import('./lib/ntfy.mjs');
+      await notify({ title: 'all-draw: falló la copia externa (B2)', message: `${stamp}: ${msg}\nLa copia local sigue en el VPS (${dir}). Reintenta: node scripts/offsite.mjs` });
+    }
+  }
+}
 process.exit(manifest.errors.length ? 1 : 0);

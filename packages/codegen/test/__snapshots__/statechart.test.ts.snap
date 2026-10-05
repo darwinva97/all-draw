@@ -1,0 +1,184 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`máquinas de estados: casos límite > pseudoestados sin equivalente y retardos ilegibles → avisos; la máquina sigue arrancando 1`] = `
+"/**
+ * Generado por all-draw a partir de «Rara».
+ * Máquina de estados → XState v5. Ejecutable: las acciones y las guardas son stubs para completar.
+ */
+import { setup } from 'xstate';
+
+/** Eventos que acepta la máquina. */
+export type RaraEvent = { type: string };
+
+export const raraMachine = setup({
+  types: {
+    events: {} as RaraEvent,
+  },
+  delays: {
+    pronto: 1000,
+  },
+}).createMachine({
+  id: 'Rara',
+  initial: 'uno',
+  states: {
+    uno: {
+      after: {
+        pronto: 'dos',
+      },
+    },
+    dos: {},
+  },
+});
+"
+`;
+
+exports[`statechart-table > tabla de transiciones con rutas, after y always, y tabla de estados 1`] = `
+"# cajero
+
+Generado por all-draw a partir de «cajero».
+
+Estado inicial: \`inactivo\`.
+
+## Transiciones
+
+| Estado | Evento | Guarda | Destino | Acciones |
+| --- | --- | --- | --- | --- |
+| inactivo | TARJETA | — | operando | leer tarjeta |
+| inactivo | REVISAR | — | revisando | — |
+| revisando | always | tieneTarjeta | operando | — |
+| revisando | always | — | inactivo | — |
+| operando | CANCELAR | — | inactivo | — |
+| operando.pin | PIN_OK | — | operando.menu | — |
+| operando.pin | PIN_KO | — | operando.pin | x = x + 1 |
+| operando.pin | after 5s | — | inactivo | — |
+| operando.menu | RETIRAR | saldo > 0 | operando.dispensando | — |
+| operando.dispensando | after 2s | — | operando.fin | — |
+
+## Estados
+
+| Estado | Tipo | Estado inicial | Entry | Exit | Descripción |
+| --- | --- | --- | --- | --- | --- |
+| inactivo | simple | — | apagarPantalla | — | — |
+| revisando | simple | — | — | — | — |
+| operando | compuesto | operando.pin | — | expulsarTarjeta | — |
+| operando.pin | simple | — | — | — | — |
+| operando.menu | simple | — | — | — | — |
+| operando.dispensando | simple | — | — | — | — |
+| operando.fin | final | — | — | — | — |
+"
+`;
+
+exports[`statechart-xstate > genera <nombre>.machine.ts con setup().createMachine() 1`] = `
+"/**
+ * Generado por all-draw a partir de «cajero».
+ * Máquina de estados → XState v5. Ejecutable: las acciones y las guardas son stubs para completar.
+ */
+import { setup } from 'xstate';
+
+/** Eventos que acepta la máquina. */
+export type CajeroEvent =
+  | { type: 'CANCELAR' }
+  | { type: 'PIN_KO' }
+  | { type: 'PIN_OK' }
+  | { type: 'RETIRAR' }
+  | { type: 'REVISAR' }
+  | { type: 'TARJETA' };
+
+export const cajeroMachine = setup({
+  types: {
+    events: {} as CajeroEvent,
+  },
+  actions: {
+    apagarPantalla: () => {
+      console.log('acción: apagarPantalla');
+    },
+    expulsarTarjeta: () => {
+      console.log('acción: expulsarTarjeta');
+    },
+    'leer tarjeta': () => {
+      console.log('acción: leer tarjeta');
+    },
+    'x = x + 1': () => {
+      console.log('acción: x = x + 1');
+    },
+  },
+  guards: {
+    'saldo > 0': () => {
+      // TODO: saldo > 0
+      return true;
+    },
+    tieneTarjeta: () => {
+      // TODO: tieneTarjeta
+      return true;
+    },
+  },
+  delays: {
+    '5s': 5000,
+  },
+}).createMachine({
+  id: 'cajero',
+  initial: 'inactivo',
+  states: {
+    inactivo: {
+      id: 'inactivo',
+      entry: 'apagarPantalla',
+      on: {
+        TARJETA: {
+          target: 'operando',
+          actions: ['leer tarjeta'],
+        },
+        REVISAR: 'revisando',
+      },
+    },
+    revisando: {
+      always: [
+        {
+          target: 'operando',
+          guard: 'tieneTarjeta',
+        },
+        {
+          target: 'inactivo',
+        },
+      ],
+    },
+    operando: {
+      exit: 'expulsarTarjeta',
+      initial: 'pin',
+      states: {
+        pin: {
+          on: {
+            PIN_OK: 'menu',
+            PIN_KO: {
+              target: 'pin',
+              actions: ['x = x + 1'],
+            },
+          },
+          after: {
+            '5s': '#inactivo',
+          },
+        },
+        menu: {
+          on: {
+            RETIRAR: {
+              target: 'dispensando',
+              guard: 'saldo > 0',
+            },
+          },
+        },
+        dispensando: {
+          after: {
+            2000: 'fin',
+          },
+        },
+        fin: {
+          type: 'final',
+        },
+      },
+      on: {
+        CANCELAR: 'inactivo',
+      },
+    },
+  },
+});
+"
+`;

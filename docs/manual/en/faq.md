@@ -92,6 +92,15 @@ Your server workspaces are seen only by you, the people you give access to and, 
 maintain it or fix an incident, whoever administers the server. There is no advertising and no third-party analytics. Local
 workspaces never leave your browser. See [privacy](privacidad.md).
 
+### The service is not responding. Where can I see whether it is down? {#estado-del-servicio}
+
+On the [status page](https://alldraw-monitor.darwin-sva-97.workers.dev) (also in the app's footer, **Service
+status**): it is checked every 5 minutes and shows availability over the last 24 hours and 7 days and the latest
+incidents. While the main server is down, the workspaces you have already opened in your browser are still available
+offline, and [alldraw.darwin-sva-97.workers.dev](https://alldraw.darwin-sva-97.workers.dev) hosts a **read-only
+backup copy**, updated every night, where you can sign in with your account and look at your diagrams (not edit them:
+changes are made at https://alldraw.bezenti.com).
+
 ## Editing {#editar}
 
 ### What is the difference between deleting from the view and deleting from the model? {#borrar-vista-o-modelo}
@@ -149,6 +158,15 @@ people change **exactly the same piece of data** at the same time (for example, 
 element), one of the two values remains, the same one for everybody. **Ctrl+Z** only undoes your
 own changes, never someone else's. See [sharing and collaborating](compartir-y-colaborar.md).
 
+### Am I told when someone mentions me or shares a workspace with me? {#notificaciones}
+
+Yes, in server workspaces: the **bell** next to your name counts unread notifications (mentions,
+workspaces shared with you, role changes and versions restored in your workspaces). For a mention to
+reach you, your email must be on your card under **Workspace → People** (or you must sign comments with
+the same name). If the server sends emails, mentions also arrive by email; turn that off under
+**Account → Email and notifications**. See [notifications](compartir-y-colaborar.md#notificaciones) and
+[who gets notified](comentarios.md#aviso-de-mencion).
+
 ### How do I remove someone's access? {#quitar-acceso}
 
 **Share** → **Revoke** next to the link you gave them. From then on the link no longer opens the
@@ -186,9 +204,25 @@ Before doing so, export an `.alldraw.json` or, in a server workspace, create a l
 
 ### I forgot my password. What do I do? {#olvide-contrasena}
 
-all-draw **sends no emails**, so there is no "reset password" link. Ask a server administrator to
-reset it: they will give you a temporary password. Sign in with it and change it in **Account →
-Change password**.
+Press **Sign in → Forgot your password?**. If the server sends emails, type your email and you get a
+link to choose a new password: it works **once** and expires in **one hour**, and using it signs out
+every session. If the server **does not send emails**, the dialog says so: ask an administrator to
+reset it; they will give you a temporary password that you change in **Account → Change password**. See
+[I forgot my password](compartir-y-colaborar.md#recuperar-contrasena).
+
+### Why do I have to confirm my email? {#confirmar-correo}
+
+So the server knows the address is yours: password recovery links and mention notices go there.
+Signing up (or changing your email) sends you a link that expires in 24 hours; if you missed it, use
+**Account → Send the link again**. Some servers do not let you create workspaces on the server until you
+confirm it; the workspaces in your browser always work. See
+[confirming your email](compartir-y-colaborar.md#verificar-correo).
+
+### How do I see where I am signed in? {#sesiones-activas}
+
+Under **Account → Active sessions**: each browser with its system, the IP without its last number, when
+it was opened and last used. **Close this session** signs that browser out right away. See
+[your account](compartir-y-colaborar.md#ajustes-cuenta).
 
 ### How do I change my password or sign out of all my devices? {#cambiar-contrasena}
 

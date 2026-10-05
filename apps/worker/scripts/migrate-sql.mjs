@@ -31,7 +31,7 @@ const insert = (table, cols, row) => `INSERT OR IGNORE INTO ${table} (${cols.joi
 
 /** Columnas que se migran de cada tabla (mismas que `src/store/import.ts` del worker). */
 export const MIGRATION_COLUMNS = {
-  users: ['id', 'email', 'name', 'password_hash', 'is_admin', 'created_at'],
+  users: ['id', 'email', 'name', 'password_hash', 'is_admin', 'created_at', 'email_verified_at', 'locale', 'notify_email'],
   workspaces: ['id', 'owner_id', 'name', 'created_at', 'updated_at'],
   members: ['workspace_id', 'user_id', 'role', 'created_at'],
   links: ['token', 'workspace_id', 'role', 'created_by', 'created_at', 'expires_at'],
@@ -59,6 +59,7 @@ export function collectMigrationRows(db) {
   for (const [group, cols] of Object.entries(MIGRATION_COLUMNS)) {
     rows[group] = src[group].map(r => {
       const row = pick(r, cols);
+      if (group === 'users' && row.notify_email == null) row.notify_email = 1; // origen anterior a la migración v4
       if (group === 'users' && isScrypt(row.password_hash)) { row.password_hash = RESET_PREFIX + row.password_hash; needsReset.push({ id: row.id, email: row.email }); }
       return row;
     });

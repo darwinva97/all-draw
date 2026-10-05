@@ -11,6 +11,9 @@ import { Landing } from './Landing';
 
 /** Centro de documentación (`#/docs…`): trozo perezoso, no entra en el paquete inicial. Enlaces: `./docs/links`. */
 const DocsScreen = lazy(() => import('./docs/DocsScreen'));
+/** Enlaces de los correos de cuenta (`#/restablecer?token=…`, `#/verificar?token=…`): también perezosos. */
+const ResetPasswordScreen = lazy(() => import('./AccountLinks').then(m => ({ default: m.ResetPasswordScreen })));
+const VerifyEmailScreen = lazy(() => import('./AccountLinks').then(m => ({ default: m.VerifyEmailScreen })));
 
 function useHashRoute(): string {
   const [h, setH] = useState(location.hash);
@@ -34,10 +37,15 @@ export function App() {
   const [lang] = useLang();
   const t = useT();
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
+  useEffect(() => { void import('./StandbyBanner').then(m => m.mountStandbyBanner()); }, []); // aviso de la copia de respaldo de solo lectura (Cloudflare)
   const m = /^#\/(w|s)\/([^/?]+)(?:\/v\/([^/?]+))?/.exec(hash);
   if (m) return <WorkspaceScreen key={m[1]! + m[2]!} mode={m[1] === 's' ? 'server' : 'local'} id={decodeURIComponent(m[2]!)} viewId={m[3] ? decodeURIComponent(m[3]) : null} />;
   if (/^#\/docs(?:[/?#]|$)/.test(hash)) return <Suspense fallback={<div className="home" role="status" aria-live="polite">{t('Cargando…')}</div>}><DocsScreen hash={hash} /></Suspense>;
   if (hash.startsWith('#/keys')) return <KeysScreen />;
+  if (/^#\/(restablecer|verificar)(?:[?#]|$)/.test(hash)) {
+    const Screen = hash.startsWith('#/restablecer') ? ResetPasswordScreen : VerifyEmailScreen;
+    return <Suspense fallback={<div className="home" role="status" aria-live="polite">{t('Cargando…')}</div>}><Screen key={hash} /></Suspense>;
+  }
   // Portada siempre accesible; en `#/` el inicio muestra la portada a quien llega sin sesión ni espacios locales.
   if (hash.startsWith('#/bienvenida')) return <Landing />;
   // `#/espacios`: el inicio (plantillas, importar, espacios) también sin sesión ni espacios locales; lo enlaza la portada.

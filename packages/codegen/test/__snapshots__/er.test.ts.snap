@@ -1,0 +1,234 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ER: casos límite > PK inexistente, FK a tabla sin PK, columnas que no encajan, SET NULL imposible y herencias 1`] = `
+"-- Generado por all-draw a partir de «ER raro».
+-- Esquema PostgreSQL.
+
+CREATE TABLE a (
+  id integer NOT NULL,
+  codigo text,
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE b (
+  x integer,
+  y integer
+);
+
+CREATE TABLE c (
+  k1 integer NOT NULL,
+  k2 integer NOT NULL,
+  a_codigo text NOT NULL,
+  PRIMARY KEY (k1, k2),
+  CONSTRAINT fk_c_a_codigo FOREIGN KEY (a_codigo) REFERENCES a (codigo) ON DELETE SET NULL
+);
+CREATE INDEX idx_c_a_codigo ON c (a_codigo);
+
+-- d hereda de a (estrategia single table).
+CREATE TABLE d (
+  id integer NOT NULL,
+  a1 integer NOT NULL,
+  a2 text NOT NULL,
+  c_k1 integer NOT NULL,
+  c_k2 integer NOT NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_d_a1_a2 FOREIGN KEY (a1, a2) REFERENCES a (id, codigo),
+  CONSTRAINT fk_d_c_k1_c_k2 FOREIGN KEY (c_k1, c_k2) REFERENCES c (k1, k2)
+);
+CREATE INDEX idx_d_a1_a2 ON d (a1, a2);
+CREATE INDEX idx_d_c_k1_c_k2 ON d (c_k1, c_k2);
+"
+`;
+
+exports[`er-postgres > ciclos: las FK circulares van al final con ALTER TABLE 1`] = `
+"-- Generado por all-draw a partir de «Ciclo».
+-- Esquema PostgreSQL.
+
+CREATE TABLE departamento (
+  id integer NOT NULL,
+  empleado_id integer,
+  PRIMARY KEY (id),
+  UNIQUE (empleado_id)
+);
+
+CREATE TABLE empleado (
+  id integer NOT NULL,
+  departamento_id integer NOT NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_empleado_departamento_id FOREIGN KEY (departamento_id) REFERENCES departamento (id)
+);
+CREATE INDEX idx_empleado_departamento_id ON empleado (departamento_id);
+
+-- Claves ajenas circulares
+ALTER TABLE departamento ADD CONSTRAINT fk_departamento_empleado_id FOREIGN KEY (empleado_id) REFERENCES empleado (id);
+"
+`;
+
+exports[`er-postgres > genera schema.postgres.sql 1`] = `
+"-- Generado por all-draw a partir de «Modelo de datos».
+-- Esquema PostgreSQL.
+
+-- Clientes registrados.
+CREATE TABLE cliente (
+  id serial NOT NULL,
+  nombre varchar(100) NOT NULL,
+  email varchar(200),
+  recomendado_por_id integer,
+  PRIMARY KEY (id),
+  UNIQUE (email),
+  CONSTRAINT fk_cliente_recomendado_por_id FOREIGN KEY (recomendado_por_id) REFERENCES cliente (id)
+);
+CREATE INDEX idx_cliente_recomendado_por_id ON cliente (recomendado_por_id);
+
+-- empresa hereda de cliente (estrategia joined: comparte su clave primaria).
+CREATE TABLE empresa (
+  cif varchar(9),
+  id integer NOT NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_empresa_id FOREIGN KEY (id) REFERENCES cliente (id) ON DELETE CASCADE
+);
+
+CREATE TABLE nota (
+  texto text
+);
+
+CREATE TABLE pedido (
+  id integer NOT NULL,
+  fecha timestamp,
+  total numeric(10, 2),
+  meta hstore,
+  cliente_id integer,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_pedido_cliente_id FOREIGN KEY (cliente_id) REFERENCES cliente (id) ON DELETE SET NULL
+);
+CREATE INDEX idx_pedido_cliente_id ON pedido (cliente_id);
+
+CREATE TABLE perfil (
+  id uuid NOT NULL,
+  "Fecha alta" date,
+  "order" integer,
+  datos jsonb,
+  cliente_id integer NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE (cliente_id),
+  CONSTRAINT fk_perfil_cliente_id FOREIGN KEY (cliente_id) REFERENCES cliente (id)
+);
+
+CREATE TABLE productos (
+  codigo varchar(20) NOT NULL,
+  precio numeric(19, 4),
+  activo boolean,
+  PRIMARY KEY (codigo)
+);
+
+-- Tabla intermedia de la relación N:M «favoritos» entre cliente y productos.
+CREATE TABLE cliente_productos (
+  cliente_id integer NOT NULL,
+  productos_codigo varchar(20) NOT NULL,
+  PRIMARY KEY (cliente_id, productos_codigo),
+  CONSTRAINT fk_cliente_productos_cliente_id FOREIGN KEY (cliente_id) REFERENCES cliente (id) ON DELETE CASCADE,
+  CONSTRAINT fk_cliente_productos_productos_codigo FOREIGN KEY (productos_codigo) REFERENCES productos (codigo) ON DELETE CASCADE
+);
+CREATE INDEX idx_cliente_productos_productos_codigo ON cliente_productos (productos_codigo);
+
+CREATE TABLE linea_de_pedido (
+  pedido_id integer NOT NULL,
+  num integer NOT NULL,
+  cantidad integer,
+  productos_codigo varchar(20) NOT NULL,
+  PRIMARY KEY (pedido_id, num),
+  CONSTRAINT fk_linea_de_pedido_pedido_id FOREIGN KEY (pedido_id) REFERENCES pedido (id) ON DELETE CASCADE,
+  CONSTRAINT fk_linea_de_pedido_productos_codigo FOREIGN KEY (productos_codigo) REFERENCES productos (codigo)
+);
+CREATE INDEX idx_linea_de_pedido_productos_codigo ON linea_de_pedido (productos_codigo);
+
+CREATE MATERIALIZED VIEW ventas_por_cliente AS
+SELECT cliente_id, sum(total) FROM pedido GROUP BY cliente_id;
+"
+`;
+
+exports[`er-sqlite > tipos SQLite, PRAGMA y FK en línea 1`] = `
+"-- Generado por all-draw a partir de «Modelo de datos».
+-- Esquema SQLite.
+
+PRAGMA foreign_keys = ON;
+
+-- Clientes registrados.
+CREATE TABLE cliente (
+  id INTEGER NOT NULL,
+  nombre TEXT NOT NULL,
+  email TEXT,
+  recomendado_por_id INTEGER,
+  PRIMARY KEY (id),
+  UNIQUE (email),
+  CONSTRAINT fk_cliente_recomendado_por_id FOREIGN KEY (recomendado_por_id) REFERENCES cliente (id)
+);
+CREATE INDEX idx_cliente_recomendado_por_id ON cliente (recomendado_por_id);
+
+-- empresa hereda de cliente (estrategia joined: comparte su clave primaria).
+CREATE TABLE empresa (
+  cif TEXT,
+  id INTEGER NOT NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_empresa_id FOREIGN KEY (id) REFERENCES cliente (id) ON DELETE CASCADE
+);
+
+CREATE TABLE nota (
+  texto TEXT
+);
+
+CREATE TABLE pedido (
+  id INTEGER NOT NULL,
+  fecha TEXT,
+  total NUMERIC,
+  meta hstore,
+  cliente_id INTEGER,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_pedido_cliente_id FOREIGN KEY (cliente_id) REFERENCES cliente (id) ON DELETE SET NULL
+);
+CREATE INDEX idx_pedido_cliente_id ON pedido (cliente_id);
+
+CREATE TABLE perfil (
+  id TEXT NOT NULL,
+  "Fecha alta" TEXT,
+  "order" INTEGER,
+  datos TEXT,
+  cliente_id INTEGER NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE (cliente_id),
+  CONSTRAINT fk_perfil_cliente_id FOREIGN KEY (cliente_id) REFERENCES cliente (id)
+);
+
+CREATE TABLE productos (
+  codigo TEXT NOT NULL,
+  precio NUMERIC,
+  activo INTEGER,
+  PRIMARY KEY (codigo)
+);
+
+-- Tabla intermedia de la relación N:M «favoritos» entre cliente y productos.
+CREATE TABLE cliente_productos (
+  cliente_id INTEGER NOT NULL,
+  productos_codigo TEXT NOT NULL,
+  PRIMARY KEY (cliente_id, productos_codigo),
+  CONSTRAINT fk_cliente_productos_cliente_id FOREIGN KEY (cliente_id) REFERENCES cliente (id) ON DELETE CASCADE,
+  CONSTRAINT fk_cliente_productos_productos_codigo FOREIGN KEY (productos_codigo) REFERENCES productos (codigo) ON DELETE CASCADE
+);
+CREATE INDEX idx_cliente_productos_productos_codigo ON cliente_productos (productos_codigo);
+
+CREATE TABLE linea_de_pedido (
+  pedido_id INTEGER NOT NULL,
+  num INTEGER NOT NULL,
+  cantidad INTEGER,
+  productos_codigo TEXT NOT NULL,
+  PRIMARY KEY (pedido_id, num),
+  CONSTRAINT fk_linea_de_pedido_pedido_id FOREIGN KEY (pedido_id) REFERENCES pedido (id) ON DELETE CASCADE,
+  CONSTRAINT fk_linea_de_pedido_productos_codigo FOREIGN KEY (productos_codigo) REFERENCES productos (codigo)
+);
+CREATE INDEX idx_linea_de_pedido_productos_codigo ON linea_de_pedido (productos_codigo);
+
+-- SQLite no tiene vistas materializadas: se crea una vista normal.
+CREATE VIEW ventas_por_cliente AS
+SELECT cliente_id, sum(total) FROM pedido GROUP BY cliente_id;
+"
+`;

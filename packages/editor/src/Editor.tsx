@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { makeView, newId } from '@all-draw/core';
 import { Canvas } from './Canvas';
 import { Palette } from './panels/Palette';
@@ -17,8 +17,15 @@ import { Icon } from './icons';
 import { inLayer } from './ui/layer';
 import { isContextMenuKey, openContextMenuFor } from './ui/menu';
 import { mountUiLayer } from './ui/toast';
+import { useRecord } from './hooks';
+import { SimMarksContext, createSimMarks, NO_SIM_MARKS } from './nodes/env';
 import './ui/dialog';
 import './editor.css';
+
+/** Panel de simulación (BPMN / estados): se carga al abrirlo, con el motor `@all-draw/sim`. */
+const SimulationPanel = lazy(() => import('./panels/Simulation'));
+/** Notaciones que se pueden simular. */
+const SIMULABLE = new Set(['bpmn', 'statechart']);
 
 export interface EditorProps {
   toolbarLeft?: ReactNode;
@@ -173,9 +180,17 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
     setSheet(null);
   }, []);
 
-  const left = readOnly ? toolbarLeft : <>
+  // Simulación: solo lectura del modelo; las marcas de los nodos van por `SimMarksContext`.
+  const [simMarks] = useState(createSimMarks);
+  const [simOpen, setSimOpen] = useState(false);
+  const simView = useRecord('views', ed.viewId);
+  const canSim = !!simView && SIMULABLE.has(simView.notationId);
+  useEffect(() => { if (!canSim) setSimOpen(false); }, [canSim]);
+  const simButton = canSim && <button className={`ad-btn ${simOpen ? 'is-on' : ''}`} aria-pressed={simOpen} onClick={() => { if (!simOpen) ed.closeComments(); setSimOpen(o => !o); }} title={t('Simular el proceso o la máquina de estados de esta vista')}><svg className="ad-icon" width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" aria-hidden="true"><path d="M5 3l8 5-8 5Z" /></svg><span className="ad-btn__label">{t('Simular')}</span></button>;
+  const left = readOnly ? <>{toolbarLeft}{simButton}</> : <>
     {mode !== 'mobile' && <button className="ad-btn" onClick={() => openWorkspacePanel()} title={t('Librerías, reglas de estilo, personas y trazabilidad')}>{t('Espacio')}</button>}
     {toolbarLeft}
+    {simButton}
   </>;
   const mobile = mode === 'mobile', tablet = mode === 'tablet';
   const showLeft = !mobile && (!tablet || panels.left);
@@ -187,7 +202,9 @@ export function Editor({ toolbarLeft, toolbarRight, theme, onRequestLayout }: Ed
         panels={tablet ? panelToggles : undefined} compact={mobile} onMore={() => setSheet(s => (s === 'more' ? null : 'more'))} />
       <div className="ad-editor__body">
         {showLeft && <div className="ad-editor__left"><ViewsPanel />{!readOnly && <Palette />}</div>}
-        <main className="ad-editor__main"><Canvas onRequestLayout={onRequestLayout} /><Problems />{comments.open && <CommentsPanel />}</main>
+        <main className={`ad-editor__main${simOpen ? ' ad-sim-on' : ''}`}><SimMarksContext.Provider value={simOpen ? simMarks : NO_SIM_MARKS}><Canvas onRequestLayout={onRequestLayout} /></SimMarksContext.Provider><Problems />
+          {simOpen && ed.viewId && <Suspense fallback={null}><SimulationPanel key={ed.viewId} viewId={ed.viewId} marks={simMarks} onClose={() => setSimOpen(false)} /></Suspense>}
+          {comments.open && <CommentsPanel />}</main>
         {showRight && <Inspector />}
       </div>
       {mobile && (

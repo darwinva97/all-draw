@@ -6,7 +6,7 @@ import { createRegistry, bindLibraries } from './registry';
 import { connectRoom, takeShareToken } from './share';
 import { api, setBearer, ApiError, ACCOUNT_KEY, cachedAccount, isNetworkError, type WorkspaceInfo, type ShareLink } from './api';
 import { ImportExport } from './ImportExport';
-import { HistoryDialog } from './History';
+import { HistoryDialog, CollabBridge } from './History';
 import { AuthDialog, useDialog } from './Auth';
 import { LangSelect } from './App';
 import { useDocumentTitle, useWorkspaceName } from './title';
@@ -15,6 +15,7 @@ import { roleLabel } from './Chrome';
 import { Tour, editorTourSteps, tourSeen } from './Tour';
 import { docHref } from './help';
 import { reportError } from './notify';
+import { NotificationBell } from './Notifications';
 import { useT, useLang } from '@all-draw/i18n';
 
 /** El inspector de vista abre el diálogo Compartir (que vive en la barra) con este evento. */
@@ -238,6 +239,7 @@ export function WorkspaceScreen({ id, mode, viewId }: { id: string; mode: 'local
       presence={conn ? { awareness: conn.awareness, me } : undefined} docsHref={docsHref}
       onShare={mode === 'server' && info?.role === 'owner' && !offline ? () => window.dispatchEvent(new Event(SHARE_EVENT)) : undefined}>
       <Editor toolbarLeft={<LeftTools onRename={mode === 'server' ? rename : undefined} />} toolbarRight={<RightTools lw={lw} id={id} mode={mode} info={info} conn={conn} offline={offline} lost={!!lost} onTour={() => setTour(true)} />} onRequestLayout={readOnly ? undefined : onLayout} />
+      <CollabBridge lw={lw} conn={conn} registry={registry} />
       {tour && !lost && <Tour steps={editorTourSteps(mode)} onClose={() => setTour(false)} />}
       {lost && <LostAccessDialog why={lost} onRetry={retry} />}
     </EditorProvider>
@@ -412,6 +414,7 @@ function RightTools({ lw, id, mode, info, conn, offline, lost, onTour }: { lw: L
     {mode === 'server' && info?.role === 'owner' && online && <button className="btn btn--primary" data-tour="share" aria-haspopup="dialog" onClick={() => setShare(true)}><Icon name="share" size={14} />{t('Compartir')}</button>}
     {mode === 'local' && <button className="btn btn--primary" data-tour="share" disabled={uploading} onClick={() => void upload()} title={t('Copia este espacio al servidor para compartirlo')}><Icon name="upload" size={14} />{uploading ? t('Subiendo…') : t('Subir al servidor')}</button>}
     <LangSelect className="lang-select--bar" />
+    {mode === 'server' && <NotificationBell />}
     <HelpMenu onTour={onTour} />
     {share && <ShareDialog id={id} onClose={() => setShare(false)} />}
     {history && info && <HistoryDialog id={id} role={info.role} onClose={() => setHistory(false)} />}

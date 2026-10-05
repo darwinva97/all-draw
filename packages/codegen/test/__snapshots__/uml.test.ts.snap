@@ -1,0 +1,320 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`uml-java > un fichero por clasificador en su paquete (namespace del uml:Package o model) > src/main/java/com/acme/ventas/EstadoPedido.java 1`] = `
+"// Generado por all-draw a partir de «Clases de la tienda».
+package com.acme.ventas;
+
+public enum EstadoPedido {
+    PENDIENTE,
+    PAGADO,
+    EN_ENVIO
+}
+"
+`;
+
+exports[`uml-java > un fichero por clasificador en su paquete (namespace del uml:Package o model) > src/main/java/com/acme/ventas/LineaDePedido.java 1`] = `
+"// Generado por all-draw a partir de «Clases de la tienda».
+package com.acme.ventas;
+
+import java.util.*;
+
+public class LineaDePedido {
+    private int cantidad;
+
+    private String nombreDelProducto;
+
+    protected List<Double> precios = new ArrayList<>();
+}
+"
+`;
+
+exports[`uml-java > un fichero por clasificador en su paquete (namespace del uml:Package o model) > src/main/java/com/acme/ventas/Pedido.java 1`] = `
+"// Generado por all-draw a partir de «Clases de la tienda».
+package com.acme.ventas;
+
+import java.util.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import model.Cliente;
+import model.Facturable;
+
+public class Pedido implements Facturable {
+    private UUID id;
+
+    private double total = 0;
+
+    private EstadoPedido estado = EstadoPedido.PENDIENTE;
+
+    private List<String> etiquetas = new ArrayList<>();
+
+    private Object extra;
+
+    LocalDate creado;
+
+    private float descuento = 0.5f;
+
+    /** Asociación «realiza» con Cliente (1). */
+    private Cliente cliente;
+
+    /** Composición con LineaDePedido (1..*). */
+    private List<LineaDePedido> lineas = new ArrayList<>();
+
+    public boolean pagar(BigDecimal importe) {
+        throw new UnsupportedOperationException();
+    }
+
+    public LineaDePedido buscar(String codigo) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String facturar() {
+        throw new UnsupportedOperationException();
+    }
+}
+"
+`;
+
+exports[`uml-java > un fichero por clasificador en su paquete (namespace del uml:Package o model) > src/main/java/model/Cliente.java 1`] = `
+"// Generado por all-draw a partir de «Clases de la tienda».
+package model;
+
+import java.util.*;
+import com.acme.ventas.Pedido;
+
+/** «entity» */
+public class Cliente extends Persona {
+    private String email;
+
+    private int puntos = 0;
+
+    /** Asociación «realiza» con Pedido (0..*). */
+    private List<Pedido> pedido = new ArrayList<>();
+
+    public Nivel getNivel() {
+        throw new UnsupportedOperationException();
+    }
+
+    public void comprar(Pedido pedido, int n) {
+        throw new UnsupportedOperationException();
+    }
+
+    private void recalcular() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String describir() {
+        throw new UnsupportedOperationException();
+    }
+}
+"
+`;
+
+exports[`uml-java > un fichero por clasificador en su paquete (namespace del uml:Package o model) > src/main/java/model/Facturable.java 1`] = `
+"// Generado por all-draw a partir de «Clases de la tienda».
+package model;
+
+public interface Facturable extends Pagable {
+    String facturar();
+}
+"
+`;
+
+exports[`uml-java > un fichero por clasificador en su paquete (namespace del uml:Package o model) > src/main/java/model/Nivel.java 1`] = `
+"// Generado por all-draw a partir de «Clases de la tienda».
+package model;
+
+public enum Nivel {
+    BRONCE,
+    PLATA
+}
+"
+`;
+
+exports[`uml-java > un fichero por clasificador en su paquete (namespace del uml:Package o model) > src/main/java/model/Pagable.java 1`] = `
+"// Generado por all-draw a partir de «Clases de la tienda».
+package model;
+
+import java.math.BigDecimal;
+
+public interface Pagable {
+    boolean pagar(BigDecimal importe);
+}
+"
+`;
+
+exports[`uml-java > un fichero por clasificador en su paquete (namespace del uml:Package o model) > src/main/java/model/Persona.java 1`] = `
+"// Generado por all-draw a partir de «Clases de la tienda».
+package model;
+
+import java.time.LocalDateTime;
+
+/** Alguien que interactúa con la tienda. */
+public abstract class Persona {
+    private String nombre;
+
+    protected LocalDateTime fechaAlta;
+
+    public static int contador = 0;
+
+    public abstract String describir();
+
+    public void saludar(Persona otro) {
+        throw new UnsupportedOperationException();
+    }
+}
+"
+`;
+
+exports[`uml-typescript > casos límite: ciclos, herencia múltiple, duplicados, reservadas, sin tipo, fuera de la vista 1`] = `
+"/**
+ * Generado por all-draw a partir de «Raro».
+ * Diagrama de clases UML → TypeScript.
+ */
+
+export interface I {}
+
+export class B {}
+
+export class A extends B {
+  x!: B;
+
+  y!: Fuera;
+}
+
+export class C extends B {
+  class_!: number;
+
+  class_2!: string;
+
+  sinTipo!: unknown;
+}
+
+export class Cosa {}
+
+export class Cosa2 {}
+
+export class Cosa3 {}
+
+export abstract class E {
+  abstract calcular(): number;
+}
+"
+`;
+
+exports[`uml-typescript > genera un único src/model.ts 1`] = `
+"/**
+ * Generado por all-draw a partir de «Clases de la tienda».
+ * Diagrama de clases UML → TypeScript.
+ */
+
+/** Paquete com.acme.ventas. */
+export enum EstadoPedido {
+  PENDIENTE = 'PENDIENTE',
+  PAGADO = 'PAGADO',
+  EN_ENVIO = 'EN_ENVIO',
+}
+
+export enum Nivel {
+  BRONCE = 'BRONCE',
+  PLATA = 'PLATA',
+}
+
+export interface Facturable extends Pagable {
+  facturar(): string;
+}
+
+export interface Pagable {
+  pagar(importe: number): boolean;
+}
+
+/** Alguien que interactúa con la tienda. */
+export abstract class Persona {
+  private nombre!: string;
+
+  protected fechaAlta!: Date;
+
+  static contador: number = 0;
+
+  abstract describir(): string;
+
+  saludar(otro: Persona): void {
+    throw new Error('No implementado');
+  }
+}
+
+/** «entity» */
+export class Cliente extends Persona {
+  private email?: string;
+
+  private puntos: number = 0;
+
+  get nivel(): Nivel {
+    throw new Error('No implementado');
+  }
+
+  /** Asociación «realiza» con Pedido (0..*). */
+  pedido: Pedido[] = [];
+
+  comprar(pedido: Pedido, n: number): void {
+    throw new Error('No implementado');
+  }
+
+  private recalcular(): void {
+    throw new Error('No implementado');
+  }
+
+  /** Requerido por Persona. */
+  describir(): string {
+    throw new Error('No implementado');
+  }
+}
+
+/** Paquete com.acme.ventas. */
+export class LineaDePedido {
+  private cantidad!: number;
+
+  private nombreDelProducto!: string;
+
+  protected precios: number[] = [];
+}
+
+/** Paquete com.acme.ventas. */
+export class Pedido implements Facturable {
+  private id!: string;
+
+  private total: number = 0;
+
+  private estado: EstadoPedido = EstadoPedido.PENDIENTE;
+
+  private etiquetas: string[] = [];
+
+  private extra!: unknown;
+
+  /** Visibilidad de paquete (~). */
+  creado!: Date;
+
+  private descuento: number = 0.5;
+
+  /** Asociación «realiza» con Cliente (1). */
+  cliente!: Cliente;
+
+  /** Composición con LineaDePedido (1..*). */
+  lineas: LineaDePedido[] = [];
+
+  pagar(importe: number): boolean {
+    throw new Error('No implementado');
+  }
+
+  buscar(codigo: string): LineaDePedido | undefined {
+    throw new Error('No implementado');
+  }
+
+  /** Requerido por Facturable. */
+  facturar(): string {
+    throw new Error('No implementado');
+  }
+}
+"
+`;

@@ -10,8 +10,9 @@
     "lint": "oxlint .",
     "gen:archimate": "node packages/notations/archimate/scripts/generate.mjs",
     "start": "node apps/server/src/server.mjs",
-    "e2e": "node e2e/smoke.mjs && node e2e/ui.mjs && node e2e/a11y.mjs && node e2e/comments.mjs && node e2e/mobile.mjs && node e2e/ui-polish.mjs && node e2e/docs.mjs && node e2e/panels-qa2.mjs && node e2e/canvas-qa2.mjs && node e2e/sync.mjs && node e2e/readonly.mjs && node e2e/revoke.mjs && node e2e/offline.mjs",
-    "deploy": "pnpm --filter web build && systemctl --user restart alldraw"
+    "e2e": "node e2e/smoke.mjs && node e2e/ui.mjs && node e2e/a11y.mjs && node e2e/comments.mjs && node e2e/mobile.mjs && node e2e/ui-polish.mjs && node e2e/docs.mjs && node e2e/panels-qa2.mjs && node e2e/canvas-qa2.mjs && node e2e/notations.mjs && node e2e/sync.mjs && node e2e/readonly.mjs && node e2e/revoke.mjs && node e2e/offline.mjs && node e2e/concurrent.mjs",
+    "deploy": "pnpm --filter web build && systemctl --user restart alldraw",
+    "e2e:accounts": "STATIC_DIR=${STATIC_DIR:-apps/web/dist} node e2e/accounts.mjs"
   },
   "license": "MIT",
   "packageManager": "pnpm@12.6.0",

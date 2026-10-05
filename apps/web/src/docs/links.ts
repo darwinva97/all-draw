@@ -8,13 +8,13 @@
  *   docHref('notaciones/bpmn')        → '#/docs/notaciones/bpmn'
  */
 
-export const DOC_NOTATION_IDS = ['archimate', 'bpmn', 'statechart', 'c4', 'grid', 'freeform', 'sequence', 'er', 'uml', 'mindmap', 'flow', 'dfd'] as const;
+export const DOC_NOTATION_IDS = ['archimate', 'bpmn', 'statechart', 'c4', 'grid', 'freeform', 'sequence', 'er', 'uml', 'mindmap', 'flow', 'dfd', 'usecase', 'component', 'deployment', 'activity', 'gantt', 'ddd'] as const;
 export type DocNotationId = (typeof DOC_NOTATION_IDS)[number];
 
 export type DocSlug =
   | 'primeros-pasos' | 'conceptos' | 'modelo-y-vistas' | 'editor' | 'notaciones' | `notaciones/${DocNotationId}`
   | 'librerias-reglas-personas' | 'compartir-y-colaborar' | 'comentarios' | 'historial' | 'importar-exportar'
-  | 'agentes-y-api' | 'atajos' | 'glosario' | 'faq' | 'privacidad' | 'terminos' | 'novedades';
+  | 'agentes-y-api' | 'simulacion' | 'generar-codigo' | 'dsl' | 'atajos' | 'glosario' | 'faq' | 'privacidad' | 'terminos' | 'novedades';
 
 /** Todos los capítulos, en el orden de lectura del índice. */
 export const DOC_SLUGS: readonly DocSlug[] = [
@@ -22,7 +22,7 @@ export const DOC_SLUGS: readonly DocSlug[] = [
   'editor', 'librerias-reglas-personas', 'importar-exportar', 'atajos',
   'notaciones', ...DOC_NOTATION_IDS.map((id): DocSlug => `notaciones/${id}`),
   'compartir-y-colaborar', 'comentarios', 'historial',
-  'agentes-y-api', 'novedades',
+  'agentes-y-api', 'simulacion', 'generar-codigo', 'dsl', 'novedades',
   'privacidad', 'terminos',
 ];
 

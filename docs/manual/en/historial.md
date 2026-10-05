@@ -30,6 +30,25 @@ snapshots, newest first. For each one you see:
 In a local workspace the **History** button does not appear: see
 [local workspaces](#espacios-locales).
 
+## Viewing a snapshot without restoring it {#ver}
+
+Click **View** next to a snapshot to open a **read-only preview**: the workspace as it was at that moment, with the
+canvas and the view picker (at the top), without touching the current workspace. You can pan, zoom and select, but not
+change anything. Every role can open it, read-only included.
+
+From the preview:
+
+- **Compare with current** opens a summary on the right of what has changed **between that version and now**, by
+  elements, relationships and views:
+  - **Added since then**: what did not exist in the version (it would go away if you restore it).
+  - **Deleted since then**: what existed and no longer does (it would come back).
+  - **Changed since then**: with its current name (and the old one, if it changed) and what changed: name,
+    documentation, fields, properties, style… For views, *content* means their nodes or lines changed.
+  - At the end, whether the workspace name changed and how many changes there are in libraries, people, rules or
+    comments.
+- **Restore this version** does the same as **Restore** in the list (see [restoring](#restaurar)).
+- **Close** (or Escape) goes back to the list.
+
 ## Automatic snapshots {#automaticas}
 
 The server creates snapshots without you doing anything:
@@ -61,7 +80,10 @@ What happens when you restore:
 - The server **first** saves an automatic snapshot of the current state. Nothing is lost.
 - Then it replaces the workspace content with the snapshot's: model, views, libraries, rules,
   people and comments.
-- Everyone who has the workspace open sees the change instantly, like any other edit.
+- Everyone who has the workspace open sees the change instantly, like any other edit, plus a notice:
+  "*Ana* restored the version from *date*". That way nobody finds the workspace changed without knowing why.
+- Only what differs from the snapshot changes: if someone is typing in an element the restore does not touch, they
+  do not lose what they type.
 
 If you picked the wrong snapshot, open **History** again and restore the automatic one created just
 before (the newest in the list).
@@ -89,6 +111,7 @@ and cannot be undone.
 | Action | read-only | can edit | owner |
 |---|:---:|:---:|:---:|
 | See the list | ✓ | ✓ | ✓ |
+| View and compare a snapshot | ✓ | ✓ | ✓ |
 | Download JSON | ✓ | ✓ | ✓ |
 | Create snapshot | | ✓ | ✓ |
 | Restore | | ✓ | ✓ |
@@ -156,3 +179,8 @@ lose, keep your own `.alldraw.json` as well.
   previous automatic snapshot.
 - **"The list is empty."** The workspace is new or has not changed for a while: create a snapshot
   by hand.
+- **"There's an automatic snapshot from October 2026 that nobody created."** The server saves it before converting an
+  old workspace to the new simultaneous-editing format (see
+  [sharing and collaborating](compartir-y-colaborar.md#edicion-simultanea)). It is pruned like the other automatic ones.
+- **"I don't know which version to restore."** Click **View** and then **Compare with current** on each candidate
+  before restoring.

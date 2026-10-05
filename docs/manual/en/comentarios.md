@@ -73,10 +73,25 @@ mouse.
 - If you delete the `@Name` text, the mention goes away.
 - If the workspace has no people, the list tells you so: create them first.
 
+### Who gets notified {#aviso-de-mencion}
+
+In **server workspaces**, a mention in a **new** comment notifies the person in their
+[notification bell](compartir-y-colaborar.md#notificaciones) (and by email if the server sends
+emails and they have it on) when the server knows which account it is. It decides like this, in order:
+
+1. The workspace person has an **email** and there is an account with that email: that account. This
+   is the reliable way: add each person's email under **Workspace → People**.
+2. If there is no email (or no account with it), it looks for an account that has **signed comments in
+   this workspace with the same name** (ignoring case and accents). If two accounts sign with that
+   name, nobody is notified.
+
+The comment's author is never notified, nor anyone **without access** to the workspace (a mention does
+not grant access). Editing a comment to add a mention does not notify, nor does restoring a version
+with old comments, nor comments older than a day that arrive when the connection comes back.
+
 > [!IMPORTANT]
-> Mentioning someone **does not send them any notice** (all-draw sends no emails or
-> notifications). A mention makes it clear who the comment is for. If that person needs to know,
-> tell them through your usual channel.
+> In **local workspaces** (in the browser) mentions **notify nobody**: there is no server to do it. A
+> mention makes it clear who the comment is for.
 
 ## Resolving and reopening {#resolver}
 

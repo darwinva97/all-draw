@@ -12,8 +12,8 @@
  */
 import * as Y from 'yjs';
 import { newId } from '@all-draw/core';
-import { importRows, type ImportResult, type ImportRows } from './import';
-import type { ApiKey, Member, MemberRole, Role, Session, ShareLink, Snapshot, SnapshotMeta, User, WorkspaceRow, WorkspaceStore } from '@all-draw/server-core';
+import { importRows, replaceRows, type ImportResult, type ImportRows, type ReplaceResult } from './import';
+import { MAX_NOTIFICATIONS_PER_USER, applyUserPatch, type AccountToken, type AccountTokenKind, type ApiKey, type Member, type MemberRole, type Notification, type NotificationKind, type Role, type Session, type SessionMeta, type ShareLink, type Snapshot, type SnapshotMeta, type User, type UserPatch, type WorkspaceRow, type WorkspaceStore } from '@all-draw/server-core';
 
 const now = () => new Date().toISOString();
 export type Row = Record<string, unknown>;
@@ -37,7 +37,18 @@ export class SqlWorkspaceStore implements WorkspaceStore {
   private run(sql: string, ...params: unknown[]) { return this.driver.run(sql, params); }
 
   private user(r: Row | null): User | null {
-    return r ? { id: r.id as string, email: r.email as string, name: r.name as string, passwordHash: r.password_hash as string, isAdmin: !!r.is_admin, createdAt: r.created_at as string } : null;
+    return r ? {
+      id: r.id as string, email: r.email as string, name: r.name as string, passwordHash: r.password_hash as string, isAdmin: !!r.is_admin, createdAt: r.created_at as string,
+      emailVerifiedAt: (r.email_verified_at as string | null) ?? null, locale: (r.locale as string | null) ?? null, notifyEmail: r.notify_email === undefined || r.notify_email === null ? true : !!r.notify_email,
+    } : null;
+  }
+  private session(r: Row): Session {
+    return { tokenHash: r.token_hash as string, userId: r.user_id as string, createdAt: r.created_at as string, expiresAt: r.expires_at as string, device: (r.device as string | null) ?? null, ip: (r.ip as string | null) ?? null, lastUsedAt: (r.last_used_at as string | null) ?? null };
+  }
+  private notification(r: Row): Notification {
+    let payload: Record<string, unknown> = {};
+    try { payload = JSON.parse(String(r.payload)) as Record<string, unknown>; } catch { /* payload corrupto: vacío */ }
+    return { id: r.id as string, userId: r.user_id as string, kind: r.kind as NotificationKind, workspaceId: (r.workspace_id as string | null) ?? null, payload, createdAt: r.created_at as string, readAt: (r.read_at as string | null) ?? null };
   }
   private workspace(r: Row | null): WorkspaceRow | null {
     return r ? { id: r.id as string, ownerId: r.owner_id as string, name: r.name as string, createdAt: r.created_at as string, updatedAt: r.updated_at as string } : null;
@@ -52,10 +63,10 @@ export class SqlWorkspaceStore implements WorkspaceStore {
     return { id: r.id as string, workspaceId: r.workspace_id as string, createdAt: r.created_at as string, authorId: (r.author_id as string | null) ?? null, label: (r.label as string | null) ?? null, size: Number(r.size) };
   }
 
-  async createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string }): Promise<User> {
-    const user: User = { id: u.id ?? newId('usr'), email: u.email.trim().toLowerCase(), name: u.name, passwordHash: u.passwordHash, isAdmin: !!u.isAdmin, createdAt: now() };
+  async createUser(u: { email: string; name: string; passwordHash: string; isAdmin?: boolean; id?: string; locale?: string | null }): Promise<User> {
+    const user: User = { id: u.id ?? newId('usr'), email: u.email.trim().toLowerCase(), name: u.name, passwordHash: u.passwordHash, isAdmin: !!u.isAdmin, createdAt: now(), emailVerifiedAt: null, locale: u.locale ?? null, notifyEmail: true };
     try {
-      await this.run('INSERT INTO users (id, email, name, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?, ?)', user.id, user.email, user.name, user.passwordHash, user.isAdmin ? 1 : 0, user.createdAt);
+      await this.run('INSERT INTO users (id, email, name, password_hash, is_admin, created_at, locale) VALUES (?, ?, ?, ?, ?, ?, ?)', user.id, user.email, user.name, user.passwordHash, user.isAdmin ? 1 : 0, user.createdAt, user.locale);
     } catch (e) { if (String(e).includes('UNIQUE')) throw new Error('email ya registrado'); throw e; }
     return user;
   }
@@ -64,10 +75,10 @@ export class SqlWorkspaceStore implements WorkspaceStore {
   async countUsers() { return Number((await this.one<{ n: number }>('SELECT COUNT(*) AS n FROM users'))!.n); }
   async listUsers() { return (await this.all('SELECT * FROM users ORDER BY created_at')).map(r => this.user(r)!); }
   async setPasswordHash(userId: string, passwordHash: string) { await this.run('UPDATE users SET password_hash = ? WHERE id = ?', passwordHash, userId); }
-  async updateUser(id: string, patch: { name?: string; email?: string; isAdmin?: boolean }) {
+  async updateUser(id: string, patch: UserPatch) {
     const u = await this.getUser(id); if (!u) return null;
-    const next = { ...u, ...(patch.name !== undefined ? { name: patch.name } : {}), ...(patch.email !== undefined ? { email: patch.email.trim().toLowerCase() } : {}), ...(patch.isAdmin !== undefined ? { isAdmin: patch.isAdmin } : {}) };
-    try { await this.run('UPDATE users SET name = ?, email = ?, is_admin = ? WHERE id = ?', next.name, next.email, next.isAdmin ? 1 : 0, id); }
+    const next = applyUserPatch(u, patch);
+    try { await this.run('UPDATE users SET name = ?, email = ?, is_admin = ?, email_verified_at = ?, locale = ?, notify_email = ? WHERE id = ?', next.name, next.email, next.isAdmin ? 1 : 0, next.emailVerifiedAt, next.locale, next.notifyEmail ? 1 : 0, id); }
     catch (e) { if (String(e).includes('UNIQUE')) throw new Error('email ya registrado'); throw e; }
     return next;
   }
@@ -77,28 +88,74 @@ export class SqlWorkspaceStore implements WorkspaceStore {
       { sql: 'DELETE FROM api_keys WHERE user_id = ?', params: [id] },
       { sql: 'DELETE FROM workspace_members WHERE user_id = ?', params: [id] },
       { sql: 'UPDATE snapshots SET author_id = NULL WHERE author_id = ?', params: [id] },
+      { sql: 'DELETE FROM account_tokens WHERE user_id = ?', params: [id] },
+      { sql: 'DELETE FROM notifications WHERE user_id = ?', params: [id] },
       { sql: 'DELETE FROM users WHERE id = ?', params: [id] },
     ]);
   }
 
-  async createSession(userId: string, tokenHash: string, expiresAt: string): Promise<Session> {
-    const s: Session = { tokenHash, userId, createdAt: now(), expiresAt };
-    await this.run('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)', tokenHash, userId, s.createdAt, expiresAt);
+  async createSession(userId: string, tokenHash: string, expiresAt: string, meta: SessionMeta = {}): Promise<Session> {
+    const t = now();
+    const s: Session = { tokenHash, userId, createdAt: t, expiresAt, device: meta.device ?? null, ip: meta.ip ?? null, lastUsedAt: t };
+    await this.run('INSERT INTO sessions (token_hash, user_id, created_at, expires_at, device, ip, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?)', tokenHash, userId, t, expiresAt, s.device, s.ip, t);
     return s;
   }
   async getSession(tokenHash: string) {
     const r = await this.one('SELECT * FROM sessions WHERE token_hash = ?', tokenHash);
     if (!r) return null;
     if ((r.expires_at as string) < now()) { await this.run('DELETE FROM sessions WHERE token_hash = ?', tokenHash); return null; }
-    return { tokenHash, userId: r.user_id as string, createdAt: r.created_at as string, expiresAt: r.expires_at as string };
+    return this.session(r);
   }
   async touchSession(tokenHash: string, expiresAt: string) { await this.run('UPDATE sessions SET expires_at = ? WHERE token_hash = ?', expiresAt, tokenHash); }
+  async markSessionUsed(tokenHash: string, at: string, ip: string | null) { await this.run('UPDATE sessions SET last_used_at = ?, ip = COALESCE(?, ip) WHERE token_hash = ?', at, ip, tokenHash); }
+  async listUserSessions(userId: string) {
+    return (await this.all('SELECT * FROM sessions WHERE user_id = ? AND expires_at >= ? ORDER BY COALESCE(last_used_at, created_at) DESC', userId, now())).map(r => this.session(r));
+  }
   async deleteSession(tokenHash: string) { await this.run('DELETE FROM sessions WHERE token_hash = ?', tokenHash); }
   async deleteUserSessions(userId: string, exceptTokenHash?: string) {
     if (exceptTokenHash) await this.run('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?', userId, exceptTokenHash);
     else await this.run('DELETE FROM sessions WHERE user_id = ?', userId);
   }
-  async purgeExpiredSessions() { return this.run('DELETE FROM sessions WHERE expires_at < ?', now()); }
+  async purgeExpiredSessions() {
+    const t = now();
+    await this.run('DELETE FROM account_tokens WHERE expires_at < ?', t);
+    return this.run('DELETE FROM sessions WHERE expires_at < ?', t);
+  }
+
+  async createAccountToken(a: Omit<AccountToken, 'createdAt'>): Promise<AccountToken> {
+    const tok: AccountToken = { ...a, email: a.email.trim().toLowerCase(), createdAt: now() };
+    await this.run('INSERT INTO account_tokens (token_hash, user_id, kind, email, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)', tok.tokenHash, tok.userId, tok.kind, tok.email, tok.createdAt, tok.expiresAt);
+    return tok;
+  }
+  async consumeAccountToken(tokenHash: string, kind: AccountTokenKind): Promise<AccountToken | null> {
+    // `DELETE … RETURNING`: atómico en D1 y en el SQLite del DO; sólo una petición gasta el token.
+    const r = await this.one('DELETE FROM account_tokens WHERE token_hash = ? AND kind = ? RETURNING *', tokenHash, kind);
+    if (!r || (r.expires_at as string) < now()) return null;
+    return { tokenHash: r.token_hash as string, userId: r.user_id as string, kind: r.kind as AccountTokenKind, email: r.email as string, createdAt: r.created_at as string, expiresAt: r.expires_at as string };
+  }
+  async deleteAccountTokens(userId: string, kind?: AccountTokenKind) {
+    if (kind) await this.run('DELETE FROM account_tokens WHERE user_id = ? AND kind = ?', userId, kind);
+    else await this.run('DELETE FROM account_tokens WHERE user_id = ?', userId);
+  }
+
+  async createNotification(n: { id?: string; userId: string; kind: NotificationKind; workspaceId: string | null; payload: Record<string, unknown> }): Promise<Notification | null> {
+    const row: Notification = { id: n.id ?? newId('ntf'), userId: n.userId, kind: n.kind, workspaceId: n.workspaceId, payload: n.payload, createdAt: now(), readAt: null };
+    const [changes] = await this.driver.batch([
+      { sql: 'INSERT OR IGNORE INTO notifications (id, user_id, kind, workspace_id, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)', params: [row.id, row.userId, row.kind, row.workspaceId, JSON.stringify(row.payload), row.createdAt] },
+      { sql: 'DELETE FROM notifications WHERE user_id = ? AND id NOT IN (SELECT id FROM notifications WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?)', params: [row.userId, row.userId, MAX_NOTIFICATIONS_PER_USER] },
+    ]);
+    return changes ? row : null;
+  }
+  async listNotifications(userId: string, limit: number) {
+    return (await this.all('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?', userId, Math.max(0, limit))).map(r => this.notification(r));
+  }
+  async countUnreadNotifications(userId: string) { return Number((await this.one<{ n: number }>('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL', userId))!.n); }
+  async markNotificationsRead(userId: string, ids?: string[]) {
+    const t = now();
+    if (!ids) return this.run('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL', t, userId);
+    if (ids.length === 0) return 0;
+    return this.run(`UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL AND id IN (${ids.map(() => '?').join(', ')})`, t, userId, ...ids);
+  }
 
   async createApiKey(k: { userId: string; name: string; prefix: string; keyHash: string }): Promise<ApiKey> {
     const key: ApiKey = { id: newId('key'), ...k, createdAt: now(), lastUsedAt: null };
@@ -133,7 +190,10 @@ export class SqlWorkspaceStore implements WorkspaceStore {
     await this.run('UPDATE workspaces SET name = ?, owner_id = ?, updated_at = ? WHERE id = ?', name, ownerId, t, id);
     return { ...w, name, ownerId, updatedAt: t };
   }
-  async deleteWorkspace(id: string) { await this.run('DELETE FROM workspaces WHERE id = ?', id); }
+  async deleteWorkspace(id: string) {
+    // Las notificaciones se borran a mano: no se cuenta con que el motor tenga las claves foráneas activas.
+    await this.driver.batch([{ sql: 'DELETE FROM notifications WHERE workspace_id = ?', params: [id] }, { sql: 'DELETE FROM workspaces WHERE id = ?', params: [id] }]);
+  }
 
   async loadDoc(id: string) {
     const base = await this.one<{ state: ArrayBuffer }>('SELECT state FROM docs WHERE workspace_id = ?', id);
@@ -209,6 +269,8 @@ export class SqlWorkspaceStore implements WorkspaceStore {
 
   /** Importación de cuentas desde otra instalación (`POST /api/admin/import`): ver `import.ts`. */
   importRows(rows: ImportRows): Promise<ImportResult> { return importRows(this.driver, rows); }
+  /** Modo `replace` de la importación (copia de respaldo `STANDBY`): el registro queda idéntico a `rows`. Ver `import.ts`. */
+  replaceRows(rows: ImportRows): Promise<ReplaceResult> { return replaceRows(this.driver, rows); }
 
   async close() { /* ni D1 ni el DO tienen conexión que cerrar */ }
 }

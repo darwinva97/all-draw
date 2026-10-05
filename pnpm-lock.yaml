@@ -185,6 +185,15 @@ importers:
         specifier: ^5.0.1
         version: 5.0.1(@types/node@26.6.2)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
 
+  apps/monitor:
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^5.20261002.1
+        version: 5.20261002.1
+      wrangler:
+        specifier: ^4.147.0
+        version: 4.147.0(@cloudflare/workers-types@5.20261002.1)(@types/node@26.6.2)
+
   apps/server:
     dependencies:
       '@all-draw/core':
@@ -284,6 +293,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@all-draw/codegen':
+        specifier: workspace:*
+        version: link:../../packages/codegen
       '@all-draw/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -299,6 +311,9 @@ importers:
       '@all-draw/layout':
         specifier: workspace:*
         version: link:../../packages/layout
+      '@all-draw/notation-activity':
+        specifier: workspace:*
+        version: link:../../packages/notations/activity
       '@all-draw/notation-archimate':
         specifier: workspace:*
         version: link:../../packages/notations/archimate
@@ -311,6 +326,15 @@ importers:
       '@all-draw/notation-catalog':
         specifier: workspace:*
         version: link:../../packages/notations/catalog
+      '@all-draw/notation-component':
+        specifier: workspace:*
+        version: link:../../packages/notations/component
+      '@all-draw/notation-ddd':
+        specifier: workspace:*
+        version: link:../../packages/notations/ddd
+      '@all-draw/notation-deployment':
+        specifier: workspace:*
+        version: link:../../packages/notations/deployment
       '@all-draw/notation-dfd':
         specifier: workspace:*
         version: link:../../packages/notations/dfd
@@ -323,6 +347,9 @@ importers:
       '@all-draw/notation-freeform':
         specifier: workspace:*
         version: link:../../packages/notations/freeform
+      '@all-draw/notation-gantt':
+        specifier: workspace:*
+        version: link:../../packages/notations/gantt
       '@all-draw/notation-grid':
         specifier: workspace:*
         version: link:../../packages/notations/grid
@@ -338,9 +365,18 @@ importers:
       '@all-draw/notation-uml-class':
         specifier: workspace:*
         version: link:../../packages/notations/uml-class
+      '@all-draw/notation-usecase':
+        specifier: workspace:*
+        version: link:../../packages/notations/usecase
+      '@all-draw/sim':
+        specifier: workspace:*
+        version: link:../../packages/sim
       '@all-draw/sync':
         specifier: workspace:*
         version: link:../../packages/sync
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       react:
         specifier: ^19.2.8
         version: 19.3.0
@@ -419,6 +455,22 @@ importers:
         specifier: ^1.0.7
         version: 1.0.7(yjs@13.6.33)
 
+  packages/codegen:
+    dependencies:
+      '@all-draw/core':
+        specifier: workspace:*
+        version: link:../core
+      '@all-draw/io':
+        specifier: workspace:*
+        version: link:../io
+    devDependencies:
+      xstate:
+        specifier: ^5.33.2
+        version: 5.33.2
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
+
   packages/core:
     dependencies:
       nanoid:
@@ -446,6 +498,9 @@ importers:
       '@all-draw/notation-grid':
         specifier: workspace:*
         version: link:../notations/grid
+      '@all-draw/sim':
+        specifier: workspace:*
+        version: link:../sim
       '@xyflow/react':
         specifier: ^12.12.0
         version: 12.12.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -502,6 +557,9 @@ importers:
       fast-xml-parser:
         specifier: ^5.11.1
         version: 5.11.1
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
@@ -514,6 +572,12 @@ importers:
       elkjs:
         specifier: ^0.12.0
         version: 0.12.0
+
+  packages/notations/activity:
+    dependencies:
+      '@all-draw/core':
+        specifier: workspace:*
+        version: link:../../core
 
   packages/notations/archimate:
     dependencies:
@@ -539,6 +603,24 @@ importers:
         specifier: workspace:*
         version: link:../../core
 
+  packages/notations/component:
+    dependencies:
+      '@all-draw/core':
+        specifier: workspace:*
+        version: link:../../core
+
+  packages/notations/ddd:
+    dependencies:
+      '@all-draw/core':
+        specifier: workspace:*
+        version: link:../../core
+
+  packages/notations/deployment:
+    dependencies:
+      '@all-draw/core':
+        specifier: workspace:*
+        version: link:../../core
+
   packages/notations/dfd:
     dependencies:
       '@all-draw/core':
@@ -558,6 +640,12 @@ importers:
         version: link:../../core
 
   packages/notations/freeform:
+    dependencies:
+      '@all-draw/core':
+        specifier: workspace:*
+        version: link:../../core
+
+  packages/notations/gantt:
     dependencies:
       '@all-draw/core':
         specifier: workspace:*
@@ -593,6 +681,12 @@ importers:
         specifier: workspace:*
         version: link:../../core
 
+  packages/notations/usecase:
+    dependencies:
+      '@all-draw/core':
+        specifier: workspace:*
+        version: link:../../core
+
   packages/server-core:
     dependencies:
       '@all-draw/core':
@@ -601,6 +695,9 @@ importers:
       '@all-draw/io':
         specifier: workspace:*
         version: link:../io
+      '@all-draw/notation-activity':
+        specifier: workspace:*
+        version: link:../notations/activity
       '@all-draw/notation-archimate':
         specifier: workspace:*
         version: link:../notations/archimate
@@ -613,6 +710,15 @@ importers:
       '@all-draw/notation-catalog':
         specifier: workspace:*
         version: link:../notations/catalog
+      '@all-draw/notation-component':
+        specifier: workspace:*
+        version: link:../notations/component
+      '@all-draw/notation-ddd':
+        specifier: workspace:*
+        version: link:../notations/ddd
+      '@all-draw/notation-deployment':
+        specifier: workspace:*
+        version: link:../notations/deployment
       '@all-draw/notation-dfd':
         specifier: workspace:*
         version: link:../notations/dfd
@@ -625,6 +731,9 @@ importers:
       '@all-draw/notation-freeform':
         specifier: workspace:*
         version: link:../notations/freeform
+      '@all-draw/notation-gantt':
+        specifier: workspace:*
+        version: link:../notations/gantt
       '@all-draw/notation-grid':
         specifier: workspace:*
         version: link:../notations/grid
@@ -640,6 +749,9 @@ importers:
       '@all-draw/notation-uml-class':
         specifier: workspace:*
         version: link:../notations/uml-class
+      '@all-draw/notation-usecase':
+        specifier: workspace:*
+        version: link:../notations/usecase
       '@all-draw/sync':
         specifier: workspace:*
         version: link:../sync
@@ -661,6 +773,19 @@ importers:
       zod:
         specifier: ^4.6.5
         version: 4.6.5
+
+  packages/sim:
+    dependencies:
+      '@all-draw/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@all-draw/io':
+        specifier: workspace:*
+        version: link:../io
+      xstate:
+        specifier: ^5.33.2
+        version: 5.33.2
 
   packages/sync:
     dependencies:
@@ -3092,6 +3217,9 @@ packages:
       picomatch:
         optional: true
 
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
+
   filelist@1.0.6:
     resolution: {integrity: sha512-5giy2PkLYY1cP39p17Ech+2xlpTRL9HLspOfEgm0L6CwBXBTgsK5ou0JtzYuepxkaQ/tvhCFIJ5uXo0OrM2DxA==}
 
@@ -4409,6 +4537,9 @@ packages:
   xml-naming@0.3.0:
     resolution: {integrity: sha512-ghig2TBE/H11aOVgmahA3MhimvkBr6JIYknH/Dhdk10nXwdbIqBJsbfMxpvFPG8bAw77gN29aQWvKpmVoPlvPQ==}
     engines: {node: '>=16.0.0'}
+
+  xstate@5.33.2:
+    resolution: {integrity: sha512-8tC7yXgeCvpT8gKEeEje6ikJJG1wpnoLiXe+HfECW8m10ubMd3QxKOwWA8KxPJVBcLwfdRoMKYxIBGYKmo37/A==}
 
   xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
@@ -6642,6 +6773,8 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.7
 
+  fflate@0.8.3: {}
+
   filelist@1.0.6:
     dependencies:
       minimatch: 5.1.9
@@ -8115,6 +8248,8 @@ snapshots:
   ws@8.22.0: {}
 
   xml-naming@0.3.0: {}
+
+  xstate@5.33.2: {}
 
   xtend@4.0.2: {}
 

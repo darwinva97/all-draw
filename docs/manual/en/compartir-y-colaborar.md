@@ -33,6 +33,32 @@ Depending on how the server is set up, registration may be open, require an **In
 server), or be closed ("Registration is closed on this server."). Your session lasts 30 days from the last time you use
 the app; to leave, open the menu under your name (top right) and press **Sign out**.
 
+### Confirming your email {#verificar-correo}
+
+If the server sends emails, signing up sends you a message **Confirm your all-draw email** with a link. Open it (it works
+**once** and expires in **24 hours**) and you will see **Email confirmed**. Until you confirm it, the **Account** screen
+reminds you, with a **Send the link again** button (each new link cancels the previous one).
+
+Some servers require a confirmed email to **create workspaces on the server**: until then, **New workspace on the
+server** and **Upload to server** answer "Confirm your email to create workspaces on the server". The workspaces in your
+browser work as usual, and you can open the ones shared with you.
+
+### I forgot my password {#recuperar-contrasena}
+
+1. Press **Sign in** and, in the dialog, **Forgot your password?**
+2. If the server sends emails, type your email and press **Send the link**. You will see "If there is an account with
+   that email, we have sent it a link": the message is the same whether or not the account exists, so it does not
+   reveal who is registered.
+3. Open the link in the **Reset your all-draw password** email (it works **once** and expires in **one hour**; asking
+   for another one cancels the previous one).
+4. Type the **New password** twice and press **Save the password**. **Every session is signed out** and open
+   workspaces are disconnected (see [What happens when sessions are closed](#cerrar-sesiones)); with **Also revoke API
+   keys** (ticked by default) your keys stop working as well.
+5. Press **Sign in** and use the new password.
+
+If the server **does not send emails**, **Forgot your password?** says so: ask an administrator to reset it (see
+[Server administration](#administracion)).
+
 ## Uploading a local workspace to the server {#subir}
 
 1. Sign in with your account.
@@ -92,7 +118,9 @@ When the link is opened, all-draw keeps the token in that tab and **removes it f
 end up in history, bookmarks or screenshots. If the person closes the tab, they will need to open the original link
 again.
 
-Links can have an expiry date, but today that can only be set through the API (`expiresAt` field).
+Links can have an expiry date, but today that can only be set through the API (`expiresAt` field). At that time the
+link stops opening the workspace and whoever has it **open** is disconnected right then, with the notice “You no longer
+have access to this workspace”.
 
 ## Revoking a link {#revocar}
 
@@ -126,12 +154,38 @@ How each person appears:
 
 ## Editing at the same time {#edicion-simultanea}
 
-There is nothing to "lock" or "check out": two people can move the same node or type in the same field at the same
-time, and the changes merge on their own in every browser without conflicts (synchronisation uses CRDTs).
+There is nothing to "lock" or "check out": several people can edit the same element at the same time and the changes
+merge on their own in every browser, with no conflict warnings (synchronisation uses CRDTs). In the end everyone sees
+exactly the same thing. What gets merged depends on what each person touches:
 
-- **Undo** (Ctrl+Z) only undoes **your** changes, never other people's.
+| If at the same time… | Result |
+|---|---|
+| One person changes an element's **name** and another its **documentation**, **fields**, **properties** or **type** | **All** the changes are kept: every field of an element, relationship, view or node syncs on its own. |
+| One person moves a node and another resizes or recolours it | Both are kept. |
+| Two people type in the **same long text**: the documentation of an element, relationship or view, the text of a note, a comment, or a long-text or JSON field | They are **merged character by character**, like in a shared document editor: if one types at the start and the other at the end, both sentences stay. |
+| Two people change the **same short field** (the name, an option in a list, a number, a date, a node's position) | The **last** change to reach the server **wins**, and it is the same one for everyone. |
+| One person edits something another person **deletes** | It stays deleted. If needed, get it back from [History](historial.md). |
+
+Some details:
+
+- Lists (tags, pins, points of a line, a library's types…) count as a single field: if two people change one at the
+  same time, one wins. The same goes for the two ends of a line or relationship (where it starts and where it ends):
+  if one person changes the source and another the target at the same time, you get one person's line, never a mix.
+- If the text you are typing changes because someone else types in it, your cursor may jump to the end; what you both
+  typed is kept.
+- If two people start filling in something that was empty and does not belong to an element (a node's style, a
+  relationship's documentation or fields, an instance note) at the same time, one wins; from then on it merges as above.
+- **Undo** (Ctrl+Z) only undoes **your** changes, never other people's, even on the same element: if you rename an
+  element while someone else writes its documentation, undo restores the name and leaves their text.
 - To talk about the model without touching it, use [comments](comentarios.md).
 - If someone breaks something, any editor can go back to an earlier version from [History](historial.md).
+
+> [!NOTE]
+> Workspaces created before October 2026 stored each element as a single block and, if two people edited it at the
+> same time, only one of the changes survived. The server converts them to the new format the first time it opens
+> them (saving an automatic snapshot first), with nothing for you to do. If you have a tab open from before the update,
+> the server will not let it sync until you **reload** the page, so it cannot damage the workspace. Whatever you changed
+> in it is still saved in the browser and is sent when you reload.
 
 ## Offline {#sin-conexion}
 
@@ -192,8 +246,31 @@ It has these sections:
   2. Type the **New password** (at least 8 characters) and repeat it in **Repeat the new password**.
   3. Press **Change**. You will see "Password changed; your other sessions have been signed out.": the other browsers
      where you were signed in will have to sign in again.
+- **Active sessions**: the browsers and devices where you are signed in, with browser and system (for example "Firefox
+  on Linux" or "Safari on iOS (mobile)"), the IP **without its last number**, when it was opened and when it was last
+  used. This browser's one is marked **this session**. **Close this session** closes only that one: that browser has to
+  sign in again and its open workspaces are disconnected right away.
 - **Sign out everywhere**: ends your session in every browser, **including this one**, and takes you back to the home
   screen. Use it if you signed in on someone else's computer or think someone is using your account.
+- **Email and notifications** (only if the server sends emails): **Email me when someone mentions me** (on by default)
+  and the **Email language**.
+
+To **change your email**, type the new one under **Profile**, your current password, and press **Save**. If the server
+sends emails, the change **is not immediate**: we send a link to the new address (24 hours) and a notice to the old one;
+until you open the link you keep signing in with the old email. Without email, the change is immediate.
+
+## Notifications {#notificaciones}
+
+When you are signed in, next to your name (and in the editor bar of server workspaces) there is a **bell**. The red
+number is your **unread** notifications. Press it to see the latest ones, each linking to what it is about:
+
+- **You were mentioned** in a comment (see [mentions](comentarios.md#menciones)), with an excerpt.
+- **A workspace was shared with you**: someone added you as a member, with your role.
+- **Your role changed** in a workspace, or **you now own it**.
+- **A version was restored** in one of your workspaces (not when you do it yourself).
+
+Opening a notification marks it as read; **Mark all as read** marks them all. The bell refreshes by itself every minute.
+If the server sends emails and **Email me when someone mentions me** is on, mentions also reach you by email right away.
 
 ### What happens when sessions are closed {#cerrar-sesiones}
 
@@ -218,7 +295,8 @@ workspace it had open. Your API keys keep working.
 If you are an administrator, the **Account** screen also shows **Server users**: every account with its name, email,
 creation date and whether it is an administrator.
 
-**If someone forgets their password** (the server does not send emails, so there is no "forgot my password"):
+**If someone forgets their password** and the server sends emails, they can recover it themselves with **Forgot your
+password?** (see [I forgot my password](#recuperar-contrasena)). If the server does not send emails:
 
 1. Go to **Account** and find that person under **Server users**.
 2. Press **Reset** next to their email and confirm.
@@ -230,6 +308,15 @@ creation date and whether it is an administrator.
 You cannot reset your own password from this list; use **Change password**.
 
 ## Common mistakes {#errores-comunes}
+
+**"Two of us typed at the same time and a change was lost."**
+If you both changed the same short field (for example, the name), the last one wins: that is expected (see
+[editing at the same time](#edicion-simultanea)). Long texts and different fields are merged. If something you need was
+lost, look for it in [History](historial.md).
+
+**"It says “A new version of all-draw is available” and doesn't sync."**
+That tab is from an earlier version of the app. Click **Reload** (or reload the page): what you had is saved in the
+browser and is sent when it comes back.
 
 **"I can't see the Share button."**
 Only the owner sees it, and only in server workspaces. If the workspace is local, upload it first with **Upload to

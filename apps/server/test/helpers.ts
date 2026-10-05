@@ -5,21 +5,21 @@ import { createApp, type App } from '../src/app';
 import { configFromEnv, type Config } from '../src/config';
 import { MemoryWorkspaceStore } from '../src/store/memory';
 import type { WorkspaceStore } from '../src/store/types';
-import type { LogLevel } from '@all-draw/server-core';
+import type { LogLevel, Mailer } from '@all-draw/server-core';
 
 export interface TestServer<S extends WorkspaceStore = MemoryWorkspaceStore> { app: App; store: S; url: string; wsUrl: string; logs: Record<string, unknown>[]; close(): Promise<void> }
 
 export async function startServer(): Promise<TestServer>;
-export async function startServer(opts: { config?: Partial<Config>; logLevel?: LogLevel }): Promise<TestServer>;
-export async function startServer<S extends WorkspaceStore>(opts: { store: S; config?: Partial<Config>; logLevel?: LogLevel }): Promise<TestServer<S>>;
-export async function startServer(opts: { store?: WorkspaceStore; config?: Partial<Config>; logLevel?: LogLevel } = {}): Promise<TestServer<WorkspaceStore>> {
+export async function startServer(opts: { config?: Partial<Config>; logLevel?: LogLevel; mailer?: Mailer }): Promise<TestServer>;
+export async function startServer<S extends WorkspaceStore>(opts: { store: S; config?: Partial<Config>; logLevel?: LogLevel; mailer?: Mailer }): Promise<TestServer<S>>;
+export async function startServer(opts: { store?: WorkspaceStore; config?: Partial<Config>; logLevel?: LogLevel; mailer?: Mailer } = {}): Promise<TestServer<WorkspaceStore>> {
   const store = opts.store ?? new MemoryWorkspaceStore();
   const config: Config = {
     ...configFromEnv({}), staticDir: '/nonexistent', allowRegistration: true, registerMinMs: 0, logLevel: 'silent',
     backupDir: path.join(os.tmpdir(), 'alldraw-test-backups'), ...opts.config,
   };
   const logs: Record<string, unknown>[] = [];
-  const app = createApp(config, store, { logger: jsonLogger({ level: opts.logLevel ?? 'debug', write: line => { logs.push(JSON.parse(line) as Record<string, unknown>); } }), build: { version: '0.0.0-test', commit: 'test', runtime: 'node', db: 'memory', startedAt: new Date().toISOString() } });
+  const app = createApp(config, store, { logger: jsonLogger({ level: opts.logLevel ?? 'debug', write: line => { logs.push(JSON.parse(line) as Record<string, unknown>); } }), build: { version: '0.0.0-test', commit: 'test', runtime: 'node', db: 'memory', startedAt: new Date().toISOString() }, ...(opts.mailer ? { mailer: opts.mailer } : {}) });
   await new Promise<void>(r => app.server.listen(0, '127.0.0.1', () => r()));
   const port = (app.server.address() as { port: number }).port;
   return { app, store, logs, url: `http://127.0.0.1:${port}`, wsUrl: `ws://127.0.0.1:${port}/ws`, close: async () => { await app.close(); await store.close(); } };

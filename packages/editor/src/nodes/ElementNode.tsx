@@ -2,11 +2,11 @@ import { memo, type CSSProperties, type MouseEvent } from 'react';
 import { Handle, NodeResizer, Position, type NodeProps, type Node } from '@xyflow/react';
 import type { Element, ElementType, Port, RuleStyle, ViewNode } from '@all-draw/core';
 import { textInset, figureOf, showsIcon } from '@all-draw/notation-archimate';
-import { shapeStyle, shapeColors, ShapeSvg, figureFor, personGeometry, readable } from './shapes';
+import { shapeStyle, shapeColors, ShapeSvg, figureFor, personGeometry, readable, isExtraFigure, figureInset, SVG_ONLY_FIGURES } from './shapes';
 import { compartmentsOf, compartmentLayout, type CompartmentLayout } from './compartments';
 import { ArchimateFigure, archimateBox } from './ArchimateFigure';
 import { InlineEdit } from './InlineEdit';
-import { useNodeEnv } from './env';
+import { useNodeEnv, useSimMark } from './env';
 import { useT } from '@all-draw/i18n';
 import { Icon } from '../icons';
 
@@ -59,6 +59,7 @@ export const DIMMED_OPACITY = 0.45;
 export const ElementNode = memo(function ElementNode({ data, selected }: NodeProps<ElementRFNode>) {
   const { readOnly, run, setRenaming, dark, lowDetail } = useNodeEnv();
   const t = useT();
+  const sim = useSimMark(data.node.id);
   const { node: vn, element, type, rule, archimate } = data;
   if (!element) return <div className="ad-node ad-node--missing">?</div>;
   const visible = visiblePorts(data.ports, vn);
@@ -72,6 +73,13 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   const layout = cmp ? compartmentLayout(cmp) : undefined;
   if (layout) css.height = Math.max(vn.h, layout.height);
   if (figure === 'store') css.color = rule.text ?? vn.style.text ?? readable(colors.fill);
+  // Figuras UML nuevas (paquete, caja 3D, señales…): las pinta el SVG entero y el texto respeta pestaña, caras y puntas.
+  const extra = isExtraFigure(figure);
+  if (extra) {
+    if (SVG_ONLY_FIGURES.has(figure)) { css.background = 'transparent'; css.borderColor = 'transparent'; }
+    const ins = figureInset(figure, vn.w, vn.h);
+    if (ins.top || ins.right || ins.left) css.padding = `${4 + ins.top}px ${10 + ins.right}px 4px ${10 + ins.left}px`;
+  }
   if (figure === 'person') {
     // Persona C4: el texto va dentro del cuerpo, bajo la cabeza, con el color legible sobre el del tipo.
     css.color = rule.text ?? vn.style.text ?? readable(colors.fill);
@@ -92,7 +100,7 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
     // Rectángulo/redondeado sin SVG: un `div` con la misma caja que ocuparía el SVG (`archimateBoxStyle`).
     css.padding = `${4 + inset.top}px ${10 + inset.right + (showsIcon(element.typeId, vn.style.figure) ? 12 : 0)}px ${4 + inset.bottom}px ${10 + inset.left}px`;
   }
-  const icon = archimate || SMALL_SHAPES.has(shape) ? undefined : ((rule.icon ?? type?.icon) || undefined);
+  const icon = archimate || SMALL_SHAPES.has(shape) || (extra && !rule.icon) ? undefined : ((rule.icon ?? type?.icon) || undefined);
   const editing = !!data.editing;
   // Atenuado (otra notación o fuera del viewpoint) con una opacidad propia: se combinan (la clase sola daría .45 fijo).
   if (data.dimmed && css.opacity !== undefined) css.opacity = Number(css.opacity) * DIMMED_OPACITY;
@@ -116,7 +124,7 @@ export const ElementNode = memo(function ElementNode({ data, selected }: NodePro
   };
 
   return (
-    <div className={`ad-node ad-shape-${figure}${layout ? ' ad-node--cls' : ''}${labelPos === 'top' || labelBelow ? ` ad-node--label-${labelPos}` : ''}${archimate ? ' ad-node--archimate' : ''}${type?.container ? ' is-container' : ''}${selected ? ' is-selected' : ''}${data.dimmed ? ' is-dimmed' : ''}${rule.bold ? ' r-bold' : ''}${rule.strike ? ' r-strike' : ''}`} style={css} title={element.doc || undefined}>
+    <div className={`ad-node ad-shape-${figure}${extra ? ` ad-shape-${shape}` : ''}${layout ? ' ad-node--cls' : ''}${labelPos === 'top' || labelBelow ? ` ad-node--label-${labelPos}` : ''}${archimate ? ' ad-node--archimate' : ''}${type?.container ? ' is-container' : ''}${selected ? ' is-selected' : ''}${data.dimmed ? ' is-dimmed' : ''}${rule.bold ? ' r-bold' : ''}${rule.strike ? ' r-strike' : ''}${sim ? ` ad-sim ad-sim--${sim}` : ''}`} style={css} title={element.doc || undefined}>
       {/* El redimensionador (8 controles) solo existe con el nodo seleccionado. */}
       {!readOnly && selected && !editing && <NodeResizer minWidth={24} minHeight={layout?.height ?? 16} lineClassName="ad-resizer__line" handleClassName="ad-resizer__handle" />}
       {boxRadius !== undefined && <div className="ad-archi-box" style={archimateBoxStyle(vn.w, vn.h, boxRadius, dark && archiFill === '#fff' ? '#1c2230' : archiFill, archiStroke)} />}

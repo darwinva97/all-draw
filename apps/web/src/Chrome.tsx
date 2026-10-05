@@ -6,6 +6,7 @@ import { LangSelect } from './App';
 import { useAppTheme, THEME_NEXT } from './theme';
 import { docHref, REPO_URL } from './help';
 import type { User } from './api';
+import { NotificationBell } from './Notifications';
 
 /** Marca de all-draw (la misma figura que el favicon). */
 export function Logo({ className = 'brand__mark' }: { className?: string }) {
@@ -42,7 +43,7 @@ export function roleLabel(t: (k: string) => string, role: string): string {
 
 export const initialsOf = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('') || '?';
 
-/** Menú de la cuenta (nombre → Cuenta y claves API, Salir). */
+/** Menú de la cuenta (nombre → Cuenta y claves API, Salir), con la campana de notificaciones delante. */
 export function UserMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -62,7 +63,8 @@ export function UserMenu({ user, onLogout }: { user: User; onLogout: () => void 
     document.addEventListener('mousedown', onDown); document.addEventListener('keydown', onKey, true);
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey, true); };
   }, [open]);
-  return (
+  return (<>
+    <NotificationBell />
     <div className="user-menu" ref={box}>
       <button ref={trigger} type="button" className="btn btn--ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)} title={user.email}>
         <span className="avatar" aria-hidden="true">{initialsOf(user.name)}</span><span className="user-menu__name">{user.name}</span><Icon name="chevronDown" size={14} />
@@ -74,7 +76,7 @@ export function UserMenu({ user, onLogout }: { user: User; onLogout: () => void 
         <button role="menuitem" type="button" onClick={() => { setOpen(false); onLogout(); }}><Icon name="logout" />{t('Cerrar sesión')}</button>
       </div>}
     </div>
-  );
+  </>);
 }
 
 /** Cabecera fija de portada, inicio y cuenta. `right` va antes de los controles de idioma y tema. */
@@ -107,6 +109,7 @@ export function AppFooter() {
           <a href={docHref('novedades')}>{t('Novedades')}</a>
           <a href={docHref('privacidad')}>{t('Privacidad')}</a>
           <a href={docHref('terminos')}>{t('Términos')}</a>
+          <a href="https://alldraw-monitor.darwin-sva-97.workers.dev" target="_blank" rel="noopener">{t('Estado del servicio')}</a>
         </nav>
         <span className="foot__spacer" />
         <span>{t('Código abierto, licencia MIT')}</span>

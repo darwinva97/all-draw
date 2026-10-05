@@ -35,6 +35,32 @@ quien administre el servidor) o estar cerrado ("El registro está cerrado en est
 desde la última vez que usas la aplicación; para salir, abre el menú de tu nombre (arriba a la derecha) y pulsa
 **Cerrar sesión**.
 
+### Confirmar el correo {#verificar-correo}
+
+Si el servidor envía correos, al registrarte te llega un mensaje **Confirma tu correo de all-draw** con un enlace.
+Ábrelo (sirve **una vez** y caduca en **24 horas**) y verás **Correo confirmado**. Mientras no lo confirmes, la pantalla
+**Cuenta** te lo recuerda con el botón **Reenviar el enlace** (cada enlace nuevo anula el anterior).
+
+Algunos servidores exigen el correo confirmado para **crear espacios en el servidor**: hasta entonces, **Nuevo espacio
+en el servidor** y **Subir al servidor** responden "Confirma tu correo para crear espacios en el servidor". Los espacios
+de tu navegador funcionan igual, y los que te compartan los puedes abrir.
+
+### He olvidado la contraseña {#recuperar-contrasena}
+
+1. Pulsa **Entrar** y, en el diálogo, **¿Olvidaste tu contraseña?**
+2. Si el servidor envía correos, escribe tu correo y pulsa **Enviar el enlace**. Verás "Si hay una cuenta con ese
+   correo, te hemos enviado un enlace": el mensaje es el mismo exista o no la cuenta, para no revelar quién está
+   registrado.
+3. Abre el enlace del correo **Restablece tu contraseña de all-draw** (sirve **una vez** y caduca en **una hora**;
+   si pides otro, el anterior deja de valer).
+4. Escribe la **Nueva contraseña** dos veces y pulsa **Guardar la contraseña**. Se **cierran todas tus sesiones** y se
+   desconectan los espacios abiertos (ver [Qué pasa al cerrar sesiones](#cerrar-sesiones)); con la casilla **Revocar
+   también las claves API** (marcada por defecto) también dejan de valer tus claves.
+5. Pulsa **Entrar** y usa la contraseña nueva.
+
+Si el servidor **no envía correos**, **¿Olvidaste tu contraseña?** te lo explica: pide a un administrador que te la
+restablezca (ver [Administración del servidor](#administracion)).
+
 ## Subir un espacio local al servidor {#subir}
 
 1. Entra con tu cuenta.
@@ -94,7 +120,9 @@ Al abrirlo, all-draw guarda el token en esa pestaña y lo **borra de la barra de
 el historial, en marcadores ni en capturas de pantalla. Si la persona cierra la pestaña, necesitará volver a abrir el
 enlace original.
 
-Los enlaces pueden llevar fecha de caducidad, pero hoy eso solo se configura por la API (campo `expiresAt`).
+Los enlaces pueden llevar fecha de caducidad, pero hoy eso solo se configura por la API (campo `expiresAt`). Al llegar
+esa hora el enlace deja de abrir el espacio y quien lo tenga **abierto** se desconecta en ese momento, con el aviso
+«Ya no tienes acceso a este espacio».
 
 ## Revocar un enlace {#revocar}
 
@@ -128,12 +156,38 @@ Cómo aparece cada persona:
 
 ## Edición simultánea {#edicion-simultanea}
 
-No hay que "bloquear" ni "proteger" nada: dos personas pueden mover el mismo nodo o escribir en el mismo campo a la
-vez, y los cambios se combinan solos en todos los navegadores sin conflictos (la sincronización usa CRDT).
+No hay que "bloquear" ni "proteger" nada: varias personas pueden editar el mismo elemento a la vez y los cambios se
+combinan solos en todos los navegadores, sin avisos de conflicto (la sincronización usa CRDT). Al final todos ven
+exactamente lo mismo. Lo que se combina depende de qué toca cada uno:
 
-- **Deshacer** (Ctrl+Z) solo deshace **tus** cambios, nunca los de los demás.
+| Si a la vez… | Resultado |
+|---|---|
+| Una persona cambia el **nombre** de un elemento y otra su **documentación**, sus **campos**, sus **propiedades** o su **tipo** | Se conservan **todos** los cambios: cada campo de un elemento, relación, vista o nodo se sincroniza por separado. |
+| Una persona mueve un nodo y otra le cambia el tamaño o el color | Se conservan los dos. |
+| Dos personas escriben en el **mismo texto largo**: la documentación de un elemento, relación o vista, el texto de una nota, un comentario o un campo de texto largo o JSON | Se **fusionan letra a letra**, como en un editor de documentos compartido: si una escribe al principio y otra al final, quedan las dos frases. |
+| Dos personas cambian el **mismo campo corto** (el nombre, una opción de una lista, un número, una fecha, la posición de un nodo) | **Gana el último** cambio que llega al servidor, y es el mismo para todos. |
+| Una persona edita algo que otra **borra** | Queda borrado. Si hacía falta, se recupera desde el [Historial](historial.md). |
+
+Algunos detalles:
+
+- Las listas (etiquetas, pines, puntos de una línea, tipos de una librería…) cuentan como un solo campo: si dos personas
+  las cambian a la vez, gana una. Igual los dos extremos de una línea o de una relación (de dónde sale y adónde llega):
+  si una persona cambia el origen y otra el destino a la vez, queda la línea de una de las dos, nunca una mezcla.
+- Si el texto que estás escribiendo cambia porque otra persona escribe en él, el cursor puede saltar al final; lo que
+  hayáis escrito los dos se conserva.
+- Si dos personas empiezan a la vez a rellenar algo que estaba vacío y no es de un elemento (el estilo de un nodo, la
+  documentación o los campos de una relación, una nota de instancia), gana una; a partir de ahí se combina como arriba.
+- **Deshacer** (Ctrl+Z) solo deshace **tus** cambios, nunca los de los demás, aunque sean en el mismo elemento: si
+  renombras un elemento mientras otra persona escribe su documentación, deshacer devuelve el nombre y deja su texto.
 - Para conversar sobre el modelo sin tocarlo, usa los [comentarios](comentarios.md).
 - Si alguien estropea algo, cualquier editor puede volver a una versión anterior desde el [Historial](historial.md).
+
+> [!NOTE]
+> Los espacios creados antes de octubre de 2026 guardaban cada elemento como un bloque y, si dos personas lo
+> editaban a la vez, se quedaba solo uno de los cambios. El servidor los pasa al formato nuevo la primera vez que los
+> abre (guardando antes una instantánea automática), sin que tengas que hacer nada. Si tienes abierta una pestaña de
+> antes de la actualización, el servidor no la deja sincronizar hasta que **recargues** la página: así no puede
+> estropear el espacio. Lo que hubieras cambiado en ella sigue guardado en el navegador y se envía al recargar.
 
 ## Sin conexión {#sin-conexion}
 
@@ -193,8 +247,32 @@ Tiene estas secciones:
   2. Escribe la **Nueva contraseña** (mínimo 8 caracteres) y repítela.
   3. Pulsa **Cambiar**. Verás "Contraseña cambiada; las demás sesiones se han cerrado": los demás navegadores donde
      tuvieras la sesión abierta tendrán que volver a entrar.
+- **Sesiones activas**: la lista de los navegadores y dispositivos donde tienes la sesión abierta, con el navegador y
+  el sistema (por ejemplo "Firefox en Linux" o "Safari en iOS (móvil)"), la IP **sin el último número**, cuándo se abrió
+  y su último uso. La de este navegador lleva la marca **esta sesión**. **Cerrar esta sesión** cierra solo esa: aquel
+  navegador tiene que volver a entrar y sus espacios abiertos se desconectan al momento.
 - **Cerrar todas las sesiones**: cierra tu sesión en todos los navegadores, **incluido este**, y te devuelve al
   inicio. Úsalo si has entrado en un ordenador ajeno o crees que alguien usa tu cuenta.
+- **Correo y notificaciones** (solo si el servidor envía correos): **Recibir por correo cuando me mencionen** (activado
+  por defecto) y el **Idioma de los correos**.
+
+Para **cambiar el correo** escribe el nuevo en **Perfil**, tu contraseña actual y pulsa **Guardar**. Si el servidor
+envía correos, el cambio **no es inmediato**: te mandamos un enlace a la dirección nueva (24 horas) y un aviso a la
+anterior; hasta que abras el enlace sigues entrando con el correo de antes. Sin correo, el cambio es inmediato.
+
+## Notificaciones {#notificaciones}
+
+Con la sesión iniciada, junto a tu nombre (y en la barra del editor de los espacios del servidor) está la **campana**.
+El número rojo son las notificaciones **sin leer**. Al pulsarla ves las últimas, con un enlace a lo notificado:
+
+- **Te han mencionado** en un comentario (ver [menciones](comentarios.md#menciones)), con un extracto.
+- **Te han compartido un espacio**: alguien te ha añadido como miembro, con tu rol.
+- **Tu rol ha cambiado** en un espacio, o **ahora eres su propietario**.
+- **Han restaurado una versión** de un espacio tuyo (si lo haces tú, no te avisa).
+
+Al abrir una notificación queda leída; **Marcar todo como leído** las marca todas. La campana se actualiza sola cada
+minuto. Si el servidor envía correos y tienes activado **Recibir por correo cuando me mencionen**, las menciones también
+te llegan por correo al momento.
 
 ### Qué pasa al cerrar sesiones {#cerrar-sesiones}
 
@@ -219,7 +297,8 @@ del servidor que tuviera abierto. Las claves API siguen funcionando.
 Si eres administrador, la pantalla **Cuenta** muestra además **Usuarios del servidor**: todas las cuentas con su
 nombre, correo, fecha de creación y si son administradoras.
 
-**Si alguien olvida su contraseña** (el servidor no envía correos, así que no hay "he olvidado mi contraseña"):
+**Si alguien olvida su contraseña** y el servidor envía correos, puede recuperarla sola con **¿Olvidaste tu
+contraseña?** (ver [He olvidado la contraseña](#recuperar-contrasena)). Si el servidor no envía correos:
 
 1. Entra en **Cuenta** y busca a esa persona en **Usuarios del servidor**.
 2. Pulsa **Restablecer** junto a su correo y confirma.
@@ -231,6 +310,15 @@ nombre, correo, fecha de creación y si son administradoras.
 No puedes restablecer tu propia contraseña desde esta lista; usa **Cambiar contraseña**.
 
 ## Errores comunes {#errores-comunes}
+
+**"Escribimos dos a la vez y se ha perdido un cambio."**
+Si los dos cambiasteis el mismo campo corto (por ejemplo, el nombre), gana el último: es lo esperado (ver
+[edición simultánea](#edicion-simultanea)). Los textos largos y los campos distintos se combinan. Si se perdió algo que
+necesitas, búscalo en el [Historial](historial.md).
+
+**"Sale «Hay una versión nueva de all-draw» y no sincroniza."**
+Esa pestaña es de una versión anterior de la aplicación. Pulsa **Recargar** (o recarga la página): lo que tenías está
+guardado en el navegador y se envía al volver.
 
 **"No veo el botón Compartir."**
 Solo lo ve el propietario, y solo en espacios del servidor. Si el espacio es local, súbelo primero con **Subir al

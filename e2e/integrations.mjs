@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const staticDir = process.env.STATIC_DIR ?? '/tmp/alldraw-integrations-web';
+const staticDir = path.resolve(process.env.STATIC_DIR ?? '/tmp/alldraw-integrations-web');
 const port = Number(process.env.PORT ?? 47410);
 if (!fs.existsSync(path.join(staticDir, 'index.html'))) {
   console.log(`compilando la web en ${staticDir}…`);

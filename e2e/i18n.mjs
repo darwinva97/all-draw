@@ -13,7 +13,7 @@
 // `LANGS=pt,fr` limita los idiomas.
 import { chromium } from 'playwright-core';
 import { existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import path, { join } from 'node:path';
 import { startServer } from './lib/server.mjs';
 
 const base = (process.env.BASE ?? 'http://127.0.0.1:4173').replace(/\/$/, '');
@@ -179,7 +179,7 @@ for (const lang of LANGS) {
 const hasApi = await fetch(base + '/api/status').then(r => r.ok && /json/.test(r.headers.get('content-type') ?? ''), () => false);
 let srv = null;
 if (!hasApi) {
-  const staticDir = process.env.STATIC_DIR ?? '/tmp/alldraw-i18n-dist';
+  const staticDir = path.resolve(process.env.STATIC_DIR ?? '/tmp/alldraw-i18n-dist');
   if (existsSync(join(staticDir, 'index.html'))) {
     const saved = process.env.BASE; delete process.env.BASE;
     srv = await startServer({ staticDir });

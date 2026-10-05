@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const staticDir = process.env.STATIC_DIR ?? '/tmp/alldraw-accounts-web';
+const staticDir = path.resolve(process.env.STATIC_DIR ?? '/tmp/alldraw-accounts-web'); // absoluta: el servidor arranca en otro directorio
 const port = Number(process.env.PORT ?? 47390);
 if (!fs.existsSync(path.join(staticDir, 'index.html'))) { console.error(`falta la app compilada en ${staticDir} (vite build --outDir ${staticDir})`); process.exit(2); }
 

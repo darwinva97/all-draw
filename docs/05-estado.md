@@ -115,3 +115,21 @@ pnpm gen:archimate              # regenera el pack desde _research/archi
 - **Portada, galería de 12 plantillas, recorrido guiado, ayuda contextual**, iconos propios, avisos y diálogos propios, estados de carga/error/sin conexión, aviso de versión nueva.
 - **Producción**: exportar y borrar la cuenta, cambiar nombre/correo, logs JSON, `/api/status`, `/metrics`, errores de cliente, `security.txt`, cierre ordenado, límites anti-abuso (formulario, espacios por cuenta, tamaño de documento, conexiones), IP real tras proxies de confianza, mantenimiento y simulacro de restauración semanales.
 - **QA**: informe exploratorio de 82 fallos (`docs/qa/2026-10-03-informe.md`), todos tratados en cinco frentes (lienzo, paneles y accesibilidad, idioma, importar/exportar, servidor y cuenta). Destacan: conectar soltando sobre el nodo, compartimentos UML/ER, menús dentro de pantalla y con teclado, importar se puede deshacer, secuencia en SVG, Mermaid de estados/secuencia/clases, sesiones cerradas que cortan la edición, errores traducidos por código, campos y opciones legibles en ambos idiomas.
+
+## Novena tanda: todo salvo uso comercial (5 de octubre de 2026)
+
+all-draw es y seguirá siendo gratuito. Añadido y desplegado:
+- **Operaciones**: copias cifradas en Backblaze (diarias y semanales, 90 días), monitor externo con avisos push y página de estado (https://alldraw-monitor.darwin-sva-97.workers.dev), Cloudflare como respaldo de solo lectura sincronizado cada noche (03:47), rate limit real en el worker.
+- **Cuentas**: correo agnóstico (SMTP/HTTP, apagado hasta tener proveedor), recuperar contraseña, verificar correo, sesiones activas, enlaces caducados que expulsan, centro de notificaciones.
+- **Colaboración**: registros como `Y.Map` por campo y textos largos como `Y.Text`; migración de documentos antiguos; historial con vista previa, comparación y aviso de restauración.
+- **Formatos**: importar draw.io y Visio, exportar PDF, lenguaje de texto (DSL) con panel de edición en vivo.
+- **Notaciones**: UML casos de uso, componentes, despliegue y actividad, Gantt (vista propia), DDD; 18 plantillas.
+- **Simulación** de BPMN y máquinas de estados; **generación de código** (TypeScript, Java, SQL, XState, OpenAPI, Structurizr).
+- **Editor**: asistente de conexión, crear y conectar, Ctrl+K con acciones, favoritos y recientes, ayuda por campo, montaje por tandas.
+- **Integraciones**: webhooks firmados (Slack, Teams, Discord), MCP remoto en `/mcp`, inserción `/embed` con oEmbed.
+- **Idiomas**: español, inglés, portugués y francés (diccionarios perezosos).
+- **Calidad**: regresión visual de 70 capturas en CI, capturas del manual en inglés.
+
+Totales: 1.127 tests unitarios y 79 del worker; 20 conjuntos de pruebas de navegador; CI con 6 trabajos en verde.
+
+Pendiente fuera de nuestro alcance: proveedor de correo (credenciales AWS del vault caducadas).

@@ -100,3 +100,14 @@ export function useCategoryState(): Record<string, Record<string, boolean>> {
 /** Claves `kind:id` de lo último elegido en Ctrl+K (acciones, vistas, elementos). */
 export const cmdkRecent = (): string[] => read(CMDK_RECENT_KEY, EMPTY, isStrings);
 export function noteCmdkChoice(key: string): void { write(CMDK_RECENT_KEY, pushRecent(cmdkRecent(), key, CMDK_RECENT_MAX)); }
+
+// ---------------------------------------------------------------- lienzo: rueda del ratón
+export const WHEEL_KEY = 'alldraw:canvas:wheel';
+/** `pan`: la rueda desplaza y Ctrl/⌘+rueda hace zoom (como Figma, draw.io o Archi). `zoom`: la rueda hace zoom. */
+export type WheelMode = 'pan' | 'zoom';
+const isWheelMode = (v: unknown): v is WheelMode => v === 'pan' || v === 'zoom';
+export const wheelMode = (): WheelMode => read(WHEEL_KEY, 'pan', isWheelMode);
+export function setWheelMode(mode: WheelMode): void { write(WHEEL_KEY, mode); }
+export function useWheelMode(): WheelMode {
+  return useSyncExternalStore(cb => subscribe(WHEEL_KEY, cb), wheelMode, wheelMode);
+}

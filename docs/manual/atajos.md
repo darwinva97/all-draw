@@ -13,7 +13,8 @@ Dentro del editor, pulsa **?** para ver un resumen en pantalla (o el botón **At
 Hay dos clases de atajos:
 
 - **Globales**: funcionan en cualquier parte del editor mientras no estés escribiendo en un campo. Son
-  **Ctrl+K**, **Ctrl+F**, **?** y **F2** (y **Ctrl+Shift+E**, que funciona incluso escribiendo).
+  **Ctrl+K**, **Ctrl+F**, **?** y **F2** (y **Ctrl+Shift+E**, **Ctrl+B** y **Ctrl+Alt+B**, que funcionan incluso
+  escribiendo).
 - **Del lienzo**: el resto (copiar, pegar, mover con flechas, zoom, borrar…). Solo funcionan cuando el foco está
   en el lienzo. Si un atajo "no hace nada", **haz clic en una zona vacía del lienzo** y vuelve a probar.
 
@@ -27,6 +28,8 @@ los atajos del lienzo no se disparan. Así **Supr** borra letras y no nodos.
 | **Ctrl+K** o **Ctrl+F** | Abre (o cierra) la búsqueda: elementos, vistas y acciones |
 | **?** | Abre (o cierra) el panel de atajos |
 | **Ctrl+Shift+E** | Abre (o cierra) el [panel de texto](dsl.md#editar-como-texto) |
+| **Ctrl+B** | Oculta (o muestra) el panel izquierdo: vistas y paleta |
+| **Ctrl+Alt+B** | Oculta (o muestra) el panel derecho: el inspector |
 | **Esc** | Cierra menús, paneles y diálogos; cancela el renombrado |
 | **Shift+F10** o tecla **Menú** | Abre el menú contextual de lo seleccionado en el lienzo (o el del lienzo, sin selección) |
 | **Ctrl+Z** | Deshacer |
@@ -76,6 +79,24 @@ En una rejilla capas × etapas, lo que pegas va a la celda que está bajo el cur
 | **-** | Alejar |
 | **Ctrl+0** | Zoom al 100 % |
 | **Ctrl+Shift+F** | Ajustar a la vista (encuadra todos los nodos) |
+| **Ctrl+rueda** (o pellizco en el panel táctil) | Acercar o alejar con el ratón |
+
+## Moverse por el lienzo {#moverse}
+
+Como en Figma o Illustrator, puedes desplazar la vista sin miedo a mover nodos, aunque estés tan cerca que los
+nodos y las relaciones ocupen toda la pantalla:
+
+| Atajo | Qué hace |
+|---|---|
+| **Espacio** (mantener) + arrastrar | Desplaza la vista desde cualquier sitio, también encima de un nodo o una relación. No mueve ni selecciona nada |
+| Arrastrar con el **botón central** (la rueda pulsada) | Igual, sin tocar el teclado |
+| **H** | Herramienta **mano**: mientras está activa, arrastrar siempre desplaza y un clic no selecciona. **V** o **Esc** vuelven a la selección normal. También está el botón de la mano abajo a la izquierda del lienzo |
+| **Rueda** | Desplaza en vertical; con **Shift**, en horizontal. En el panel táctil del portátil, desliza con dos dedos |
+| Arrastrar por **dentro de un contenedor** | Si el contenedor (un Grouping, un grupo, un componente con cosas dentro…) no está seleccionado, desplaza la vista. Para moverlo, arrastra su **título** o su **borde**, o selecciónalo con un clic y arrastra por donde quieras |
+
+> [!TIP]
+> ¿Prefieres que la rueda acerque y aleje, como antes? Pulsa el botón del ratón que hay abajo a la izquierda del
+> lienzo, junto a la mano. La elección se recuerda en este navegador; **Ctrl+rueda** siempre hace zoom.
 
 ## Renombrar en línea {#renombrar}
 
@@ -147,12 +168,13 @@ En los diálogos (entrar, compartir, búsqueda, atajos, Espacio…):
 
 | Gesto | Dónde | Qué hace |
 |---|---|---|
-| Arrastrar | Fondo del lienzo | Desplaza la vista |
-| Rueda | Lienzo | Acerca o aleja |
+| Arrastrar | Fondo del lienzo, o interior de un contenedor sin seleccionar | Desplaza la vista |
+| Arrastrar con el botón central | Cualquier sitio del lienzo | Desplaza la vista (también encima de nodos) |
+| Rueda | Lienzo | Desplaza la vista (con **Shift**, en horizontal); con **Ctrl**, acerca o aleja. Ver [Moverse por el lienzo](#moverse) |
 | Doble clic | Fondo del lienzo | Acerca |
 | Arrastrar | Desde la paleta al lienzo | Crea un nodo (o una aparición, desde la pestaña **Modelo**) |
 | Clic | Un tipo de la paleta | Lo añade en un hueco libre cerca del centro del lienzo |
-| Arrastrar | Un nodo | Lo mueve; si lo sueltas dentro de un contenedor, lo anida |
+| Arrastrar | Un nodo | Lo mueve; si lo sueltas dentro de un contenedor, lo anida. Un contenedor sin seleccionar se arrastra por su título o su borde |
 | Arrastrar | Esquinas de un nodo seleccionado | Cambia su tamaño |
 | Arrastrar | Desde el borde inferior de un nodo hasta otro | Crea una relación (aparece el menú **Tipo de relación**). Mientras arrastras, el destino se marca en verde si vale y en rojo si no, con el motivo |
 | Arrastrar | Desde el borde inferior de un nodo hasta un hueco vacío | Menú **Crear y conectar**: crea un elemento ahí ya conectado (un solo Ctrl+Z lo deshace) |
@@ -172,9 +194,9 @@ Abajo a la izquierda del lienzo están también los botones de acercar, alejar y
 
 all-draw se adapta al tamaño de la pantalla:
 
-- **Escritorio** (1100 px o más): las tres columnas a la vista.
-- **Tableta** (de 700 a 1099 px): la barra tiene dos botones para **mostrar u ocultar** la columna de vistas y
-  paleta y la del inspector. La elección se recuerda.
+- **Escritorio** (1100 px o más) y **tableta** (de 700 a 1099 px): las tres columnas. Los botones de los extremos de
+  la barra (o **Ctrl+B** y **Ctrl+Alt+B**) **muestran u ocultan** la columna de vistas y paleta y la del inspector.
+  La elección se recuerda.
 - **Móvil** (menos de 700 px): el lienzo ocupa toda la pantalla y abajo aparece una barra con **Vistas**,
   **Añadir**, **Inspector** y **Más**. Cada botón abre una hoja que sube desde abajo.
 
@@ -198,6 +220,10 @@ deshacer y rehacer se quedan siempre en la barra superior.
 > edita el nombre arriba.
 
 ## Problemas frecuentes {#problemas-frecuentes}
+
+**Quiero moverme por el diagrama y acabo moviendo nodos.**
+Mantén **Espacio** mientras arrastras, arrastra con el botón central o activa la mano con **H**. Ver
+[Moverse por el lienzo](#moverse).
 
 **Un atajo no hace nada.**
 Haz clic en una zona vacía del lienzo para darle el foco. Si estás escribiendo en un campo, los atajos del

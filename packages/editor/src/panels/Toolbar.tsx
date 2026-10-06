@@ -97,14 +97,14 @@ export function Toolbar({ left, right, onSearch, onShortcuts, panels, compact, o
   }
   return (
     <header className="ad-toolbar">
-      {panels && <button className={`ad-btn ad-btn--panel ${panels.left ? 'is-on' : ''}`} onClick={panels.toggleLeft} aria-pressed={panels.left} title={t('Mostrar u ocultar vistas y paleta')} aria-label={t('Mostrar u ocultar vistas y paleta')}><Icon name="panelLeft" /></button>}
+      {panels && <button className={`ad-btn ad-btn--panel ${panels.left ? 'is-on' : ''}`} onClick={panels.toggleLeft} aria-pressed={panels.left} title={t('Mostrar u ocultar vistas y paleta (Ctrl+B)')} aria-label={t('Mostrar u ocultar vistas y paleta')}><Icon name="panelLeft" /></button>}
       {left}
       <Crumbs />
       <div className="ad-toolbar__spacer" />
       <ToolbarTools onSearch={onSearch} onShortcuts={onShortcuts} />
       {undoRedo}
       {right}
-      {panels && <button className={`ad-btn ad-btn--panel ${panels.right ? 'is-on' : ''}`} onClick={panels.toggleRight} aria-pressed={panels.right} title={t('Mostrar u ocultar el inspector')} aria-label={t('Mostrar u ocultar el inspector')}><Icon name="panelRight" /></button>}
+      {panels && <button className={`ad-btn ad-btn--panel ${panels.right ? 'is-on' : ''}`} onClick={panels.toggleRight} aria-pressed={panels.right} title={t('Mostrar u ocultar el inspector (Ctrl+Alt+B)')} aria-label={t('Mostrar u ocultar el inspector')}><Icon name="panelRight" /></button>}
     </header>
   );
 }

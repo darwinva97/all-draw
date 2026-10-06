@@ -13,7 +13,8 @@ l'éditeur, appuyez sur **?** pour afficher un résumé à l'écran (ou utilisez
 Il existe deux sortes de raccourcis :
 
 - **Globaux** : ils fonctionnent partout dans l'éditeur tant que vous n'êtes pas en train de saisir dans un champ. Ce sont **Ctrl+K**,
-  **Ctrl+F**, **?** et **F2** (ainsi que **Ctrl+Shift+E**, qui fonctionne même pendant la saisie).
+  **Ctrl+F**, **?** et **F2** (ainsi que **Ctrl+Shift+E**, **Ctrl+B** et **Ctrl+Alt+B**, qui fonctionnent même
+  pendant la saisie).
 - **Du canevas** : tous les autres (copier, coller, déplacer avec les flèches, zoom, supprimer…). Ils ne fonctionnent que lorsque le canevas a
   le focus. Si un raccourci « ne fait rien », **cliquez sur une zone vide du canevas** et réessayez.
 
@@ -27,6 +28,8 @@ ne se déclenchent pas. Ainsi, **Suppr** efface des lettres, pas des nœuds.
 | **Ctrl+K** ou **Ctrl+F** | Ouvre (ou ferme) la recherche : éléments, vues et actions |
 | **?** | Ouvre (ou ferme) le panneau des raccourcis |
 | **Ctrl+Shift+E** | Ouvre (ou ferme) le [panneau de texte](dsl.md#editar-como-texto) |
+| **Ctrl+B** | Masque (ou affiche) le panneau gauche : vues et palette |
+| **Ctrl+Alt+B** | Masque (ou affiche) le panneau droit : l'inspecteur |
 | **Esc** | Ferme les menus, panneaux et boîtes de dialogue ; annule le renommage |
 | **Shift+F10** ou la touche **Menu** | Ouvre le menu contextuel de la sélection sur le canevas (ou le menu du canevas, sans sélection) |
 | **Ctrl+Z** | Annuler |
@@ -76,6 +79,24 @@ Dans une grille couches × étapes, ce que vous collez va dans la cellule situé
 | **-** | Zoom arrière |
 | **Ctrl+0** | Zoom à 100 % |
 | **Ctrl+Shift+F** | Ajuster à la vue (cadre tous les nœuds) |
+| **Ctrl+molette** (ou pincement sur le pavé tactile) | Zoom avant ou arrière à la souris |
+
+## Se déplacer sur le canevas {#moverse}
+
+Comme dans Figma ou Illustrator, vous pouvez faire défiler la vue sans craindre de déplacer des nœuds, même lorsque
+vous êtes si près que les nœuds et les arêtes occupent tout l'écran :
+
+| Raccourci | Ce qu'il fait |
+|---|---|
+| **Espace** (maintenir) + glisser | Fait défiler la vue depuis n'importe où, y compris sur un nœud ou une arête. Ne déplace et ne sélectionne rien |
+| Glisser avec le **bouton du milieu** (la molette enfoncée) | Pareil, sans toucher au clavier |
+| **H** | **Outil main** : tant qu'il est actif, glisser fait toujours défiler la vue et un clic ne sélectionne pas. **V** ou **Esc** reviennent à la sélection normale. Le bouton de la main se trouve aussi en bas à gauche du canevas |
+| **Molette** | Fait défiler verticalement ; avec **Shift**, horizontalement. Sur le pavé tactile d'un ordinateur portable, faites glisser deux doigts |
+| Glisser **à l'intérieur d'un conteneur** | Si le conteneur (un Grouping, un groupe, un composant avec des éléments à l'intérieur…) n'est pas sélectionné, fait défiler la vue. Pour le déplacer, faites glisser son **titre** ou sa **bordure**, ou sélectionnez-le d'un clic et faites-le glisser par où vous voulez |
+
+> [!TIP]
+> Vous préférez que la molette zoome, comme avant ? Cliquez sur le bouton de la souris situé en bas à gauche du
+> canevas, à côté de la main. Ce choix est mémorisé dans ce navigateur ; **Ctrl+molette** zoome toujours.
 
 ## Renommer sur place {#renombrar}
 
@@ -147,12 +168,13 @@ Dans les boîtes de dialogue (connexion, partage, recherche, raccourcis, Espace�
 
 | Geste | Où | Ce qu'il fait |
 |---|---|---|
-| Glisser | Fond du canevas | Fait défiler la vue |
-| Molette | Canevas | Zoome en avant ou en arrière |
+| Glisser | Fond du canevas, ou intérieur d'un conteneur non sélectionné | Fait défiler la vue |
+| Glisser avec le bouton du milieu | N'importe où sur le canevas | Fait défiler la vue (même sur les nœuds) |
+| Molette | Canevas | Fait défiler la vue (avec **Shift**, horizontalement) ; avec **Ctrl**, zoome en avant ou en arrière. Voir [Se déplacer sur le canevas](#moverse) |
 | Double-clic | Fond du canevas | Zoome en avant |
 | Glisser | De la palette vers le canevas | Crée un nœud (ou une occurrence, depuis l'onglet **Modèle**) |
 | Clic | Un type de la palette | L'ajoute à un emplacement libre près du centre du canevas |
-| Glisser | Un nœud | Le déplace ; le déposer dans un conteneur l'y imbrique |
+| Glisser | Un nœud | Le déplace ; le déposer dans un conteneur l'y imbrique. Un conteneur non sélectionné se fait glisser par son titre ou sa bordure |
 | Glisser | Coins d'un nœud sélectionné | Le redimensionne |
 | Glisser | Du bord inférieur d'un nœud vers un autre nœud | Crée une relation (le menu **Type de relation** apparaît). Pendant le glissement, la cible devient verte si elle est valide et rouge sinon, avec la raison |
 | Glisser | Du bord inférieur d'un nœud vers un emplacement vide | Menu **Créer et connecter** : crée à cet endroit un élément déjà relié (un seul Ctrl+Z l'annule) |
@@ -172,8 +194,8 @@ Les boutons de zoom avant, de zoom arrière et d'ajustement à la vue se trouven
 
 all-draw s'adapte à la taille de l'écran :
 
-- **Ordinateur** (1100 px ou plus) : les trois colonnes sont visibles.
-- **Tablette** (de 700 à 1099 px) : la barre d'outils a deux boutons pour **afficher ou masquer** la colonne des vues et de la palette et
+- **Ordinateur** (1100 px ou plus) et **tablette** (de 700 à 1099 px) : les trois colonnes. Les boutons aux deux extrémités
+  de la barre d'outils (ou **Ctrl+B** et **Ctrl+Alt+B**) **affichent ou masquent** la colonne des vues et de la palette et
   la colonne de l'inspecteur. Votre choix est mémorisé.
 - **Téléphone** (moins de 700 px) : le canevas occupe tout l'écran et une barre apparaît en bas avec **Vues**,
   **Ajouter**, **Inspecteur** et **Plus**. Chaque bouton ouvre un panneau qui glisse depuis le bas.
@@ -198,6 +220,10 @@ barre du haut.
 > le nom en haut.
 
 ## Problèmes fréquents {#problemas-frecuentes}
+
+**Je veux me déplacer dans le diagramme et je finis par déplacer des nœuds.**
+Maintenez **Espace** pendant que vous faites glisser, faites glisser avec le bouton du milieu ou activez la main avec
+**H**. Voir [Se déplacer sur le canevas](#moverse).
 
 **Un raccourci ne fait rien.**
 Cliquez sur une zone vide du canevas pour lui donner le focus. Si vous êtes en train de saisir dans un champ, les raccourcis du canevas sont désactivés

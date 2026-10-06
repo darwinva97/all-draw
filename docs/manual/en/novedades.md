@@ -1,5 +1,11 @@
 # What's new
 
+## 6 October 2026 {#2026-10-06}
+
+- **Move around without moving nodes**: hold **Space** and drag, drag with the middle button or turn on the **hand** (**H**). The mouse wheel pans (**Ctrl+wheel** zooms), and dragging inside an unselected container moves the view. See [Moving around the canvas](atajos.md#moverse).
+- **Hide the panels** on desktop too: **Ctrl+B** (views and palette) and **Ctrl+Alt+B** (inspector), or the buttons at the ends of the bar.
+- **ArchiMate that looks like Archi**: no type name in every box (it can be turned on in the view), text that stays inside, container titles always visible, a black Junction and notes with a folded corner. Also in the exported SVG.
+
 ## 5 October 2026 {#2026-10-05}
 
 - **Portuguese and French**, alongside Spanish and English.

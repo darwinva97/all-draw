@@ -36,10 +36,10 @@ With a wide window (1100 px or more) you see everything at once:
 
 ### On a tablet {#tableta}
 
-Between 700 and 1099 px wide, both side columns can be hidden to give the canvas more room:
+Both side columns can be hidden to give the canvas more room:
 
-- The button at the far left of the bar (**Show or hide views and palette**) folds the left column.
-- The one at the far right (**Show or hide the inspector**) folds the inspector.
+- The button at the far left of the bar (**Show or hide views and palette**) or **Ctrl+B** folds the left column.
+- The one at the far right (**Show or hide the inspector**) or **Ctrl+Alt+B** folds the inspector.
 
 The app remembers in this browser which panels you left open.
 
@@ -183,7 +183,9 @@ Want to group things visually without creating relationships? Use a **Group** fr
 ## Moving, resizing and aligning {#mover}
 
 - **Move**: drag the node. With the keyboard, the **arrow keys** move it 1 px and **Shift + arrows** 10 px.
-- **Pan the canvas**: drag on an empty area. **Zoom**: mouse wheel, pinch on touch screens, the **+** / **−** keys, or
+- **Pan the canvas**: drag on an empty area or inside an unselected container, use the mouse wheel, or hold **Space**
+  (or the middle button) and drag from anywhere, even over a node. The **H** key turns on the hand (see
+  [Moving around the canvas](atajos.md#moverse)). **Zoom**: **Ctrl+wheel**, pinch, the **+** / **−** keys, or
   the buttons in the corner. **Ctrl+0** goes back to 100 % and **Ctrl+Shift+F** fits the whole view.
 - **Resize**: select the node and drag its corners. You can also type the width and height in the **Style** tab of the
   inspector.
@@ -406,8 +408,8 @@ refused](#conexion-rechazada).
 
 **"I can't see the palette and the inspector is not editable."**
 You are in **read-only** mode (read-only link or **read-only** role). Ask the owner for an edit link; see
-[Sharing and collaborating](compartir-y-colaborar.md#roles). On a tablet, also check that you have not hidden the
-panels with the buttons at the ends of the bar.
+[Sharing and collaborating](compartir-y-colaborar.md#roles). Also check that you have not hidden the panels with the
+buttons at the ends of the bar (or with **Ctrl+B** / **Ctrl+Alt+B**).
 
 **"I renamed a node and it changed in another view."**
 That is expected: both nodes are occurrences of the same element. If you wanted an independent copy, use

@@ -13,7 +13,8 @@ the editor, press **?** to see a summary on screen (or use the **Keyboard shortc
 There are two kinds of shortcuts:
 
 - **Global**: they work anywhere in the editor as long as you are not typing in a field. They are **Ctrl+K**,
-  **Ctrl+F**, **?** and **F2** (and **Ctrl+Shift+E**, which works even while typing).
+  **Ctrl+F**, **?** and **F2** (and **Ctrl+Shift+E**, **Ctrl+B** and **Ctrl+Alt+B**, which work even while
+  typing).
 - **Canvas**: all the others (copy, paste, move with arrows, zoom, delete…). They only work when the canvas has
   the focus. If a shortcut "does nothing", **click an empty area of the canvas** and try again.
 
@@ -27,6 +28,8 @@ do not fire. That way **Del** deletes letters, not nodes.
 | **Ctrl+K** or **Ctrl+F** | Opens (or closes) search: elements, views and actions |
 | **?** | Opens (or closes) the shortcuts panel |
 | **Ctrl+Shift+E** | Opens (or closes) the [text panel](dsl.md#editar-como-texto) |
+| **Ctrl+B** | Hides (or shows) the left panel: views and palette |
+| **Ctrl+Alt+B** | Hides (or shows) the right panel: the inspector |
 | **Esc** | Closes menus, panels and dialogs; cancels renaming |
 | **Shift+F10** or the **Menu** key | Opens the context menu of the selection on the canvas (or the canvas menu, with nothing selected) |
 | **Ctrl+Z** | Undo |
@@ -76,6 +79,24 @@ In a layers × stages grid, whatever you paste goes into the cell under the curs
 | **-** | Zoom out |
 | **Ctrl+0** | Zoom to 100% |
 | **Ctrl+Shift+F** | Fit to view (frames all nodes) |
+| **Ctrl+wheel** (or pinch on the touchpad) | Zoom in or out with the mouse |
+
+## Moving around the canvas {#moverse}
+
+As in Figma or Illustrator, you can pan the view without fear of moving nodes, even when you are zoomed in so far that
+nodes and edges fill the whole screen:
+
+| Shortcut | What it does |
+|---|---|
+| **Space** (hold) + drag | Pans the view from anywhere, including over a node or an edge. It does not move or select anything |
+| Drag with the **middle button** (the wheel pressed down) | The same, without touching the keyboard |
+| **H** | **Hand** tool: while it is on, dragging always pans and a click does not select. **V** or **Esc** go back to normal selection. There is also the hand button at the bottom left of the canvas |
+| **Wheel** | Scrolls vertically; with **Shift**, horizontally. On a laptop touchpad, swipe with two fingers |
+| Drag **inside a container** | If the container (a Grouping, a group, a component with things inside…) is not selected, it pans the view. To move it, drag its **title** or its **border**, or select it with a click and drag from anywhere |
+
+> [!TIP]
+> Prefer the wheel to zoom in and out, as before? Press the mouse button at the bottom left of the canvas, next to
+> the hand. The choice is remembered in this browser; **Ctrl+wheel** always zooms.
 
 ## Renaming inline {#renombrar}
 
@@ -147,12 +168,13 @@ In dialogs (sign in, share, search, shortcuts, Workspace…):
 
 | Gesture | Where | What it does |
 |---|---|---|
-| Drag | Canvas background | Pans the view |
-| Wheel | Canvas | Zooms in or out |
+| Drag | Canvas background, or inside an unselected container | Pans the view |
+| Drag with the middle button | Anywhere on the canvas | Pans the view (also over nodes) |
+| Wheel | Canvas | Pans the view (with **Shift**, horizontally); with **Ctrl**, zooms in or out. See [Moving around the canvas](#moverse) |
 | Double-click | Canvas background | Zooms in |
 | Drag | From the palette onto the canvas | Creates a node (or an appearance, from the **Model** tab) |
 | Click | A palette type | Adds it in a free spot near the center of the canvas |
-| Drag | A node | Moves it; dropping it inside a container nests it |
+| Drag | A node | Moves it; dropping it inside a container nests it. An unselected container is dragged by its title or its border |
 | Drag | Corners of a selected node | Resizes it |
 | Drag | From a node's bottom edge to another node | Creates a relation (the **Relationship type** menu appears). While you drag, the target turns green if it is valid and red if not, with the reason |
 | Drag | From the bottom edge of a node to an empty spot | **Create and connect** menu: creates an element there, already connected (a single Ctrl+Z undoes it) |
@@ -172,9 +194,9 @@ The zoom in, zoom out and fit-to-view buttons are also at the bottom left of the
 
 all-draw adapts to the screen size:
 
-- **Desktop** (1100 px or wider): all three columns visible.
-- **Tablet** (700 to 1099 px): the toolbar has two buttons to **show or hide** the views-and-palette column and
-  the inspector column. Your choice is remembered.
+- **Desktop** (1100 px or wider) and **tablet** (700 to 1099 px): all three columns. The buttons at both ends of the
+  toolbar (or **Ctrl+B** and **Ctrl+Alt+B**) **show or hide** the views-and-palette column and the inspector column.
+  Your choice is remembered.
 - **Phone** (under 700 px): the canvas fills the screen and a bar appears at the bottom with **Views**,
   **Add**, **Inspector** and **More**. Each button opens a sheet that slides up from the bottom.
 
@@ -198,6 +220,10 @@ top bar.
 > the name at the top.
 
 ## Common problems {#problemas-frecuentes}
+
+**I want to move around the diagram and I end up moving nodes.**
+Hold **Space** while you drag, drag with the middle button or turn on the hand with **H**. See
+[Moving around the canvas](#moverse).
 
 **A shortcut does nothing.**
 Click an empty area of the canvas to give it the focus. If you are typing in a field, canvas shortcuts are off

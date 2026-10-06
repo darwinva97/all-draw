@@ -2229,5 +2229,25 @@ export const pt: Record<string, string> = {
   // ==== Aspecto Archi
   'Mostrar el nombre del tipo': 'Mostrar o nome do tipo',
   'En ArchiMate, el icono de la esquina ya dice el tipo (como en Archi).': 'No ArchiMate, o ícone do canto já indica o tipo (como no Archi).',
+  // ==== Moverse por el lienzo y paneles
+  'Mano activada: arrastrar mueve la vista (H o Esc para volver a seleccionar)': 'Mão ativada: arrastar move a visão (H ou Esc para voltar a selecionar)',
+  'Mano (H): arrastrar mueve la vista sin mover nada. También: mantener Espacio o el botón central': 'Mão (H): arrastar move a visão sem mover nada. Também: manter Espaço ou o botão do meio',
+  'Herramienta mano': 'Ferramenta mão',
+  'Rueda del ratón: desplaza (Ctrl+rueda hace zoom) · clic para que la rueda haga zoom': 'Roda do mouse: desloca (Ctrl+roda faz zoom) · clique para a roda fazer zoom',
+  'Rueda del ratón: hace zoom · clic para que la rueda desplace': 'Roda do mouse: faz zoom · clique para a roda deslocar',
+  'La rueda del ratón hace zoom': 'A roda do mouse faz zoom',
+  'Mostrar u ocultar vistas y paleta (Ctrl+B)': 'Mostrar ou ocultar visões e paleta (Ctrl+B)',
+  'Mostrar u ocultar el inspector (Ctrl+Alt+B)': 'Mostrar ou ocultar o inspetor (Ctrl+Alt+B)',
+  'Mostrar u ocultar el panel izquierdo (vistas y paleta)': 'Mostrar ou ocultar o painel esquerdo (visões e paleta)',
+  'Mostrar u ocultar el panel derecho (inspector)': 'Mostrar ou ocultar o painel direito (inspetor)',
+  'Espacio+arrastrar': 'Espaço+arrastar',
+  'Mover la vista (también sobre nodos)': 'Mover a visão (também sobre nós)',
+  'Botón central+arrastrar': 'Botão do meio+arrastar',
+  'Mover la vista': 'Mover a visão',
+  'Herramienta mano (V o Esc: volver a seleccionar)': 'Ferramenta mão (V ou Esc: voltar a selecionar)',
+  'Rueda / Shift+rueda': 'Roda / Shift+roda',
+  'Desplazar en vertical / horizontal': 'Deslocar na vertical / horizontal',
+  'Ctrl+rueda': 'Ctrl+roda',
+  'Acercar / alejar con el ratón': 'Aproximar / afastar com o mouse',
 };
 Object.assign(pt, ptDocs, ptFields, ptMessages, ptApi);

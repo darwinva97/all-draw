@@ -36,6 +36,8 @@ import { useGanttCanvas } from './views/gantt-canvas';
 import { deleteSelection } from './delete-selection';
 import { filterBpmnConnections } from './bpmn-rules';
 import { compartmentHeight } from './nodes/compartments';
+import { usePanGestures } from './pan';
+import { useWheelMode, setWheelMode } from './prefs';
 import { darken } from './nodes/shapes';
 import { groupRelationOptions, pruneBridges, explainNoRelation, type RelationGroups } from './edges/relation-options';
 import { LiteEdge, type LiteEdgeData } from './edges/LiteEdge';
@@ -270,6 +272,10 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     return shared.viewports.get(viewId) ?? (size.w && size.h ? fitViewport(rfNodes, size.w, size.h, minimapShown()) : undefined) ?? EMPTY_VIEWPORT;
   }, [viewId, size]); // eslint-disable-line react-hooks/exhaustive-deps -- solo al abrir la vista
   const onMoveEnd = useCallback((_: unknown, vp: Viewport) => { if (viewId) shared.viewports.set(viewId, vp); }, [viewId, shared]);
+  // Moverse sin mover nodos: Espacio, herramienta mano (H), botón central, interior de contenedores, rueda (ver pan.ts).
+  const [hand, setHand] = useState(false);
+  const wheel = useWheelMode();
+  const { spaceHeld, panning } = usePanGestures(wrapper, rf, { hand, wheel, onPanEnd: vp => onMoveEnd(null, vp) });
 
   // Antes del montaje de <ReactFlow> el almacén aún tiene el zoom por defecto: se usa el del encuadre inicial.
   const lowZoom = useStore(s => (s.domNode ? s.transform[2] : initialViewport?.zoom ?? 1) < LOW_DETAIL_ZOOM);
@@ -742,7 +748,9 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
     if (mod && e.key === '0') { e.preventDefault(); ed.canvas.current?.resetZoom(); return; }
     if (!mod && (e.key === '+' || e.key === '=')) { e.preventDefault(); rf.zoomIn({ duration: 150 }); return; }
     if (!mod && e.key === '-') { e.preventDefault(); rf.zoomOut({ duration: 150 }); return; }
-    if (e.key === 'Escape') { setPicker(null); setCreateMenu(null); setMenu(null); setPaneMenu(null); setEdgeMenu(null); setRenaming(null); return; }
+    if (!mod && !e.altKey && !e.shiftKey && key === 'h') { e.preventDefault(); setHand(h => !h); return; }
+    if (!mod && !e.altKey && !e.shiftKey && key === 'v') { setHand(false); return; }
+    if (e.key === 'Escape') { setHand(false); setPicker(null); setCreateMenu(null); setMenu(null); setPaneMenu(null); setEdgeMenu(null); setRenaming(null); return; }
     if (readOnly) return;
     if (mod && key === 'c') { if (copy()) e.preventDefault(); return; }
     if (mod && key === 'v') { e.preventDefault(); void pasteFromClipboard(e.shiftKey ? 'clone' : 'appearance'); return; }
@@ -913,7 +921,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
   ] : [];
 
   return (
-    <div ref={wrapper} className="ad-canvas" onKeyDown={onKeyDown} tabIndex={0} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave} data-mounting={mounting ? batchPlan!.order.length - (allowed?.size ?? 0) : undefined}>
+    <div ref={wrapper} className={`ad-canvas${hand || spaceHeld ? ' is-hand' : ''}${panning ? ' is-panning' : ''}`} onKeyDown={onKeyDown} tabIndex={0} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave} data-mounting={mounting ? batchPlan!.order.length - (allowed?.size ?? 0) : undefined}>
       <NodeEnvContext.Provider value={nodeEnv}>
       {size && <ReactFlow
         nodes={shownNodes} edges={rfEdges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
@@ -926,7 +934,7 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         onPaneContextMenu={onPaneContextMenu}
         onPaneClick={() => { setPicker(null); setCreateMenu(null); setMenu(null); setPaneMenu(null); setEdgeMenu(null); }}
         defaultViewport={initialViewport} fitView={!initialViewport} onMoveEnd={onMoveEnd}
-        minZoom={MIN_ZOOM} maxZoom={MAX_ZOOM} deleteKeyCode={null} multiSelectionKeyCode="Shift" selectionKeyCode="Shift"
+        minZoom={MIN_ZOOM} maxZoom={MAX_ZOOM} deleteKeyCode={null} multiSelectionKeyCode="Shift" selectionKeyCode="Shift" panActivationKeyCode={null}
         onlyRenderVisibleElements={rfNodes.length > VIRTUALIZE_FROM}
         nodesDraggable={!readOnly} nodesConnectable={!readOnly} elementsSelectable
         snapToGrid={snap && !alt && !gantt.active} snapGrid={SNAP_GRID}
@@ -939,6 +947,12 @@ function CanvasInner({ onRequestLayout, shared }: CanvasProps & { shared: Canvas
         <Background gap={16} />
         <Controls showInteractive={false} showFitView={false}>
           <ControlButton className="react-flow__controls-fitview" onClick={() => fitNodes()} title={t('Ajustar a la vista')} aria-label={t('Ajustar a la vista')}><Icon name="fit" size={12} /></ControlButton>
+          <ControlButton className={`ad-control-hand${hand ? ' is-on' : ''}`} onClick={() => setHand(h => !h)} aria-pressed={hand}
+            title={hand ? t('Mano activada: arrastrar mueve la vista (H o Esc para volver a seleccionar)') : t('Mano (H): arrastrar mueve la vista sin mover nada. También: mantener Espacio o el botón central')}
+            aria-label={t('Herramienta mano')}><Icon name="hand" size={14} /></ControlButton>
+          <ControlButton className={`ad-control-wheel${wheel === 'zoom' ? ' is-on' : ''}`} onClick={() => setWheelMode(wheel === 'pan' ? 'zoom' : 'pan')} aria-pressed={wheel === 'zoom'}
+            title={wheel === 'pan' ? t('Rueda del ratón: desplaza (Ctrl+rueda hace zoom) · clic para que la rueda haga zoom') : t('Rueda del ratón: hace zoom · clic para que la rueda desplace')}
+            aria-label={t('La rueda del ratón hace zoom')}><Icon name="mouse" size={14} /></ControlButton>
         </Controls>
         {/* Minimapa más pequeño y translúcido (opaco al pasar el puntero); las figuras blancas llevan borde. */}
         <MiniMap pannable zoomable className="ad-minimap" style={{ width: MINIMAP.w, height: MINIMAP.h }}

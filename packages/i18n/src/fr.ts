@@ -2229,5 +2229,25 @@ export const fr: Record<string, string> = {
   // ==== Aspecto Archi
   'Mostrar el nombre del tipo': 'Afficher le nom du type',
   'En ArchiMate, el icono de la esquina ya dice el tipo (como en Archi).': 'En ArchiMate, l’icône du coin indique déjà le type (comme dans Archi).',
+  // ==== Moverse por el lienzo y paneles
+  'Mano activada: arrastrar mueve la vista (H o Esc para volver a seleccionar)': 'Main activée : glisser déplace la vue (H ou Échap pour revenir à la sélection)',
+  'Mano (H): arrastrar mueve la vista sin mover nada. También: mantener Espacio o el botón central': 'Main (H) : glisser déplace la vue sans rien déplacer. Aussi : maintenir Espace ou le bouton du milieu',
+  'Herramienta mano': 'Outil main',
+  'Rueda del ratón: desplaza (Ctrl+rueda hace zoom) · clic para que la rueda haga zoom': 'Molette : fait défiler (Ctrl+molette zoome) · cliquer pour que la molette zoome',
+  'Rueda del ratón: hace zoom · clic para que la rueda desplace': 'Molette : zoome · cliquer pour que la molette fasse défiler',
+  'La rueda del ratón hace zoom': 'La molette zoome',
+  'Mostrar u ocultar vistas y paleta (Ctrl+B)': 'Afficher ou masquer les vues et la palette (Ctrl+B)',
+  'Mostrar u ocultar el inspector (Ctrl+Alt+B)': 'Afficher ou masquer l’inspecteur (Ctrl+Alt+B)',
+  'Mostrar u ocultar el panel izquierdo (vistas y paleta)': 'Afficher ou masquer le panneau gauche (vues et palette)',
+  'Mostrar u ocultar el panel derecho (inspector)': 'Afficher ou masquer le panneau droit (inspecteur)',
+  'Espacio+arrastrar': 'Espace+glisser',
+  'Mover la vista (también sobre nodos)': 'Déplacer la vue (même sur les nœuds)',
+  'Botón central+arrastrar': 'Bouton du milieu+glisser',
+  'Mover la vista': 'Déplacer la vue',
+  'Herramienta mano (V o Esc: volver a seleccionar)': 'Outil main (V ou Échap : revenir à la sélection)',
+  'Rueda / Shift+rueda': 'Molette / Shift+molette',
+  'Desplazar en vertical / horizontal': 'Défiler verticalement / horizontalement',
+  'Ctrl+rueda': 'Ctrl+molette',
+  'Acercar / alejar con el ratón': 'Zoomer / dézoomer avec la souris',
 };
 Object.assign(fr, frDocs, frFields, frMessages, frApi);

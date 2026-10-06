@@ -157,6 +157,9 @@ export function Editor({ layout, toolbarLeft, toolbarRight, theme, onRequestLayo
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
       if (mod && e.shiftKey && !e.altKey && key === 'e') { e.preventDefault(); setTextOpen(o => !o); return; }
+      // Ctrl+B: panel izquierdo (vistas y paleta); Ctrl+Alt+B: inspector (como las barras laterales de VS Code).
+      // Por `code`: con Alt, en Mac `key` es «∫».
+      if (mod && !e.shiftKey && e.code === 'KeyB' && mode !== 'mobile') { e.preventDefault(); togglePanel(e.altKey ? 'right' : 'left'); return; }
       if (mod && (key === 'k' || key === 'f') && !e.shiftKey && !e.altKey) { e.preventDefault(); setSearchOpen(o => !o); setKeysOpen(false); return; }
       const tg = e.target as HTMLElement | null;
       const typing = !!tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.tagName === 'SELECT' || tg.isContentEditable);
@@ -171,7 +174,7 @@ export function Editor({ layout, toolbarLeft, toolbarRight, theme, onRequestLayo
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [readOnly, selection, setRenaming, setKeysOpen]);
+  }, [readOnly, selection, setRenaming, setKeysOpen, mode, togglePanel]);
 
   const curView = useRecord('views', ed.viewId);
   const libraries = useCollection('libraries');
@@ -264,14 +267,15 @@ export function Editor({ layout, toolbarLeft, toolbarRight, theme, onRequestLayo
     {simButton}
     {textButton}
   </>;
-  const mobile = mode === 'mobile', tablet = mode === 'tablet';
-  const showLeft = !mobile && (!tablet || panels.left);
-  const showRight = !mobile && (!tablet || panels.right);
+  const mobile = mode === 'mobile';
+  // Escritorio y tableta: los paneles se ocultan con los botones de la barra o Ctrl+B / Ctrl+Alt+B. Móvil: hojas.
+  const showLeft = !mobile && panels.left;
+  const showRight = !mobile && panels.right;
   const sheetTitle: Record<Sheet, string> = { views: t('Vistas'), add: t('Añadir'), inspector: t('Inspector'), more: t('Más') };
   return (
     <div className={`ad-editor theme-${effectiveTheme} ad-editor--${mode} ${readOnly ? 'is-readonly' : ''} ${showLeft ? '' : 'is-left-hidden'} ${showRight ? '' : 'is-right-hidden'}`}>
       <Toolbar left={left} right={mobile ? undefined : toolbarRight} onSearch={() => setSearchOpen(true)} onShortcuts={() => setKeysOpen(true)}
-        panels={tablet ? panelToggles : undefined} compact={mobile} onMore={() => setSheet(s => (s === 'more' ? null : 'more'))} />
+        panels={mobile ? undefined : panelToggles} compact={mobile} onMore={() => setSheet(s => (s === 'more' ? null : 'more'))} />
       <div className="ad-editor__body">
         {showLeft && <div className="ad-editor__left"><ViewsPanel />{!readOnly && <Palette />}</div>}
         <main className={`ad-editor__main${simOpen ? ' ad-sim-on' : ''}`}><SimMarksContext.Provider value={simOpen ? simMarks : NO_SIM_MARKS}><Canvas onRequestLayout={onRequestLayout} /></SimMarksContext.Provider><Problems />

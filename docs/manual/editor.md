@@ -38,10 +38,11 @@ Con una ventana ancha (1100 px o más) ves todo a la vez:
 
 ### En tableta {#tableta}
 
-Entre 700 y 1099 px de ancho, las dos columnas laterales se pueden ocultar para dejar más sitio al lienzo:
+Las dos columnas laterales se pueden ocultar para dejar más sitio al lienzo:
 
-- El botón del extremo izquierdo de la barra (**Mostrar u ocultar vistas y paleta**) pliega la columna izquierda.
-- El del extremo derecho (**Mostrar u ocultar el inspector**) pliega el inspector.
+- El botón del extremo izquierdo de la barra (**Mostrar u ocultar vistas y paleta**) o **Ctrl+B** pliega la columna
+  izquierda.
+- El del extremo derecho (**Mostrar u ocultar el inspector**) o **Ctrl+Alt+B** pliega el inspector.
 
 La aplicación recuerda en este navegador qué paneles dejaste abiertos.
 
@@ -192,7 +193,9 @@ estado dentro de un estado compuesto.
 ## Mover, redimensionar y alinear {#mover}
 
 - **Mover**: arrastra el nodo. Con el teclado, las **flechas** lo mueven 1 px y **Shift + flechas**, 10 px.
-- **Desplazar el lienzo**: arrastra sobre una zona vacía. **Zoom**: rueda del ratón, pellizco en pantallas táctiles,
+- **Desplazar el lienzo**: arrastra sobre una zona vacía o por dentro de un contenedor sin seleccionar, usa la rueda
+  del ratón, o mantén **Espacio** (o el botón central) y arrastra desde cualquier sitio, también encima de un nodo. La
+  tecla **H** activa la mano (ver [Moverse por el lienzo](atajos.md#moverse)). **Zoom**: **Ctrl+rueda**, pellizco,
   las teclas **+** / **−**, o los botones de la esquina. **Ctrl+0** vuelve al 100 % y **Ctrl+Shift+F** encuadra toda la
   vista.
 - **Redimensionar**: selecciona el nodo y arrastra sus esquinas. También puedes escribir el ancho y el alto en la
@@ -415,8 +418,8 @@ conexión](#conexion-rechazada).
 
 **"No veo la paleta ni el inspector editable."**
 Estás en modo **solo lectura** (enlace de lectura o rol **solo lectura**). Pide al propietario un enlace de edición; ver
-[Compartir y colaborar](compartir-y-colaborar.md#roles). En tableta, comprueba también que no hayas ocultado los
-paneles con los botones de los extremos de la barra.
+[Compartir y colaborar](compartir-y-colaborar.md#roles). Comprueba también que no hayas ocultado los paneles con los
+botones de los extremos de la barra (o con **Ctrl+B** / **Ctrl+Alt+B**).
 
 **"Cambié el nombre de un nodo y cambió en otra vista."**
 Es lo esperado: los dos nodos son apariciones del mismo elemento. Si querías una copia independiente, usa

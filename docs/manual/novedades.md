@@ -1,5 +1,11 @@
 # Novedades
 
+## 6 de octubre de 2026 {#2026-10-06}
+
+- **Moverse sin mover nodos**: mantén **Espacio** y arrastra, arrastra con el botón central o activa la **mano** (**H**). La rueda del ratón desplaza (**Ctrl+rueda** hace zoom), y arrastrar por dentro de un contenedor sin seleccionar mueve la vista. Ver [Moverse por el lienzo](atajos.md#moverse).
+- **Ocultar los paneles** también en escritorio: **Ctrl+B** (vistas y paleta) y **Ctrl+Alt+B** (inspector), o los botones de los extremos de la barra.
+- **ArchiMate con el aspecto de Archi**: sin el nombre del tipo en cada caja (se puede activar en la vista), textos que no se salen, títulos de contenedor siempre visibles, Junction negra y notas con la esquina doblada. También en el SVG exportado.
+
 ## 5 de octubre de 2026 {#2026-10-05}
 
 - **Portugués y francés**, además de español e inglés.

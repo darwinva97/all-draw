@@ -98,6 +98,10 @@
 .ad-node:hover .ad-handle, .react-flow__node.selected .ad-handle, .ad-canvas .react-flow.connecting .ad-handle { opacity: 1; }
 .ad-handle--body { }
 .ad-handle--inert { opacity: 0; pointer-events: none; }
+/* Mano (H) o Espacio mantenido: arrastrar mueve la vista, también sobre nodos y aristas (pan.ts). */
+.ad-canvas.is-hand :is(.react-flow__pane, .react-flow__node, .react-flow__node *, .react-flow__edge, .react-flow__edge *) { cursor: grab !important; }
+.ad-canvas.is-panning, .ad-canvas.is-panning * { cursor: grabbing !important; }
+.ad-editor .ad-canvas .react-flow__controls .react-flow__controls-button.is-on { color: var(--ad-accent); background: var(--ad-accent-soft, rgba(37, 99, 235, .12)); }
 .ad-ports { position: absolute; inset: 0; pointer-events: none; }
 .ad-port { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; }
 .ad-port .ad-handle--port { opacity: 1; width: 9px; height: 9px; background: #f59e0b; border-radius: 2px; pointer-events: all; }
@@ -900,3 +904,5 @@ button.ad-tr-count { color: var(--ad-text); }
 .ad-visual--core-note .ad-visual__text { position: relative; font-size: 11px; line-height: 14px; white-space: pre-line; overflow-wrap: normal; word-break: normal; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; text-align: left; max-height: 100%; }
 .ad-editor.theme-dark .ad-visual.ad-visual--core-note { background: transparent; border-color: transparent; }
 .ad-visual--core-note.is-selected { outline-offset: 2px; }
+/* Iconos propios en los controles del lienzo: de trazo, sin el relleno que React Flow pone a sus SVG. */
+.ad-canvas .react-flow__controls-button svg.ad-icon { fill: none; max-width: 14px; max-height: 14px; }

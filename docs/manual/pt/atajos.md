@@ -13,7 +13,8 @@ editor, pressione **?** para ver um resumo na tela (ou use o botão **Atalhos de
 Há dois tipos de atalhos:
 
 - **Globais**: funcionam em qualquer parte do editor, desde que você não esteja digitando em um campo. São **Ctrl+K**,
-  **Ctrl+F**, **?** e **F2** (e **Ctrl+Shift+E**, que funciona até mesmo enquanto você digita).
+  **Ctrl+F**, **?** e **F2** (e **Ctrl+Shift+E**, **Ctrl+B** e **Ctrl+Alt+B**, que funcionam até mesmo enquanto
+  você digita).
 - **Da tela**: todos os outros (copiar, colar, mover com as setas, zoom, excluir…). Só funcionam quando a tela tem
   o foco. Se um atalho “não faz nada”, **clique em uma área vazia da tela** e tente de novo.
 
@@ -27,6 +28,8 @@ atalhos da tela não são acionados. Assim, **Del** apaga letras, e não nós.
 | **Ctrl+K** ou **Ctrl+F** | Abre (ou fecha) a busca: elementos, visões e ações |
 | **?** | Abre (ou fecha) o painel de atalhos |
 | **Ctrl+Shift+E** | Abre (ou fecha) o [painel de texto](dsl.md#editar-como-texto) |
+| **Ctrl+B** | Oculta (ou mostra) o painel esquerdo: visões e paleta |
+| **Ctrl+Alt+B** | Oculta (ou mostra) o painel direito: o inspetor |
 | **Esc** | Fecha menus, painéis e diálogos; cancela a renomeação |
 | **Shift+F10** ou a tecla **Menu** | Abre o menu de contexto da seleção na tela (ou o menu da tela, sem nada selecionado) |
 | **Ctrl+Z** | Desfazer |
@@ -76,6 +79,24 @@ Em uma grade de camadas × etapas, o que você colar vai para a célula sob o cu
 | **-** | Afastar |
 | **Ctrl+0** | Zoom em 100% |
 | **Ctrl+Shift+F** | Ajustar à visão (enquadra todos os nós) |
+| **Ctrl+roda** (ou pinça no touchpad) | Aproximar ou afastar com o mouse |
+
+## Mover-se pela tela {#moverse}
+
+Como no Figma ou no Illustrator, você pode deslocar a visão sem medo de mover nós, mesmo quando está tão perto que
+os nós e as arestas ocupam a tela inteira:
+
+| Atalho | O que faz |
+|---|---|
+| **Espaço** (manter pressionado) + arrastar | Desloca a visão a partir de qualquer lugar, inclusive sobre um nó ou uma aresta. Não move nem seleciona nada |
+| Arrastar com o **botão do meio** (a roda pressionada) | O mesmo, sem tocar no teclado |
+| **H** | **Ferramenta mão**: enquanto está ativa, arrastar sempre desloca e um clique não seleciona. **V** ou **Esc** voltam à seleção normal. Há também o botão da mão no canto inferior esquerdo da tela |
+| **Roda** | Desloca na vertical; com **Shift**, na horizontal. No touchpad do notebook, deslize com dois dedos |
+| Arrastar **dentro de um contêiner** | Se o contêiner (um Grouping, um grupo, um componente com coisas dentro…) não estiver selecionado, desloca a visão. Para movê-lo, arraste o **título** ou a **borda** dele, ou selecione-o com um clique e arraste de onde quiser |
+
+> [!TIP]
+> Prefere que a roda aproxime e afaste, como antes? Clique no botão do mouse que fica no canto inferior esquerdo da
+> tela, ao lado da mão. A escolha fica lembrada neste navegador; **Ctrl+roda** sempre faz zoom.
 
 ## Renomear no lugar {#renombrar}
 
@@ -147,12 +168,13 @@ Nos diálogos (entrar, compartilhar, busca, atalhos, Espaço…):
 
 | Gesto | Onde | O que faz |
 |---|---|---|
-| Arrastar | Fundo da tela | Desloca a visão |
-| Roda | Tela | Aproxima ou afasta |
+| Arrastar | Fundo da tela, ou interior de um contêiner não selecionado | Desloca a visão |
+| Arrastar com o botão do meio | Qualquer lugar da tela | Desloca a visão (também sobre nós) |
+| Roda | Tela | Desloca a visão (com **Shift**, na horizontal); com **Ctrl**, aproxima ou afasta. Veja [Mover-se pela tela](#moverse) |
 | Clique duplo | Fundo da tela | Aproxima |
 | Arrastar | Da paleta para a tela | Cria um nó (ou uma ocorrência, a partir da aba **Modelo**) |
 | Clique | Um tipo da paleta | Adiciona-o em um espaço livre perto do centro da tela |
-| Arrastar | Um nó | Move-o; soltá-lo dentro de um contêiner o aninha |
+| Arrastar | Um nó | Move-o; soltá-lo dentro de um contêiner o aninha. Um contêiner não selecionado é arrastado pelo título ou pela borda |
 | Arrastar | Cantos de um nó selecionado | Redimensiona-o |
 | Arrastar | Da borda inferior de um nó até outro nó | Cria uma relação (aparece o menu **Tipo de relação**). Enquanto você arrasta, o destino fica verde se for válido e vermelho se não for, com o motivo |
 | Arrastar | Da borda inferior de um nó até um espaço vazio | Menu **Criar e conectar**: cria ali um elemento já conectado (um único Ctrl+Z o desfaz) |
@@ -172,9 +194,9 @@ Os botões de aproximar, afastar e ajustar à visão também ficam no canto infe
 
 O all-draw se adapta ao tamanho da tela:
 
-- **Computador** (1100 px ou mais): as três colunas visíveis.
-- **Tablet** (de 700 a 1099 px): a barra de ferramentas tem dois botões para **mostrar ou ocultar** a coluna de visões
-  e paleta e a coluna do inspetor. A sua escolha fica lembrada.
+- **Computador** (1100 px ou mais) e **tablet** (de 700 a 1099 px): as três colunas. Os botões das extremidades da
+  barra de ferramentas (ou **Ctrl+B** e **Ctrl+Alt+B**) **mostram ou ocultam** a coluna de visões e paleta e a coluna
+  do inspetor. A sua escolha fica lembrada.
 - **Celular** (menos de 700 px): a tela de desenho ocupa a tela inteira e aparece uma barra na parte inferior com
   **Visões**, **Adicionar**, **Inspetor** e **Mais**. Cada botão abre uma folha que sobe a partir de baixo.
 
@@ -198,6 +220,10 @@ desfazer e refazer ficam sempre na barra superior.
 > o nome no topo.
 
 ## Problemas frequentes {#problemas-frecuentes}
+
+**Quero me mover pelo diagrama e acabo movendo nós.**
+Mantenha **Espaço** pressionado enquanto arrasta, arraste com o botão do meio ou ative a mão com **H**. Veja
+[Mover-se pela tela](#moverse).
 
 **Um atalho não faz nada.**
 Clique em uma área vazia da tela para dar o foco a ela. Se você estiver digitando em um campo, os atalhos da tela

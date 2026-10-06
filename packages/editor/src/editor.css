@@ -5,6 +5,12 @@
 .ad-editor__left { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--ad-border); background: var(--ad-panel); }
 .ad-editor__main { position: relative; display: flex; flex-direction: column; min-width: 0; }
 .ad-editor.is-readonly .ad-editor__body { grid-template-columns: 220px 1fr 280px; }
+/* Paneles ocultos (Ctrl+B / Ctrl+Alt+B): sin su columna, el lienzo ocupa el hueco. */
+.ad-editor.is-left-hidden .ad-editor__body { grid-template-columns: 1fr 300px; }
+.ad-editor.is-right-hidden .ad-editor__body { grid-template-columns: 260px 1fr; }
+.ad-editor.is-readonly.is-left-hidden .ad-editor__body { grid-template-columns: 1fr 280px; }
+.ad-editor.is-readonly.is-right-hidden .ad-editor__body { grid-template-columns: 220px 1fr; }
+.ad-editor.is-left-hidden.is-right-hidden .ad-editor__body { grid-template-columns: 1fr; }
 
 /* Barra */
 .ad-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--ad-border); background: var(--ad-panel); min-height: 40px; }

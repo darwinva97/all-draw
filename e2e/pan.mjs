@@ -136,12 +136,22 @@ await page.getByRole('button', { name: 'La rueda del ratón hace zoom' }).click(
 // ---- paneles: Ctrl+B y Ctrl+Alt+B (escritorio)
 const left = () => page.locator('.ad-editor__left').count(), right = () => page.locator('.ad-inspector, .ad-editor > .ad-editor__body > aside').count();
 const rightBefore = await right();
+const canvasRect = () => page.locator('.ad-canvas').evaluate(el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, width: r.width, win: innerWidth }; });
+const full = await canvasRect();
 await page.locator('.ad-canvas').focus();
 await page.keyboard.press('Control+b');
 check('Ctrl+B oculta el panel izquierdo', (await left()) === 0);
+await page.waitForTimeout(300);
+{ const r = await canvasRect(); check('sin panel izquierdo, el lienzo empieza en el borde izquierdo', r.left < 2 && r.width > full.width + 200, JSON.stringify({ full, r })); }
 await page.keyboard.press('Control+b');
 check('Ctrl+B lo vuelve a mostrar', (await left()) === 1);
 await page.keyboard.press('Control+Alt+b');
+await page.waitForTimeout(300);
+{ const r = await canvasRect(); check('sin panel derecho, el lienzo llega al borde derecho', r.win - r.right < 2 && r.width > full.width + 200, JSON.stringify({ full, r })); }
+await page.keyboard.press('Control+b');
+await page.waitForTimeout(300);
+{ const r = await canvasRect(); check('sin ningún panel, el lienzo ocupa todo el ancho', r.left < 2 && r.win - r.right < 2, JSON.stringify(r)); }
+await page.keyboard.press('Control+b');
 check('Ctrl+Alt+B oculta el panel derecho', rightBefore > 0 && (await right()) === 0 && (await page.locator('.ad-editor.is-right-hidden').count()) === 1);
 await page.keyboard.press('Control+Alt+b');
 check('Ctrl+Alt+B lo vuelve a mostrar', (await right()) === rightBefore);
